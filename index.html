@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Calculateur BTP – Accueil</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #eef1f5;
+}
+
+/* ===== HEADER ===== */
+.header {
+  background: linear-gradient(90deg, #1e3c72, #2a5298);
+  color: white;
+  padding: 25px;
+  text-align: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  max-width: 1100px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+/* ===== GRID ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 25px;
+}
+
+/* ===== CARD ===== */
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 25px rgba(0,0,0,0.15);
+}
+
+/* ===== ICON ===== */
+.card-icon {
+  font-size: 50px;
+  margin-bottom: 15px;
+}
+
+/* ===== TITLE ===== */
+.card h2 {
+  margin: 10px 0 0 0;
+  font-size: 22px;
+  color: #2a5298;
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  text-align: center;
+  color: #777;
+  margin-top: 60px;
+  padding-bottom: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <h1>Calculateur BTP</h1>
+  <p>Choisissez votre corps de métier</p>
+</div>
+
+<!-- ===== CONTENT ===== -->
+<div class="container">
+
+  <div class="grid">
+
+    <div class="card" onclick="location.href='placo.html'">
+      <div class="card-icon">🧱</div>
+      <h2>Placo</h2>
+    </div>
+
+    <div class="card" onclick="location.href='maconnerie.html'">
+      <div class="card-icon">🏗️</div>
+      <h2>Maçonnerie</h2>
+    </div>
+
+    <div class="card" onclick="location.href='carrelage.html'">
+      <div class="card-icon">🔲</div>
+      <h2>Carrelage</h2>
+    </div>
+
+    <div class="card" onclick="location.href='plomberie.html'">
+      <div class="card-icon">🚰</div>
+      <h2>Plomberie</h2>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ===== FOOTER ===== -->
+<div class="footer">
+  © 2026 – Calculateur BTP
+</div>
+
+</body>
+</html>
