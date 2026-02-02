@@ -1,123 +1,667 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Calculateur BTP – Accueil</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Catalogue Placo – Quantités</title>
 
-<style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #eef1f5;
-}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 
-/* ===== HEADER ===== */
-.header {
-  background: linear-gradient(90deg, #1e3c72, #2a5298);
-  color: white;
-  padding: 25px;
-  text-align: center;
-}
+  <style>
+    :root{
+      --bg:#F3F5F9; --card:#fff; --text:#0f172a; --muted:#64748b;
+      --line:#e5e7eb; --shadow:0 10px 30px rgba(2,8,23,.10); --shadow2:0 8px 18px rgba(2,8,23,.08);
+      --brand:#1e3c72; --accent:#22c55e; --radius:16px; --radius2:12px; --input:#f8fafc;
+      --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .header{
+      background:var(--brand);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:10;box-shadow:0 6px 18px rgba(0,0,0,.15)
+    }
+    .header h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.2px}
+    .header .hint{font-size:13px;opacity:.9;font-weight:600}
 
-.header h1 {
-  margin: 0;
-  font-size: 26px;
-}
+    .page{max-width:1280px;margin:22px auto;padding:0 18px 40px}
+    .layout{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(240px,1fr));gap:14px}
+    @media (max-width:1120px){
+      .layout{grid-template-columns:1fr}
+      .grid{grid-template-columns:repeat(2,minmax(220px,1fr))}
+      .side{position:relative;top:auto}
+    }
+    @media (max-width:700px){.grid{grid-template-columns:1fr}}
 
-/* ===== CONTAINER ===== */
-.container {
-  max-width: 1100px;
-  margin: 40px auto;
-  padding: 20px;
-}
+    .card{
+      background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow2);padding:14px;
+      border:1px solid rgba(15,23,42,.06);display:flex;flex-direction:column;gap:10px;min-height:420px
+    }
+    .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .badge{
+      font-size:12px;font-weight:800;padding:6px 10px;border-radius:999px;color:#0b1220;background:#eef2ff;
+      border:1px solid rgba(2,6,23,.08);white-space:nowrap
+    }
+    .b-standard{background:#FEF9C3}
+    .b-hydro{background:#DCFCE7}
+    .b-phoniq{background:#DBEAFE}
+    .b-feu{background:#FEE2E2}
+    .b-durete{background:#E5E7EB}
+    .b-activair{background:#E0F2FE}
 
-/* ===== GRID ===== */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 25px;
-}
+    .title{margin:0;font-size:15px;font-weight:800}
+    .subtitle{margin-top:2px;font-size:12px;color:var(--muted);font-weight:600}
 
-/* ===== CARD ===== */
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 40px 20px;
-  text-align: center;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
+    .imgwrap{
+      width:100%;height:110px;border-radius:var(--radius2);background:#f8fafc;display:flex;align-items:center;justify-content:center;
+      overflow:hidden;border:1px solid rgba(2,6,23,.06)
+    }
+    .imgwrap img{width:120px;height:110px;object-fit:contain;filter:drop-shadow(0 10px 14px rgba(0,0,0,.10))}
 
-.card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 25px rgba(0,0,0,0.15);
-}
+    label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:0 0 6px}
+    select,input{
+      width:100%;height:40px;border-radius:10px;border:1px solid rgba(15,23,42,.12);background:var(--input);
+      padding:8px 10px;font-size:14px;outline:none;transition:.15s ease
+    }
+    select:focus,input:focus{border-color:rgba(34,197,94,.55);box-shadow:0 0 0 4px rgba(34,197,94,.15);background:#fff}
 
-/* ===== ICON ===== */
-.card-icon {
-  font-size: 50px;
-  margin-bottom: 15px;
-}
+    /* Pièces: boutons */
+    .pieces-toolbar{display:flex;flex-wrap:wrap;gap:8px}
+    .piece-btn{
+      border:1px solid rgba(15,23,42,.12);
+      background:#fff;
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+      transition:.15s ease;
+    }
+    .piece-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(2,8,23,.10)}
+    .piece-btn:active{transform:translateY(0)}
+    .piece-btn.added{
+      background:#f1f5f9;
+      color:#94a3b8;
+      cursor:not-allowed;
+    }
 
-/* ===== TITLE ===== */
-.card h2 {
-  margin: 10px 0 0 0;
-  font-size: 22px;
-  color: #2a5298;
-}
+    /* Liste des pièces ajoutées dans la carte */
+    .pieces-list{
+      margin-top:6px;
+      border:1px solid rgba(15,23,42,.08);
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
 
-/* ===== FOOTER ===== */
-.footer {
-  text-align: center;
-  color: #777;
-  margin-top: 60px;
-  padding-bottom: 20px;
-}
-</style>
+    /* ✅ Pièce = Nom + champs empilés (Longueur, Largeur, Hauteur, Croix) */
+    .piece-row{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+      padding:12px 10px;
+      border-bottom:1px dashed rgba(15,23,42,.08);
+    }
+    .piece-row:last-child{border-bottom:none}
+
+    .piece-name{font-size:13px;font-weight:900}
+
+    .piece-fields{
+      display:flex;
+      flex-direction:column;
+      gap:10px; /* ✅ espace entre longueur / largeur / hauteur / croix */
+    }
+
+    .mini{
+      height:36px;
+      border-radius:10px;
+      padding:6px 8px;
+      font-size:13px;
+      background:#fff;
+    }
+
+    .remove{
+      width:38px;height:38px;border-radius:10px;
+      border:1px solid rgba(239,68,68,.25);
+      background:#fff;
+      color:var(--danger);
+      font-weight:900;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .remove:hover{background:rgba(239,68,68,.08)}
+
+    .empty{
+      padding:12px 10px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:700;
+    }
+
+    /* Stats bas de carte */
+    .stats{
+      margin-top:auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-top:1px dashed var(--line);
+      padding-top:10px;
+      gap:12px;
+    }
+    .stat{display:flex;flex-direction:column;gap:2px}
+    .stat .k{font-size:12px;color:var(--muted);font-weight:800}
+    .stat .v{font-size:14px;font-weight:900}
+    .v-green{color:var(--accent)}
+
+    /* Sidebar */
+    .side{position:sticky;top:92px}
+    .panel{
+      background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+      padding:14px;border:1px solid rgba(15,23,42,.06);
+      margin-bottom:14px;
+    }
+    .panel h2{margin:0;font-size:15px;font-weight:900;text-align:center}
+    .panel .sub{margin-top:6px;font-size:12px;font-weight:800;color:var(--muted);text-align:center}
+
+    /* Consommables */
+    .cons-list{margin-top:10px;display:flex;flex-direction:column}
+    .cons-item{
+      display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px dashed var(--line);gap:10px
+    }
+    .cons-item:last-child{border-bottom:none}
+    .cons-name{font-weight:900;font-size:13px}
+    .cons-right{width:180px;display:flex;justify-content:center;align-items:center}
+    .cons-pack{display:flex;align-items:center;justify-content:center;gap:10px}
+    .cons-pack input{
+      width:64px;text-align:center;background:#fff;border:1px solid rgba(15,23,42,.18);
+      height:38px;border-radius:10px;padding:6px 8px;font-weight:900
+    }
+    .cons-pack span{width:95px;font-weight:900;text-align:left}
+    .panel-footer{
+      margin-top:12px;padding-top:12px;border-top:1px solid rgba(15,23,42,.08);
+      display:flex;align-items:center;justify-content:space-between;font-weight:900;color:var(--accent)
+    }
+    .note{
+      margin-top:10px;font-size:12px;color:var(--muted);line-height:1.35;background:#f8fafc;
+      border:1px solid rgba(15,23,42,.06);border-radius:12px;padding:10px
+    }
+  </style>
 </head>
 
 <body>
-
-<!-- ===== HEADER ===== -->
-<div class="header">
-  <h1>Calculateur BTP</h1>
-  <p>Choisissez votre corps de métier</p>
-</div>
-
-<!-- ===== CONTENT ===== -->
-<div class="container">
-
-  <div class="grid">
-
-    <div class="card" onclick="location.href='placo.html'">
-      <div class="card-icon">🧱</div>
-      <h2>Placo</h2>
-    </div>
-
-    <div class="card" onclick="location.href='maconnerie.html'">
-      <div class="card-icon">🏗️</div>
-      <h2>Maçonnerie</h2>
-    </div>
-
-    <div class="card" onclick="location.href='carrelage.html'">
-      <div class="card-icon">🔲</div>
-      <h2>Carrelage</h2>
-    </div>
-
-    <div class="card" onclick="location.href='plomberie.html'">
-      <div class="card-icon">🚰</div>
-      <h2>Plomberie</h2>
-    </div>
-
+  <div class="header">
+    <h1>Catalogue Placo</h1>
+    <div class="hint">Ajoute des pièces → saisis L, l, h → m² + plaques auto</div>
   </div>
 
-</div>
+  <div class="page">
+    <div class="layout">
 
-<!-- ===== FOOTER ===== -->
-<div class="footer">
-  © 2026 – Calculateur BTP
-</div>
+      <!-- ===== CARTES BA13 ===== -->
+      <div class="grid">
 
+        <!-- Standard -->
+        <div class="card placo-card" data-placo="standard">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Standard</p>
+              <p class="subtitle">Plaque classique</p>
+            </div>
+            <span class="badge b-standard">STANDARD</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://www.entrepot-du-bricolage.fr/mediaw/imgproxy/OwkURQVa_lWA64yKDSwZjuN8-8yweZP3F7l45iuE3SM/rs:fit:400:400:1/g:ce/fn:plaque-de-platre-batiplac-ba13-nf-250-x-120-m-pour-piece-a-vivre-batiplac/aHR0cHM6Ly93d3cuZW50cmVwb3QtZHUtYnJpY29sYWdlLmZyL21lZGlhdy9hc3NldC9QSE9UTzFfMzQ5NjI1MF8wOTM2MDcuanBn" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hydrofuge -->
+        <div class="card placo-card" data-placo="hydro">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Hydrofuge</p>
+              <p class="subtitle">Pièces humides</p>
+            </div>
+            <span class="badge b-hydro">HYDRO</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://media.adeo.com/media/4258172/media.png?width=3000&height=3000&format=jpg&quality=80&fit=bounds" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phonique -->
+        <div class="card placo-card" data-placo="phonique">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Phonique</p>
+              <p class="subtitle">Isolation acoustique</p>
+            </div>
+            <span class="badge b-phoniq">PHONIQUE</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://www.pointp.fr/asset/14/90/AST191490-XL.jpg" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feu -->
+        <div class="card placo-card" data-placo="feu">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Ignifugé</p>
+              <p class="subtitle">Résistance au feu</p>
+            </div>
+            <span class="badge b-feu">FEU</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://uploads.gedimat.fr/PHOTO1/0000124/590532.jpg" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dureté -->
+        <div class="card placo-card" data-placo="durete">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Haute Dureté</p>
+              <p class="subtitle">Zones sollicitées</p>
+            </div>
+            <span class="badge b-durete">DUR</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://www.pointp.fr/asset/42/60/AST13104260-XL.jpg" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activair -->
+        <div class="card placo-card" data-placo="activair">
+          <div class="card-top">
+            <div>
+              <p class="title">BA13 Activ’Air</p>
+              <p class="subtitle">Qualité de l’air</p>
+            </div>
+            <span class="badge b-activair">ACTIV</span>
+          </div>
+
+          <div class="imgwrap">
+            <img src="https://www.ciffreobona.fr/userfiles/image/catalogues/Web/placoplatre/ba13_activair_v3.jpg" alt="">
+          </div>
+
+          <label>Dimensions plaque</label>
+          <select class="dimension">
+            <option value="2.4">2,00 × 1,20 m</option>
+            <option value="3" selected>2,50 × 1,20 m</option>
+            <option value="3.6">3,00 × 1,20 m</option>
+          </select>
+
+          <label>Ajouter des pièces</label>
+          <div class="pieces-toolbar"></div>
+
+          <div class="pieces-list">
+            <div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Surface totale</div>
+              <div class="v"><span class="areaValue">0.0</span> m²</div>
+            </div>
+            <div class="stat" style="text-align:right">
+              <div class="k">Plaques</div>
+              <div class="v v-green plaquesValue">0</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== SIDEBAR CONSOMMABLES ===== -->
+      <aside class="side">
+        <div class="panel">
+          <h2>Consommables</h2>
+          <div class="sub">Quantité</div>
+
+          <div class="cons-list">
+            <div class="cons-item">
+              <div class="cons-name">Vis placo</div>
+              <div class="cons-right">
+                <div class="cons-pack">
+                  <input type="number" id="visPack" value="0" readonly>
+                  <span>boîte(s)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="cons-item">
+              <div class="cons-name">Enduit</div>
+              <div class="cons-right">
+                <div class="cons-pack">
+                  <input type="number" id="enduitPack" value="0" readonly>
+                  <span>sac/pot</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="cons-item">
+              <div class="cons-name">Bandes</div>
+              <div class="cons-right">
+                <div class="cons-pack">
+                  <input type="number" id="bandesPack" value="0" readonly>
+                  <span>rouleau(x)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <span>Total plaques</span>
+            <span id="totalPlaquesAff">0</span>
+          </div>
+
+          <div class="note">
+            Quantités estimatives pour une pose standard.<br>
+            Plaques = (surface totale × 1,10) / surface plaque (arrondi au supérieur).<br>
+            Surface pièce (murs) = 2 × (L + l) × h
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <script>
+    const PIECES = [
+      "Chambre 1","Chambre 2","Chambre 3","Chambre 4","Chambre 5",
+      "Salon","Cuisine","Toilette (WC)","Salle de bain","Couloir"
+    ];
+
+    const MARGE = 1.10;
+
+    // Ratios consommables
+    const VIS_PAR_PLAQUE = 30;
+    const BANDE_M_PAR_PLAQUE = 5;
+    const ENDUIT_KG_PAR_PLAQUE = 0.7;
+
+    // Conditionnements
+    const VIS_PAR_BOITE = 1000;
+    const BANDE_PAR_ROULEAU_M = 150;
+    const ENDUIT_PAR_SAC_KG = 25;
+
+    function toNum(v){
+      const n = parseFloat(v);
+      return (!isNaN(n) && n > 0) ? n : 0;
+    }
+
+    function calcCard(card){
+  const surfacePlaque = parseFloat(card.querySelector(".dimension").value);
+  let area = 0;
+
+  // ✅ calcul automatique selon les dimensions remplies
+  function surfaceAuto(L, W, H){
+    const vals = [L, W, H].filter(v => v > 0);
+
+    // 2 valeurs remplies -> produit des 2
+    if(vals.length === 2){
+      return vals[0] * vals[1];
+    }
+
+    // 3 valeurs remplies -> murs (périmètre × hauteur)
+    if(vals.length === 3){
+      return 2 * (L + W) * H;
+    }
+
+    // 0 ou 1 valeur -> pas de surface
+    return 0;
+  }
+
+  card.querySelectorAll(".piece-row").forEach(row => {
+    const L = toNum(row.querySelector(".len")?.value);
+    const W = toNum(row.querySelector(".wid")?.value);
+    const H = toNum(row.querySelector(".hei")?.value);
+
+    area += surfaceAuto(L, W, H);
+  });
+
+  const areaEl = card.querySelector(".areaValue");
+  const plaquesEl = card.querySelector(".plaquesValue");
+
+  areaEl.textContent = area.toFixed(2);
+
+  let plaques = 0;
+  if(area > 0){
+    plaques = Math.ceil((area * MARGE) / surfacePlaque);
+  }
+  plaquesEl.textContent = plaques;
+
+  return { area, plaques };
+}
+
+
+    function recalculerTout(){
+      let totalPlaques = 0;
+
+      document.querySelectorAll(".placo-card").forEach(card => {
+        const res = calcCard(card);
+        totalPlaques += res.plaques;
+      });
+
+      // Consommables
+      const visTotal = totalPlaques * VIS_PAR_PLAQUE;
+      const bandeTotalM = totalPlaques * BANDE_M_PAR_PLAQUE;
+      const enduitTotalKg = totalPlaques * ENDUIT_KG_PAR_PLAQUE;
+
+      const nbBoitesVis = Math.ceil(visTotal / VIS_PAR_BOITE);
+      const nbRouleauxBandes = Math.ceil(bandeTotalM / BANDE_PAR_ROULEAU_M);
+      const nbSacsEnduit = Math.ceil(enduitTotalKg / ENDUIT_PAR_SAC_KG);
+
+      document.getElementById("visPack").value = nbBoitesVis;
+      document.getElementById("enduitPack").value = nbSacsEnduit;
+      document.getElementById("bandesPack").value = nbRouleauxBandes;
+      document.getElementById("totalPlaquesAff").textContent = totalPlaques;
+    }
+
+    function addPieceToCard(card, pieceName, btn){
+      const list = card.querySelector(".pieces-list");
+
+      const empty = list.querySelector(".empty");
+      if(empty) empty.remove();
+
+      if(list.querySelector(`[data-piece="${pieceName}"]`)) return;
+
+      const row = document.createElement("div");
+      row.className = "piece-row";
+      row.setAttribute("data-piece", pieceName);
+
+      // ✅ Longueur / Largeur / Hauteur / Croix en colonne
+      row.innerHTML = `
+        <div class="piece-name">${pieceName}</div>
+
+        <div class="piece-fields">
+          <input class="mini len" type="number" min="0" step="0.01" placeholder="Longueur (m)">
+          <input class="mini wid" type="number" min="0" step="0.01" placeholder="Largeur (m)">
+          <input class="mini hei" type="number" min="0" step="0.01" placeholder="Hauteur (m)">
+          <button class="remove" title="Retirer">×</button>
+        </div>
+      `;
+
+      list.appendChild(row);
+
+      if(btn){
+        btn.classList.add("added");
+        btn.disabled = true;
+      }
+
+      row.querySelector(".len").addEventListener("input", recalculerTout);
+      row.querySelector(".wid").addEventListener("input", recalculerTout);
+      row.querySelector(".hei").addEventListener("input", recalculerTout);
+
+      row.querySelector(".remove").addEventListener("click", () => {
+        row.remove();
+
+        const toolbar = card.querySelector(".pieces-toolbar");
+        const b = [...toolbar.querySelectorAll(".piece-btn")].find(x => x.dataset.piece === pieceName);
+        if(b){
+          b.classList.remove("added");
+          b.disabled = false;
+        }
+
+        if(!list.querySelector(".piece-row")){
+          list.innerHTML = `<div class="empty">Clique sur une pièce ci-dessus pour l’ajouter, puis saisis Longueur / Largeur / Hauteur.</div>`;
+        }
+
+        recalculerTout();
+      });
+
+      recalculerTout();
+    }
+
+    document.querySelectorAll(".placo-card").forEach(card => {
+      const toolbar = card.querySelector(".pieces-toolbar");
+      PIECES.forEach(p => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "piece-btn";
+        btn.textContent = p;
+        btn.dataset.piece = p;
+        btn.addEventListener("click", () => addPieceToCard(card, p, btn));
+        toolbar.appendChild(btn);
+      });
+
+      card.querySelector(".dimension").addEventListener("change", recalculerTout);
+    });
+
+    recalculerTout();
+  </script>
 </body>
 </html>
