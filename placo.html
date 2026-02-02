@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Catalogue Placo – Calcul & Prix</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f2f4f7;
+}
+
+.header {
+  background: #1e3c72;
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total-global {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.container {
+  max-width: 100%;
+  margin: 30px auto;
+  padding: 0 20px;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+}
+
+.card {
+  min-width: 260px;
+  flex-shrink: 0;
+}
+
+.card img {
+  height: 140px;
+  object-fit: contain;
+  margin-bottom: 10px;
+}
+
+.container {
+  align-items: stretch;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+}
+
+.card {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card img {
+  width: 120px;
+  margin-bottom: 10px;
+}
+
+.nom {
+  font-weight: bold;
+}
+
+input, select {
+  width: 100%;
+  height: 38px;
+  padding: 6px 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.info {
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.prix {
+  font-size: 18px;
+  font-weight: bold;
+  color: #28a745;
+}
+
+/* ===== AJOUT : STYLE CONSOMMABLES (sans impacter tes cartes) ===== */
+.consommables-card {
+  text-align: left; /* plus propre pour liste */
+}
+
+.consommables-title {
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.cons-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #eee;
+}
+
+.cons-item:last-of-type {
+  border-bottom: none;
+}
+
+.cons-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.cons-fields {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cons-qty {
+  width: 70px;
+  height: 38px;
+  padding: 6px 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.cons-price {
+  width: 90px;
+  height: 38px;
+  padding: 6px 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.cons-footer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cons-total {
+  font-weight: bold;
+  color: #28a745;
+}
+
+/* ===== CONSOMMABLES ===== */
+.consommables-card { text-align: left; }
+.consommables-title { font-weight: bold; font-size: 16px; text-align: center; margin-bottom: 8px; }
+
+.cons-vendeur { margin-bottom: 10px; }
+
+.cons-row{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px dashed #eee;
+}
+
+.cons-row:last-of-type{ border-bottom: none; }
+
+.cons-left{ display:flex; flex-direction:column; gap:2px; }
+.cons-name{ font-weight: 700; font-size: 14px; }
+.cons-desc{ font-size: 12px; color: #777; }
+
+.cons-mid{
+  display: grid;
+  grid-template-columns: 120px 80px 90px;
+  gap: 8px;
+  align-items: center;
+}
+
+.cons-pack{
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cons-pack input{
+  width: 60px;
+  height: 38px;
+  padding: 6px 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.cons-unitprice{
+  font-size: 13px;
+  color: #555;
+  text-align: right;
+}
+
+.cons-lineprice{
+  font-weight: 800;
+  color: #28a745;
+  text-align: right;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>Catalogue Placo</h1>
+  <div class="total-global" id="totalGlobal">Total : 0 €</div>
+</div>
+
+<div class="container">
+
+<!-- ===== CARTE PLACO ===== -->
+<div class="card" data-prix-pointp="9.90" data-prix-chausson="10.30" data-prix-edb="9.40">
+  <img src="https://www.entrepot-du-bricolage.fr/mediaw/imgproxy/OwkURQVa_lWA64yKDSwZjuN8-8yweZP3F7l45iuE3SM/rs:fit:400:400:1/g:ce/fn:plaque-de-platre-batiplac-ba13-nf-250-x-120-m-pour-piece-a-vivre-batiplac/aHR0cHM6Ly93d3cuZW50cmVwb3QtZHUtYnJpY29sYWdlLmZyL21lZGlhdy9hc3NldC9QSE9UTzFfMzQ5NjI1MF8wOTM2MDcuanBn">
+  <div class="nom">BA13 Standard</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<div class="card" data-prix-pointp="11.07" data-prix-chausson="11.50" data-prix-edb="10.80">
+  <img src="https://media.adeo.com/media/4258172/media.png?width=3000&height=3000&format=jpg&quality=80&fit=bounds">
+  <div class="nom">BA13 Hydrofuge</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<div class="card" data-prix-pointp="6.55" data-prix-chausson="6.90" data-prix-edb="6.20">
+  <img src="https://www.pointp.fr/asset/14/90/AST191490-XL.jpg">
+  <div class="nom">BA13 Phonique</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<div class="card" data-prix-pointp="12.50" data-prix-chausson="12.90" data-prix-edb="12.00">
+  <img src="https://uploads.gedimat.fr/PHOTO1/0000124/590532.jpg">
+  <div class="nom">BA13 Ignifugé (Feu)</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<div class="card" data-prix-pointp="14.20" data-prix-chausson="14.80" data-prix-edb="13.90">
+  <img src="https://www.pointp.fr/asset/42/60/AST13104260-XL.jpg">
+  <div class="nom">BA13 Haute Dureté</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<div class="card" data-prix-pointp="13.80" data-prix-chausson="14.20" data-prix-edb="13.50">
+  <img src="https://www.ciffreobona.fr/userfiles/image/catalogues/Web/placoplatre/ba13_activair_v3.jpg">
+  <div class="nom">BA13 Activ’Air</div>
+
+  <select class="dimension">
+    <option value="2.4">2,00 × 1,20 m</option>
+    <option value="3" selected>2,50 × 1,20 m</option>
+    <option value="3.6">3,00 × 1,20 m</option>
+  </select>
+
+  <input type="number" class="surface" placeholder="Surface en m²">
+
+  <select class="fournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <div class="info plaques">Plaques : 0</div>
+  <div class="prix">0 €</div>
+</div>
+
+<!-- ===== CARTE CONSOMMABLES (vendeur + calcul auto) ===== -->
+<div class="card consommables-card" id="consommablesCard">
+  <div class="consommables-title">Consommables</div>
+
+  <select class="cons-vendeur" id="consFournisseur">
+    <option value="pointp">Point P</option>
+    <option value="chausson">Chausson</option>
+    <option value="edb">Entrepôt du Bricolage</option>
+  </select>
+
+  <!-- VIS -->
+  <div class="cons-row">
+    <div class="cons-left">
+      <div class="cons-name">Vis placo</div>
+      <div class="cons-desc" id="visDetail">0 vis</div>
+    </div>
+
+    <div class="cons-mid">
+      <div class="cons-pack">
+        <input type="number" id="visPack" value="0" readonly>
+        <span>boîte</span>
+      </div>
+      <div class="cons-unitprice" id="visUnitPrice">0.00 €</div>
+      <div class="cons-lineprice" id="visLinePrice">0.00 €</div>
+    </div>
+  </div>
+
+  <!-- ENDUIT -->
+  <div class="cons-row">
+    <div class="cons-left">
+      <div class="cons-name">Enduit</div>
+      <div class="cons-desc" id="enduitDetail">0 kg</div>
+    </div>
+
+    <div class="cons-mid">
+      <div class="cons-pack">
+        <input type="number" id="enduitPack" value="0" readonly>
+        <span>sac / pot</span>
+      </div>
+      <div class="cons-unitprice" id="enduitUnitPrice">0.00 €</div>
+      <div class="cons-lineprice" id="enduitLinePrice">0.00 €</div>
+    </div>
+  </div>
+
+  <!-- BANDES -->
+  <div class="cons-row">
+    <div class="cons-left">
+      <div class="cons-name">Bandes</div>
+      <div class="cons-desc" id="bandesDetail">0 m</div>
+    </div>
+
+    <div class="cons-mid">
+      <div class="cons-pack">
+        <input type="number" id="bandesPack" value="0" readonly>
+        <span>rouleau</span>
+      </div>
+      <div class="cons-unitprice" id="bandesUnitPrice">0.00 €</div>
+      <div class="cons-lineprice" id="bandesLinePrice">0.00 €</div>
+    </div>
+  </div>
+
+  <div class="cons-footer">
+    <div>Total consommables</div>
+    <div class="cons-total" id="totalConsommables">0 €</div>
+  </div>
+</div>
+
+
+
+<script>
+function recalculer() {
+  let total = 0;
+
+  // ===== CALCUL PLACO (identique à toi) =====
+  document.querySelectorAll(".card").forEach(card => {
+
+    if (card.classList.contains("consommables-card")) return;
+
+    let surface = parseFloat(card.querySelector(".surface").value);
+    let surfacePlaque = parseFloat(card.querySelector(".dimension").value);
+    let fournisseur = card.querySelector(".fournisseur").value;
+    let prixM2 = parseFloat(card.getAttribute("data-prix-" + fournisseur));
+
+    let divPrix = card.querySelector(".prix");
+    let divPlaques = card.querySelector(".plaques");
+
+    if (!isNaN(surface) && surface > 0) {
+      let plaques = Math.ceil((surface * 1.10) / surfacePlaque);
+      let prix = plaques * surfacePlaque * prixM2;
+
+      divPlaques.textContent = "Plaques : " + plaques;
+      divPrix.textContent = prix.toFixed(2) + " €";
+
+      total += prix;
+    } else {
+      divPlaques.textContent = "Plaques : 0";
+      divPrix.textContent = "0 €";
+    }
+  });
+
+  // ===== CONSOMMABLES (vendeur + quantités auto) =====
+
+  // Ratios (moyennes) — ajuste si besoin
+  const VIS_PAR_PLAQUE = 30;        // vis / plaque
+  const BANDE_M_PAR_PLAQUE = 5;     // m / plaque
+  const ENDUIT_KG_PAR_PLAQUE = 0.7; // kg / plaque
+
+  // Conditionnements
+  const VIS_PAR_BOITE = 1000;
+  const BANDE_PAR_ROULEAU_M = 150;
+  const ENDUIT_PAR_SAC_KG = 25;
+
+  // Prix par vendeur (EXEMPLE) — tu me donnes tes vrais prix et je les mets
+  const PRIX_CONS = {
+    pointp:   { vis: 12.90, enduit: 19.90, bandes: 6.50 },
+    chausson: { vis: 13.50, enduit: 20.50, bandes: 6.90 },
+    edb:      { vis: 11.90, enduit: 18.90, bandes: 5.90 }
+  };
+
+  // Total plaques (on refait un petit calcul rapide à partir des surfaces)
+  let totalPlaques = 0;
+  document.querySelectorAll(".card").forEach(card => {
+    if (card.classList.contains("consommables-card")) return;
+
+    let surface = parseFloat(card.querySelector(".surface").value);
+    let surfacePlaque = parseFloat(card.querySelector(".dimension").value);
+
+    if (!isNaN(surface) && surface > 0) {
+      totalPlaques += Math.ceil((surface * 1.10) / surfacePlaque);
+    }
+  });
+
+  // Besoins bruts
+  let visTotal = totalPlaques * VIS_PAR_PLAQUE;
+  let bandeTotalM = totalPlaques * BANDE_M_PAR_PLAQUE;
+  let enduitTotalKg = totalPlaques * ENDUIT_KG_PAR_PLAQUE;
+
+  // Conversion en packs
+  let nbBoitesVis = Math.ceil(visTotal / VIS_PAR_BOITE);
+  let nbRouleauxBandes = Math.ceil(bandeTotalM / BANDE_PAR_ROULEAU_M);
+  let nbSacsEnduit = Math.ceil(enduitTotalKg / ENDUIT_PAR_SAC_KG);
+
+  // Affichage quantités calculées
+  document.getElementById("visPack").value = nbBoitesVis;
+  document.getElementById("enduitPack").value = nbSacsEnduit;
+  document.getElementById("bandesPack").value = nbRouleauxBandes;
+
+  // Affichage détails quantités
+  document.getElementById("visDetail").textContent = visTotal + " vis (~" + totalPlaques + " plaques)";
+  document.getElementById("enduitDetail").textContent = enduitTotalKg.toFixed(1) + " kg (~" + totalPlaques + " plaques)";
+  document.getElementById("bandesDetail").textContent = bandeTotalM.toFixed(0) + " m (~" + totalPlaques + " plaques)";
+
+  // Fournisseur consommables
+  let consF = document.getElementById("consFournisseur").value;
+  let p = PRIX_CONS[consF];
+
+  // Prix unitaires
+  document.getElementById("visUnitPrice").textContent = p.vis.toFixed(2) + " €";
+  document.getElementById("enduitUnitPrice").textContent = p.enduit.toFixed(2) + " €";
+  document.getElementById("bandesUnitPrice").textContent = p.bandes.toFixed(2) + " €";
+
+  // Prix ligne
+  let visLine = nbBoitesVis * p.vis;
+  let enduitLine = nbSacsEnduit * p.enduit;
+  let bandesLine = nbRouleauxBandes * p.bandes;
+
+  document.getElementById("visLinePrice").textContent = visLine.toFixed(2) + " €";
+  document.getElementById("enduitLinePrice").textContent = enduitLine.toFixed(2) + " €";
+  document.getElementById("bandesLinePrice").textContent = bandesLine.toFixed(2) + " €";
+
+  // Total consommables
+  let totalCons = visLine + enduitLine + bandesLine;
+  document.getElementById("totalConsommables").textContent = totalCons.toFixed(2) + " €";
+
+  // Total global = placo + consommables
+  total += totalCons;
+
+  document.getElementById("totalGlobal").textContent =
+    "Total : " + total.toFixed(2) + " €";
+}
+
+document.querySelectorAll("input, select").forEach(el => {
+  el.addEventListener("input", recalculer);
+  el.addEventListener("change", recalculer);
+});
+
+// AJOUT : écouteur sur le vendeur consommables
+document.getElementById("consFournisseur").addEventListener("change", recalculer);
+
+</script>
+
+</body>
+</html>
