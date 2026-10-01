@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Toutes les affiches · ASF Pierrelatte</title>
 <meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;1,800;1,900&family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{--fond:#0B1633;--carte:#13224A;--ligne:#243B7E;--or:#C9A227;--bleu:#1C3F9E;--texte:#EEF2FF;--doux:#9FB2E8}
   *{box-sizing:border-box}
@@ -26,6 +29,20 @@
   .texte{margin-top:12px}
   .texte a{color:var(--or)}
   .note{color:var(--doux);font-size:13.5px}
+
+  /* habillage « nuit de match » */
+  :root{--or-clair:#F7DC92;--or-fonce:#B8861E}
+  body{font-family:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:radial-gradient(900px 500px at 10% -10%,rgba(47,107,255,.2),transparent 60%),radial-gradient(700px 400px at 100% 0%,rgba(227,182,76,.09),transparent 60%),linear-gradient(180deg,#060E26,#030817) no-repeat;background-color:#030817}
+  html{background:#030817}
+  header{background:linear-gradient(180deg,rgba(4,10,28,.92),rgba(6,14,38,.8));-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid rgba(227,182,76,.3)}
+  h1{font:900 italic 28px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.01em}
+  section{border-radius:22px;border:1px solid transparent;background:linear-gradient(180deg,rgba(22,40,94,.55),rgba(7,15,40,.8)) padding-box,linear-gradient(135deg,rgba(247,220,146,.5),rgba(47,107,255,.25) 40%,rgba(255,255,255,.05)) border-box;
+    box-shadow:0 20px 50px rgba(0,0,0,.4);padding:22px}
+  section h2{font:800 italic 26px "Barlow Condensed",sans-serif;text-transform:uppercase;color:var(--or-clair)}
+  figure{border-radius:16px;box-shadow:0 14px 34px rgba(0,0,0,.4);transition:transform .3s cubic-bezier(.2,.9,.25,1.15)}
+  figure:hover{transform:translateY(-3px)}
+  input,select{border-radius:12px}
 </style>
 </head>
 <body>

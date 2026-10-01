@@ -6,6 +6,9 @@
 <meta name="robots" content="noindex">
 <title>Votre conversation avec le club · ASF Pierrelatte</title>
 <link rel="icon" href="/img/blason.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;1,800;1,900&family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0}
   html{-webkit-text-size-adjust:100%}
@@ -32,6 +35,27 @@
   .ferme a{color:#fff}
   .erreur{padding:30px 16px;text-align:center;color:#C9D4F2;line-height:1.6}
   .ok{color:#22C55E}
+
+  /* habillage « nuit de match » */
+  :root{--or:#E3B64C;--or-clair:#F7DC92;--or-fonce:#B8861E}
+  body{font-family:"Source Sans 3",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:radial-gradient(900px 500px at 10% -10%,rgba(47,107,255,.22),transparent 60%),radial-gradient(700px 400px at 100% 0%,rgba(227,182,76,.10),transparent 60%),linear-gradient(180deg,#060E26,#030817) no-repeat;background-color:#030817}
+  html{background:#030817}
+  .h{background:linear-gradient(180deg,rgba(4,10,28,.92),rgba(6,14,38,.78));-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:0 10px 30px rgba(0,0,0,.3)}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(227,182,76,.7),rgba(143,194,255,.5),rgba(227,182,76,.7),transparent)}
+  .h img{filter:drop-shadow(0 4px 12px rgba(227,182,76,.3))}
+  .h b{font:800 italic 21px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.02em}
+  .b{animation:bulle .35s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes bulle{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .b.club .t{background:linear-gradient(160deg,rgba(34,58,128,.75),rgba(14,26,66,.9));border:1px solid rgba(143,168,240,.18);box-shadow:0 8px 22px rgba(0,0,0,.3)}
+  .b.moi .t{background:linear-gradient(135deg,#3B7BFF,#1C3F9E);box-shadow:0 8px 22px rgba(47,107,255,.3)}
+  .rep{background:linear-gradient(180deg,rgba(6,14,38,.85),rgba(3,8,23,.96));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid rgba(227,182,76,.25)}
+  textarea{background:rgba(255,255,255,.05);border-color:rgba(143,168,240,.28);transition:border-color .2s,box-shadow .2s}
+  textarea:focus{border-color:var(--or);box-shadow:0 0 0 3px rgba(227,182,76,.2)}
+  button{background:linear-gradient(135deg,var(--or-clair),var(--or) 50%,var(--or-fonce));color:#0B1633;font-family:"Barlow Condensed",sans-serif;font-size:18px;border-radius:999px;padding:11px 24px;
+    box-shadow:0 8px 22px rgba(227,182,76,.3);transition:transform .2s}
+  button:hover{transform:translateY(-1px)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>

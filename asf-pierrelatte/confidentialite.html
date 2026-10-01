@@ -5,15 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Politique de confidentialité · ASF Pierrelatte</title>
 <meta name="robots" content="index,follow">
+<link rel="icon" href="/img/blason.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;1,800;1,900&family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  body{margin:0;background:#0B1633;color:#EEF2FF;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
-  main{max-width:820px;margin:0 auto;padding:32px 20px 60px}
-  h1{font-size:30px;margin:0 0 6px} h2{font-size:21px;margin:30px 0 8px;color:#E3B64C}
-  p,li{color:#DCE5FA} a{color:#8FC2FF}
-  .date{color:#9FB2E8;font-size:14px}
+  :root{--or:#E3B64C;--or-clair:#F7DC92;--or-fonce:#B8861E;--nuit:#060E26}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:#EEF2FF;font:16.5px/1.65 "Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:radial-gradient(900px 500px at 10% -10%,rgba(47,107,255,.22),transparent 60%),radial-gradient(800px 500px at 100% 0%,rgba(227,182,76,.10),transparent 60%),linear-gradient(180deg,#060E26,#030817) no-repeat;background-color:#030817}
+  html{background:#030817}
+  .tete{display:flex;align-items:center;gap:12px;max-width:820px;margin:0 auto;padding:22px 20px 0}
+  .tete img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 6px 16px rgba(227,182,76,.25))}
+  .tete b{font:800 italic 22px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.02em;display:block;line-height:1}
+  .tete small{color:#9FB2E8;font-size:13px}
+  main{max-width:820px;margin:18px auto 60px;padding:34px 30px 40px;border-radius:24px;border:1px solid transparent;
+    background:linear-gradient(180deg,rgba(22,40,94,.62),rgba(7,15,40,.8)) padding-box,linear-gradient(135deg,rgba(247,220,146,.6),rgba(47,107,255,.3) 40%,rgba(255,255,255,.06)) border-box;
+    box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  @media (max-width:640px){main{margin:14px 12px 40px;padding:24px 18px 30px;border-radius:18px}}
+  h1{font:900 italic clamp(34px,6vw,52px)/.95 "Barlow Condensed",sans-serif;text-transform:uppercase;margin:0 0 10px;
+    background:linear-gradient(180deg,#fff 30%,#C9D8FF);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{font:800 italic 25px/1.1 "Barlow Condensed",sans-serif;text-transform:uppercase;margin:34px 0 10px;color:var(--or-clair);display:flex;align-items:center;gap:12px}
+  h2::before{content:"";width:7px;height:.9em;border-radius:3px;transform:skewX(-14deg);background:linear-gradient(180deg,var(--or-clair),var(--or-fonce));flex:none}
+  p,li{color:#DCE5FA} li{margin-bottom:6px} ul{padding-left:20px}
+  li::marker{color:var(--or)}
+  a{color:#8FC2FF;text-underline-offset:3px} a:hover{color:var(--or-clair)}
+  b{color:#fff}
+  .date{color:#9FB2E8;font-size:14px;padding-bottom:16px;border-bottom:1px solid rgba(143,168,240,.18)}
+  .retour{display:inline-block;margin-top:34px;padding:11px 20px;border-radius:999px;text-decoration:none;font:800 17px "Barlow Condensed",sans-serif;color:#0B1633;
+    background:linear-gradient(135deg,var(--or-clair),var(--or) 50%,var(--or-fonce));box-shadow:0 10px 26px rgba(227,182,76,.3)}
+  .retour:hover{color:#0B1633;transform:translateY(-1px)}
 </style>
 </head>
 <body>
+<div class="tete"><img src="/img/blason.png" alt=""><div><b>ASF Pierrelatte</b><small>Atom'Sports Football Pierrelatte</small></div></div>
 <main>
   <h1>Politique de confidentialité</h1>
   <p class="date">Atom'Sports Football Pierrelatte (ASF Pierrelatte) · site asf-pierrelatte.fr · mise à jour : septembre 2026</p>
@@ -46,7 +71,7 @@
   <p>Vous pouvez à tout moment demander à consulter, corriger ou supprimer vos données : écrivez à <a href="mailto:contact@asf-pierrelatte.fr">contact@asf-pierrelatte.fr</a> en précisant votre nom et l'objet de la demande (message, inscription à un stage, compte). La suppression est faite sous 30 jours et vous est confirmée par e-mail.</p>
   <p>Vous pouvez aussi adresser une réclamation à la CNIL (<a href="https://www.cnil.fr" target="_blank" rel="noopener">www.cnil.fr</a>).</p>
 
-  <p style="margin-top:34px"><a href="/">← Retour au site du club</a></p>
+  <p><a class="retour" href="/">← Retour au site du club</a></p>
 </main>
 </body>
 </html>

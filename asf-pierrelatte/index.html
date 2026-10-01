@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="/icone-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,600;1,700;1,800;1,900&family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bleu:#1C3F9E; --bleu-nuit:#0F2257; --bleu-clair:#DCE5FA; --bleu-texte:#1C3F9E;
@@ -2173,6 +2173,427 @@ tr.repeche td:first-child{box-shadow:inset 3px 0 0 #E3B64C}
 .ca-logo img{width:100%;height:100%;object-fit:contain}
 .ca-logo i{position:absolute;inset:auto 0 0 0;height:18px;background:rgba(5,11,31,.65);font-size:10px;font-style:normal;display:grid;place-items:center}
 .ca-nom{flex:1;min-width:0;font-size:16px}
+/*HABILLAGE-CSS*/
+/* =====================================================================
+   HABILLAGE « NUIT DE MATCH » : refonte visuelle du site public
+   (tout ce qui suit se superpose au style d'origine, sans rien retirer)
+   ===================================================================== */
+:root{
+  --or:#E3B64C; --or-clair:#F7DC92; --or-fonce:#B8861E; --electrique:#2F6BFF; --ciel:#8FC2FF;
+  --nuit-0:#030817; --nuit-1:#060E26; --nuit-2:#0A1636;
+  --verre:linear-gradient(180deg,rgba(22,40,94,.62),rgba(7,15,40,.78));
+  --verre-bord:linear-gradient(135deg,rgba(247,220,146,.75),rgba(47,107,255,.35) 38%,rgba(255,255,255,.07) 70%,rgba(143,194,255,.3));
+  --ombre-xl:0 30px 80px rgba(0,0,0,.55),0 8px 24px rgba(0,0,0,.35);
+  --ressort:cubic-bezier(.2,.9,.25,1.15);
+}
+:root[data-theme="dark"]{ --fond:#060E26; --carte:#0F1C44; --ligne:#203266; }
+
+/* ---------- fond général : nuit bleue et halos de projecteurs ---------- */
+:root[data-theme="dark"] body{background:var(--nuit-1)}
+:root[data-theme="dark"] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(1100px 600px at 12% -10%,rgba(47,107,255,.16),transparent 60%),
+    radial-gradient(900px 520px at 100% 0%,rgba(227,182,76,.08),transparent 60%),
+    radial-gradient(1200px 800px at 50% 120%,rgba(28,63,158,.22),transparent 60%),
+    linear-gradient(180deg,var(--nuit-1),var(--nuit-0))}
+::selection{background:rgba(227,182,76,.4);color:#fff}
+
+/* apparition douce de chaque page */
+.page.visible{animation:pageEntre .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes pageEntre{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ---------- en-tête en verre ---------- */
+.top{background:linear-gradient(180deg,rgba(4,10,28,.9),rgba(6,14,38,.74));-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
+  box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(227,182,76,.75) 20%,rgba(143,194,255,.6) 50%,rgba(227,182,76,.75) 80%,transparent);
+  background-size:200% 100%;animation:filet 9s linear infinite}
+@keyframes filet{to{background-position:-200% 0}}
+.marque .bl{filter:drop-shadow(0 4px 10px rgba(227,182,76,.25));transition:transform .5s var(--ressort)}
+.marque:hover .bl{transform:rotate(-8deg) scale(1.08)}
+.marque b{letter-spacing:.02em}
+.nav a,.nav-tete{position:relative}
+.nav > a:not(.cle)::after,.nav-tete::after{content:"";position:absolute;left:8px;right:8px;bottom:2px;height:3px;border-radius:3px;
+  background:linear-gradient(90deg,var(--or),var(--or-clair));transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ressort)}
+.nav > a:not(.cle):hover::after,.nav-tete:hover::after{transform:scaleX(.45)}
+.nav a.actif,.nav-groupe:has(a.actif) .nav-tete{box-shadow:none!important;color:#fff}
+.nav > a.actif::after,.nav-groupe:has(a.actif) .nav-tete::after{transform:scaleX(1)}
+.nav-menu{background:linear-gradient(180deg,rgba(14,28,70,.96),rgba(6,14,38,.98));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-color:rgba(227,182,76,.22);animation:menuOuvre .22s ease-out}
+@keyframes menuOuvre{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.retour-espace,.retour-site{background:linear-gradient(135deg,var(--or-clair),var(--or) 50%,var(--or-fonce));color:#0B1633;border-radius:999px;
+  box-shadow:0 6px 20px rgba(227,182,76,.28),inset 0 1px 0 rgba(255,255,255,.5);transition:transform .2s var(--ressort),box-shadow .2s}
+.retour-espace:hover,.retour-site:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(227,182,76,.4),inset 0 1px 0 rgba(255,255,255,.5)}
+
+/* ---------- boutons ---------- */
+.btn{border-radius:12px;transition:transform .2s var(--ressort),box-shadow .2s ease,background-color .2s,border-color .2s,color .2s;position:relative;overflow:hidden;isolation:isolate}
+.btn::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;pointer-events:none;z-index:-1;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-18deg);opacity:0}
+.btn:hover::after{animation:eclair .75s ease}
+@keyframes eclair{0%{left:-60%;opacity:1}100%{left:130%;opacity:1}}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn.plein{background:linear-gradient(135deg,var(--or-clair),var(--or) 45%,var(--or-fonce));border-color:transparent;color:#0B1633;
+  box-shadow:0 12px 30px rgba(227,182,76,.32),inset 0 1px 0 rgba(255,255,255,.55)}
+.btn.plein:hover{box-shadow:0 16px 40px rgba(227,182,76,.45),inset 0 1px 0 rgba(255,255,255,.55)}
+.btn.bleu{background:linear-gradient(135deg,#3B7BFF,#1C3F9E);border-color:transparent;box-shadow:0 10px 26px rgba(47,107,255,.32),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.bleu:hover{box-shadow:0 14px 34px rgba(47,107,255,.45),inset 0 1px 0 rgba(255,255,255,.25)}
+.lien{text-decoration-color:rgba(227,182,76,.6);text-underline-offset:4px;text-decoration-thickness:2px;transition:color .2s}
+.lien:hover{color:var(--or-clair)}
+
+/* ---------- ACCUEIL : la scène 3D ---------- */
+.hero.hero-stade{background:
+    radial-gradient(60% 40% at 50% 8%,rgba(143,194,255,.22),transparent 70%),
+    radial-gradient(35% 30% at 8% 0%,rgba(255,240,210,.18),transparent 70%),
+    radial-gradient(35% 30% at 92% 0%,rgba(255,240,210,.18),transparent 70%),
+    linear-gradient(180deg,#071234 0%,#06102C 38%,#0A2A1A 50%,#0E4A22 68%,#040A1E 100%);
+  display:flex;flex-direction:column;min-height:max(640px,min(calc(100svh - 68px),1000px));isolation:isolate;overflow:hidden}
+.stade3d{position:absolute;left:0;top:0;width:100%;height:100%;display:block;z-index:0;opacity:0;transition:opacity 1.4s ease;touch-action:pan-y}
+.stade3d.pret{opacity:1}
+.hero-voile{position:absolute;inset:0;z-index:1;pointer-events:none;background:
+  linear-gradient(90deg,rgba(3,8,23,.86) 0%,rgba(3,8,23,.62) 30%,rgba(3,8,23,.12) 52%,transparent 62%),
+  linear-gradient(180deg,rgba(3,8,23,.35) 0%,transparent 16%,transparent 58%,rgba(3,8,23,.72) 84%,var(--nuit-1) 100%)}
+.hero.hero-stade > .wrap{position:relative;z-index:2;max-width:1320px;margin:0 auto;width:100%}
+.hero.hero-stade .hero-scene{flex:1;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:24px;align-items:center;padding:34px 28px 10px}
+.hero.hero-stade .hero-dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:stretch;padding:0 28px 38px}
+.hero.hero-stade .hero-dock:has(>.hero-actus[hidden]){grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.hero.hero-stade .hero-dock:has(>.hero-actus[hidden]) #prochain{grid-column:2}
+.hero-texte{animation:monte .9s .15s cubic-bezier(.2,.8,.2,1) both}
+@keyframes monte{from{opacity:0;translate:0 26px}to{opacity:1;translate:0 0}}
+.hero-stade .hero-tete{gap:14px}
+.hero-stade .hero-blason{width:clamp(74px,8vw,112px);height:clamp(74px,8vw,112px);filter:drop-shadow(0 10px 26px rgba(0,0,0,.5)) drop-shadow(0 0 22px rgba(227,182,76,.25));animation:blasonFlotte 6s ease-in-out infinite}
+@keyframes blasonFlotte{50%{transform:translateY(-5px) rotate(-2deg)}}
+.hero-stade .annee{font-size:clamp(78px,11vw,168px);-webkit-text-stroke:1.5px rgba(247,220,146,.7);font-style:italic;letter-spacing:-.01em;
+  background:linear-gradient(100deg,transparent 30%,rgba(247,220,146,.55) 45%,transparent 60%) no-repeat;background-size:250% 100%;-webkit-background-clip:text;background-clip:text;
+  animation:reflet 5.5s ease-in-out 1.2s infinite}
+@keyframes reflet{0%{background-position:120% 0}60%,100%{background-position:-60% 0}}
+.hero-sur{display:flex;align-items:center;gap:10px;margin-top:14px!important;font:800 12.5px var(--corps)!important;letter-spacing:.13em;white-space:nowrap;text-transform:uppercase;color:var(--or-clair)!important}
+.hero-sur span{width:34px;height:2px;background:linear-gradient(90deg,var(--or),transparent);flex:none}
+.hero.hero-stade h1{font-size:clamp(40px,4.7vw,74px);font-weight:900;font-style:italic;text-transform:uppercase;line-height:.9;letter-spacing:-.005em;max-width:14ch;margin-top:10px;
+  text-shadow:0 6px 30px rgba(0,0,0,.55)}
+.hero.hero-stade h1 em{display:block;white-space:nowrap;font-style:italic;background:linear-gradient(100deg,var(--or-clair),var(--or) 40%,#fff6dc 55%,var(--or) 70%);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:orCoule 6s linear infinite;filter:drop-shadow(0 6px 22px rgba(227,182,76,.25))}
+@keyframes orCoule{to{background-position:-200% 0}}
+.hero.hero-stade .hero-texte > p:not(.hero-sur){font-size:18px;color:#D6E0FA;max-width:42ch;margin-top:16px;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.hero.hero-stade .btns{margin-top:24px;gap:12px}
+.hero.hero-stade .btn{font-size:20px;padding:13px 24px}
+.hero.hero-stade .btn.stage-bt{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.35);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.hero-ballon{position:relative;justify-self:center;width:min(100%,560px,64vh);aspect-ratio:1;border-radius:50%;cursor:grab;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.hero-ballon.saisi{cursor:grabbing}
+.hero-indice{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);white-space:nowrap;font:700 12.5px var(--corps);letter-spacing:.06em;color:#DCE5FA;
+  background:rgba(4,10,28,.55);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:6px 14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  opacity:0;pointer-events:none;transition:opacity .6s}
+.stade3d-ok .hero-indice{animation:indice 7s 3.4s ease both}
+@keyframes indice{0%{opacity:0;transform:translate(-50%,8px)}10%,80%{opacity:1;transform:translate(-50%,0)}100%{opacity:0}}
+.hero-ballon.frappe::after{content:"";position:absolute;inset:7%;border-radius:50%;border:2px solid rgba(247,220,146,.8);animation:onde .8s ease-out forwards;pointer-events:none}
+@keyframes onde{from{opacity:1;transform:scale(.9)}to{opacity:0;transform:scale(1.5)}}
+/* sans 3D : le grand blason du club prend la place du ballon */
+.stade3d-ko .hero-ballon{background:url(/img/blason.png) 50% 50%/64% no-repeat;filter:drop-shadow(0 30px 50px rgba(0,0,0,.55)) drop-shadow(0 0 60px rgba(227,182,76,.25));
+  animation:blasonFlotte 6s ease-in-out infinite;cursor:default}
+.stade3d-ko .hero-indice{display:none}
+
+/* le dock : actualités et matchs du week-end, en verre */
+.hero-stade .hero-actus,.hero-stade .tableau-score{border-radius:22px;border:1px solid transparent;background:var(--verre) padding-box,var(--verre-bord) border-box;
+  -webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:var(--ombre-xl);animation:monte .9s .35s cubic-bezier(.2,.8,.2,1) both}
+.hero-stade .hero-actus{padding:16px}
+.hero-stade .ha-fiche{grid-template-columns:minmax(0,190px) minmax(0,1fr);align-items:center;gap:16px}
+.hero-stade .ha-img{aspect-ratio:4/3;box-shadow:0 10px 26px rgba(0,0,0,.4)}
+.hero-stade .ha-sans{position:relative;overflow:hidden;color:var(--or-clair);font-style:italic;font-size:26px;letter-spacing:.2em;text-shadow:0 2px 12px rgba(0,0,0,.6);
+  background:url(/img/blason.png) 50% 45%/58% no-repeat,radial-gradient(80% 90% at 50% 0%,rgba(143,194,255,.35),transparent 70%),linear-gradient(135deg,#1C4FC4,#0B1A4A);
+  background-blend-mode:soft-light,normal,normal;align-content:end;padding-bottom:10px;border:1px solid rgba(255,255,255,.12)}
+.hero-stade .ha-stage .ha-sans{background:url(/img/blason.png) 50% 45%/58% no-repeat,linear-gradient(135deg,var(--or-clair),var(--or) 45%,var(--or-fonce));color:#0B1633;text-shadow:none}
+.hero-stade .ha-txt h3{font-size:24px;font-style:italic}
+.hero-stade .ha-points{justify-content:flex-start;margin-left:206px}
+.hero-stade .tableau-score{padding:18px 22px;position:relative;overflow:hidden}
+.hero-stade .tableau-score::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:radial-gradient(60% 80% at 50% 0%,rgba(143,194,255,.18),transparent 70%)}
+.hero-stade .tableau-score h3{font:800 13px var(--corps);letter-spacing:.16em;text-transform:uppercase;color:var(--or-clair)}
+.hero-stade .tableau-score h3 span:last-child{min-width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(227,182,76,.16);border:1px solid rgba(227,182,76,.5);letter-spacing:0}
+.hero-stade .we-cote img,.hero-stade .we-cote .ecusson{width:64px;height:64px;box-shadow:0 0 0 3px rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.45)}
+.hero-stade .we-cote span{font-size:20px;font-style:italic;text-transform:uppercase}
+.hero-stade .we-milieu{font-size:38px;font-style:italic;color:#fff;text-shadow:0 0 18px rgba(143,194,255,.55),0 0 2px #fff;
+  background:rgba(2,6,20,.55);border:1px solid rgba(143,194,255,.25);border-radius:14px;padding:8px 14px 6px;min-width:110px}
+.hero-stade .we-milieu small{color:var(--or-clair);letter-spacing:.08em;text-transform:uppercase;font-size:10.5px;text-shadow:none;margin-top:2px}
+.hero-stade .we-info{color:#C9D4F2;margin-top:10px}
+.hero-stade .we-points button{transition:width .3s,background .3s}
+.hero-stade .we-points button[aria-current="true"]{background:var(--or);width:22px;border-radius:999px}
+
+@media (max-width:1100px){
+  .hero.hero-stade h1{font-size:clamp(38px,6vw,64px)}
+  .hero-stade .ha-fiche{grid-template-columns:minmax(0,150px) minmax(0,1fr)}
+  .hero-stade .ha-points{margin-left:166px}
+}
+@media (max-width:860px){
+  .hero.hero-stade{min-height:0}
+  .hero.hero-stade .hero-scene{grid-template-columns:minmax(0,1fr);padding:6px 18px 6px;gap:0}
+  .hero-ballon{order:-1;width:min(76vw,340px,44svh);margin:4px auto 18px}
+  .hero-indice{bottom:-14px;font-size:11px;padding:5px 11px;letter-spacing:.03em}
+  .hero-sur{white-space:normal;letter-spacing:.1em;font-size:11.5px!important;line-height:1.35}
+  .hero.hero-stade .hero-dock{grid-template-columns:minmax(0,1fr);padding:18px 16px 30px;gap:16px}
+  .hero.hero-stade .hero-dock:has(>.hero-actus[hidden]) #prochain{grid-column:auto}
+  .hero-voile{background:linear-gradient(180deg,rgba(3,8,23,.25) 0,transparent 60px,transparent 300px,rgba(3,8,23,.7) 400px,rgba(3,8,23,.88) 520px,var(--nuit-1) 640px)}
+  .stade3d{height:min(100%,600px);-webkit-mask-image:linear-gradient(180deg,#000 52%,transparent);mask-image:linear-gradient(180deg,#000 52%,transparent)}
+  .hero-stade .hero-tete{gap:10px}
+  .hero-stade .annee{font-size:clamp(64px,22vw,110px)}
+  .hero.hero-stade h1{font-size:clamp(36px,10.5vw,54px);max-width:none}
+  .hero.hero-stade .hero-texte > p:not(.hero-sur){font-size:16.5px}
+  .hero-stade .ha-fiche{grid-template-columns:minmax(0,1fr)}
+  .hero-stade .ha-points{margin-left:0;justify-content:center}
+  .hero-stade .we-milieu{font-size:30px;min-width:92px}
+  .hero.hero-stade .btn{font-size:18px;padding:12px 20px}
+}
+
+/* bandeau des chiffres */
+#p-accueil .chiffres{background:linear-gradient(180deg,var(--nuit-1),rgba(10,22,54,.6));border:0;position:relative;max-width:1320px;margin:0 auto;gap:0;padding:6px 16px 10px}
+#p-accueil .chiffres div{border:0;position:relative;padding:22px 22px 18px;color:#AFC0EA;font-weight:600;font-size:15px;letter-spacing:.02em}
+#p-accueil .chiffres div + div::before{content:"";position:absolute;left:0;top:22%;bottom:22%;width:1px;background:linear-gradient(180deg,transparent,rgba(227,182,76,.55),transparent)}
+#p-accueil .chiffres b{font-size:clamp(46px,5vw,68px);font-weight:900;font-style:italic;line-height:.95;margin-bottom:4px;
+  background:linear-gradient(180deg,#fff 20%,var(--or-clair) 70%,var(--or));-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 20px rgba(227,182,76,.18))}
+@media (max-width:700px){
+  #p-accueil .chiffres div:nth-child(-n+2){border-bottom:0}
+  #p-accueil .chiffres div:nth-child(3)::before{display:none}
+  #p-accueil .chiffres b{font-size:44px}
+}
+
+/* ---------- titres de section ---------- */
+.bloc h2{font-weight:800;letter-spacing:.005em}
+#p-accueil .bloc h2,#p-club .bloc h2,#p-equipes .bloc h2,#p-inscriptions .bloc h2,#p-partenaires .bloc h2,#p-contact .bloc h2{
+  font-style:italic;text-transform:uppercase;font-weight:900;font-size:clamp(30px,3.4vw,42px);display:flex;align-items:center;gap:14px}
+#p-accueil .bloc h2::before,#p-club .bloc h2::before,#p-equipes .bloc h2::before,#p-inscriptions .bloc h2::before,#p-partenaires .bloc h2::before,#p-contact .bloc h2::before{
+  content:"";width:8px;height:.9em;border-radius:3px;flex:none;transform:skewX(-14deg);background:linear-gradient(180deg,var(--or-clair),var(--or-fonce));box-shadow:0 0 18px rgba(227,182,76,.4)}
+
+/* ---------- bandeau de titre des pages : pelouse en perspective et projecteurs ---------- */
+.titre-page{background:
+    radial-gradient(70% 120% at 85% -20%,rgba(47,107,255,.35),transparent 60%),
+    radial-gradient(50% 90% at 0% 0%,rgba(227,182,76,.16),transparent 60%),
+    linear-gradient(160deg,#0D2264 0%,#081840 45%,#050C24 100%);
+  padding:70px 0 58px;isolation:isolate;border-bottom:1px solid rgba(227,182,76,.18)}
+.titre-page::before{content:"";position:absolute;left:-30%;right:-30%;bottom:-2px;height:230%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 100%,transparent 0 118px,rgba(255,255,255,.22) 119px 121px,transparent 122px),
+    linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,255,255,.22) calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)),
+    repeating-linear-gradient(90deg,rgba(46,140,80,.30) 0 70px,rgba(36,116,66,.20) 70px 140px);
+  transform:perspective(520px) rotateX(64deg);transform-origin:50% 100%;
+  -webkit-mask-image:linear-gradient(0deg,#000 0%,rgba(0,0,0,.6) 40%,transparent 80%);mask-image:linear-gradient(0deg,#000 0%,rgba(0,0,0,.6) 40%,transparent 80%);
+  animation:solDefile 14s linear infinite}
+@keyframes solDefile{to{background-position:0 0,0 0,140px 0}}
+.titre-page::after{right:auto;left:0;width:100%;top:0;bottom:0;transform:none;z-index:-1;
+  background:
+    conic-gradient(from 160deg at 12% -10%,transparent 0deg,rgba(255,244,214,.16) 10deg,transparent 22deg),
+    conic-gradient(from 178deg at 88% -10%,transparent 0deg,rgba(214,228,255,.16) 12deg,transparent 26deg);
+  animation:faisceaux 9s ease-in-out infinite alternate}
+@keyframes faisceaux{from{opacity:.65;transform:skewX(-3deg)}to{opacity:1;transform:skewX(3deg)}}
+.titre-page .wrap{position:relative}
+.titre-page .wrap::before{content:"ASF Pierrelatte";display:block;font:800 12.5px var(--corps);letter-spacing:.2em;text-transform:uppercase;color:var(--or-clair);margin-bottom:10px;
+  padding-left:44px;background:linear-gradient(90deg,var(--or),transparent) left center/34px 2px no-repeat}
+.titre-page h1{font-style:italic;font-weight:900;text-transform:uppercase;font-size:clamp(42px,7vw,86px);line-height:.92;
+  background:linear-gradient(180deg,#fff 30%,#C9D8FF);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 8px 30px rgba(0,0,0,.45));
+  animation:monte .8s cubic-bezier(.2,.8,.2,1) both}
+.titre-page p{font-size:17.5px;color:#C9D4F2;opacity:1;margin-top:12px;animation:monte .8s .12s cubic-bezier(.2,.8,.2,1) both}
+@media (max-width:700px){.titre-page{padding:44px 0 38px}}
+
+/* ---------- filtres en pastilles ---------- */
+.filtres button,.onglets button{transition:background .2s,border-color .2s,color .2s,box-shadow .2s,transform .2s var(--ressort)}
+:root[data-theme="dark"] .filtres button{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:#DCE5FA}
+.filtres button:hover{border-color:rgba(227,182,76,.6);transform:translateY(-1px)}
+.filtres button[aria-pressed="true"]{background:linear-gradient(135deg,var(--or-clair),var(--or) 50%,var(--or-fonce))!important;border-color:transparent!important;color:#0B1633!important;
+  box-shadow:0 8px 22px rgba(227,182,76,.3)}
+.cal-filtres{background:linear-gradient(180deg,rgba(4,10,28,.4),transparent)}
+
+/* ---------- cartes et tableaux ---------- */
+:root[data-theme="dark"] .scroll,:root[data-theme="dark"] form.carte,:root[data-theme="dark"] .carte{border-color:rgba(143,168,240,.16);box-shadow:0 18px 44px rgba(0,0,0,.28)}
+:root[data-theme="dark"] .scroll{background:linear-gradient(180deg,rgba(18,32,76,.75),rgba(9,18,46,.85));border-radius:16px}
+:root[data-theme="dark"] th{background:rgba(0,0,0,.22);color:#9FB2E8;letter-spacing:.06em;text-transform:uppercase;font-size:14px}
+:root[data-theme="dark"] td{border-bottom-color:rgba(143,168,240,.10)}
+tr.nous td{background:rgba(227,182,76,.17)!important;color:#fff;box-shadow:inset 0 1px 0 rgba(227,182,76,.35),inset 0 -1px 0 rgba(227,182,76,.35)}
+tr.nous td:first-child{box-shadow:inset 4px 0 0 var(--or),inset 0 1px 0 rgba(227,182,76,.35),inset 0 -1px 0 rgba(227,182,76,.35)}
+#mini-classement tr:not(.nous) td{transition:background .2s}
+#mini-classement tr:not(.nous):hover td{background:rgba(255,255,255,.04)}
+.cl-blason,.cm-blason{box-shadow:0 2px 8px rgba(0,0,0,.3)}
+
+/* ---------- résultats ---------- */
+.res-affiche,.cal-affiche{background:
+  radial-gradient(60% 50% at 80% 0%,rgba(47,107,255,.25),transparent 70%),
+  radial-gradient(40% 40% at 0% 100%,rgba(227,182,76,.10),transparent 70%),
+  linear-gradient(160deg,#0C1F58 0%,#08143A 45%,#040A1E 100%)}
+.res-carte{position:relative;border-radius:18px;border:1px solid rgba(255,255,255,.1);border-left-width:5px;
+  background:linear-gradient(160deg,rgba(34,58,128,.55),rgba(9,18,46,.75));box-shadow:0 18px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);
+  transition:transform .3s var(--ressort),box-shadow .3s ease}
+.res-carte:hover,.res-carte:focus-visible{transform:translateY(-4px);box-shadow:0 26px 54px rgba(0,0,0,.45),0 0 0 1px rgba(227,182,76,.35),inset 0 1px 0 rgba(255,255,255,.07)}
+.res-carte.V{box-shadow:0 18px 40px rgba(0,0,0,.35),inset 6px 0 24px -12px rgba(34,197,94,.6)}
+.res-carte.D{box-shadow:0 18px 40px rgba(0,0,0,.35),inset 6px 0 24px -12px rgba(239,68,68,.55)}
+.res-chip{background:linear-gradient(135deg,var(--or-clair),var(--or));box-shadow:0 4px 12px rgba(227,182,76,.25)}
+.res-eq span{font-style:italic}
+.res-eq b{font-style:italic;font-size:30px}
+.res-eq.gagne b{background:linear-gradient(180deg,#fff,#DCE5FA);box-shadow:0 6px 16px rgba(255,255,255,.15)}
+.res-bilan div{border-radius:16px;background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03));box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.res-bilan b{font-style:italic;font-size:46px}
+#dernier .res-carte{background:linear-gradient(160deg,rgba(34,58,128,.6),rgba(9,18,46,.8))}
+.res-we h3,.cal-bloc h3{font-style:italic;text-transform:uppercase}
+.res-we h3::after,.cal-bloc h3::after{background:linear-gradient(90deg,var(--or),transparent);width:80px}
+
+/* ---------- calendrier ---------- */
+.cal-bloc{border-radius:20px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(160deg,rgba(34,58,128,.42),rgba(8,16,42,.7));
+  box-shadow:0 18px 44px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.07)}
+.cal-ligne{transition:background .2s,transform .25s var(--ressort)}
+.cal-ligne:hover,.cal-ligne:focus-visible{background:linear-gradient(90deg,rgba(227,182,76,.16),rgba(255,255,255,.04));transform:translateX(4px)}
+.cal-jour{font-style:italic}
+.cal-j{background:linear-gradient(135deg,var(--or-clair),var(--or))}
+.cal-saison{background:linear-gradient(180deg,var(--or-clair),var(--or-fonce));-webkit-background-clip:text;background-clip:text;color:transparent;font-style:italic}
+.cal-titre{-webkit-text-stroke:1.5px rgba(247,220,146,.6)}
+.cal-bande{background:linear-gradient(180deg,rgba(47,107,255,.35),rgba(4,10,30,.1))}
+
+/* ---------- classement : podium en relief ---------- */
+.clx-tete h2{font-style:italic;text-transform:uppercase}
+.clx-nous{border-radius:20px;background:linear-gradient(135deg,rgba(227,182,76,.2),rgba(255,255,255,.04));box-shadow:0 14px 34px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08)}
+.clx-rang{font-style:italic;background:linear-gradient(180deg,var(--or-clair),var(--or-fonce));-webkit-background-clip:text;background-clip:text;color:transparent}
+.clx-podium{perspective:1000px;align-items:end;margin-bottom:40px}
+.clx-marche{--socle:34px;padding-bottom:calc(14px + var(--socle));border-radius:18px 18px 8px 8px;overflow:hidden;transform-origin:50% 100%;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 26px 50px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.12);transition:transform .45s var(--ressort)}
+.clx-marche.p1{--socle:72px}.clx-marche.p2{--socle:46px}
+.clx-marche:hover{transform:translateY(-6px) rotateX(4deg)}
+.clx-marche::after{position:absolute;left:0;right:0;bottom:0;height:var(--socle);display:grid;place-items:center;
+  font:900 italic calc(var(--socle) * .9) var(--display);line-height:1;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.5);
+  background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.02));border-top:1px solid rgba(255,255,255,.18)}
+.clx-marche.p1::after{content:"1";background:linear-gradient(180deg,rgba(227,182,76,.45),rgba(227,182,76,.08));-webkit-text-stroke-color:rgba(255,240,200,.85)}
+.clx-marche.p2::after{content:"2";background:linear-gradient(180deg,rgba(203,213,225,.35),rgba(203,213,225,.05))}
+.clx-marche.p3::after{content:"3";background:linear-gradient(180deg,rgba(214,154,107,.4),rgba(214,154,107,.06))}
+.clx-marche.p1{box-shadow:0 30px 70px rgba(227,182,76,.18),0 26px 50px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.2)}
+.clx-marche .med{top:10px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.clx-marche .cl-blason{margin-top:22px}
+.clx-marche .pt{font-style:italic}
+.clx-table{border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));box-shadow:0 18px 44px rgba(0,0,0,.3)}
+.clx-l{transition:background .2s}
+.clx-l.nous{background:linear-gradient(90deg,rgba(227,182,76,.3),rgba(227,182,76,.06))}
+.clx-l .pts{font-style:italic}
+
+/* ---------- équipes : cartes façon cartes à collectionner ---------- */
+.diapo{border-radius:22px;box-shadow:0 30px 70px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08)}
+.dp-slide figcaption b{font-style:italic;text-transform:uppercase}
+.dp-points button[aria-current="true"]{background:var(--or);width:24px;border-radius:999px}
+.eq-carte{position:relative;border-radius:20px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(170deg,#132A6E,#0A1638 60%,#070F2A);
+  box-shadow:0 20px 44px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1)}
+.eq-carte:hover{box-shadow:0 30px 60px rgba(0,0,0,.5),0 0 0 1px rgba(227,182,76,.45)}
+.eq-photo{background:radial-gradient(80% 90% at 50% 0%,rgba(143,194,255,.35),transparent 70%),linear-gradient(135deg,#1C4FC4,#0B1A4A)}
+.eq-photo::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(100deg,transparent 0 22px,rgba(255,255,255,.05) 22px 34px)}
+.eq-sigle{font-style:italic;font-size:76px;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.4)}
+.eq-niveau{background:linear-gradient(135deg,var(--or-clair),var(--or));color:#0B1633;box-shadow:0 6px 16px rgba(0,0,0,.3);z-index:1}
+.eq-corps h3{font-style:italic;text-transform:uppercase}
+.eq-infos b{font-style:italic;background:linear-gradient(180deg,#fff,var(--or-clair));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* reflet holographique et inclinaison 3D (activés par le script sur ordinateur) */
+.relief{transform-style:preserve-3d;will-change:transform}
+.relief > .reflet{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;opacity:0;transition:opacity .35s;mix-blend-mode:screen;
+  background:
+    radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.28),transparent 42%),
+    linear-gradient(115deg,transparent 20%,rgba(255,215,130,.16) 38%,rgba(143,194,255,.20) 50%,rgba(255,140,220,.10) 60%,transparent 78%);
+  background-size:100% 100%,220% 220%;background-position:0 0,var(--hx,50%) var(--hy,50%)}
+.relief.survol > .reflet{opacity:1}
+
+/* ---------- compos : terrain en 3D, joueurs debout ---------- */
+.fc{border-radius:24px;border-color:rgba(143,168,240,.16);background:linear-gradient(180deg,rgba(15,28,68,.85),rgba(6,14,38,.92));box-shadow:0 30px 70px rgba(0,0,0,.45)}
+.fc-tete{background:radial-gradient(70% 140% at 50% -40%,rgba(47,107,255,.5),transparent 70%),linear-gradient(135deg,#14418E,#0B1A4A 60%,#060E26);padding:24px 20px}
+.fc-club b{font-style:italic}
+.fc-terrain{perspective:1100px;perspective-origin:50% -20%}
+.fc-terrain .pitch:not(.edition){transform:rotateX(32deg);transform-origin:50% 100%;transform-style:preserve-3d;overflow:visible;margin-top:-6%;
+  box-shadow:0 60px 60px -30px rgba(0,0,0,.75),0 0 0 4px #2E7A38,0 0 0 9px rgba(255,255,255,.06);background:transparent;transition:transform .8s var(--ressort)}
+.fc-terrain .pitch:not(.edition):hover{transform:rotateX(26deg)}
+.fc-terrain .pitch:not(.edition) .pl-svg{border-radius:10px}
+.fc-terrain .pitch:not(.edition)::after{content:"";position:absolute;inset:0;border-radius:10px;pointer-events:none;
+  background:radial-gradient(60% 45% at 50% 50%,rgba(255,255,255,.10),transparent 70%),linear-gradient(180deg,rgba(0,0,0,.25),transparent 30%)}
+.fc-terrain .pitch:not(.edition) .tk{transform:translate(-50%,-92%) rotateX(-32deg);transform-origin:50% 100%;transition:transform .8s var(--ressort)}
+.fc-terrain .pitch:not(.edition):hover .tk{transform:translate(-50%,-92%) rotateX(-26deg)}
+.fc-terrain .pitch:not(.edition) .tk .mt-svg{filter:drop-shadow(0 8px 6px rgba(0,0,0,.55))}
+.fc-terrain .pitch:not(.edition) .tk-n{box-shadow:0 4px 10px rgba(0,0,0,.4)}
+.banc{border-radius:16px}
+.banc-toit{background:linear-gradient(180deg,#1C4FC4,#0B1A4A)}
+.mot-coach{border-radius:16px}
+
+/* ---------- club ---------- */
+.frise{border-left:0;position:relative;margin-left:12px}
+.frise::before{content:"";position:absolute;left:0;top:6px;bottom:10px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--or),rgba(47,107,255,.6),transparent)}
+.frise div::before{left:-7px;width:17px;height:17px;background:radial-gradient(circle,#fff 0 30%,var(--or) 35%);border:0;box-shadow:0 0 0 4px rgba(227,182,76,.18),0 0 18px rgba(227,182,76,.5)}
+.frise b{font-style:italic;text-transform:uppercase;color:var(--or-clair)}
+.photo{border-radius:20px;box-shadow:0 26px 60px rgba(0,0,0,.45);transform:perspective(900px) rotateY(-6deg) rotateX(3deg);transition:transform .6s var(--ressort)}
+.photo:hover{transform:none}
+.info-ligne svg{stroke:var(--or)}
+
+/* ---------- contact ---------- */
+.ct-personne{position:relative;border-radius:20px;border-color:rgba(143,168,240,.16);background:linear-gradient(160deg,rgba(26,46,108,.6),rgba(9,18,46,.85));
+  box-shadow:0 18px 40px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.07);transition:transform .3s var(--ressort),box-shadow .3s}
+.ct-personne:hover{transform:translateY(-4px);box-shadow:0 26px 54px rgba(0,0,0,.42),0 0 0 1px rgba(227,182,76,.35)}
+.ct-avatar{background:conic-gradient(from 210deg,var(--or-clair),var(--or),var(--or-fonce),var(--or-clair))}
+.ct-p-txt h3{font-style:italic}
+
+/* ---------- inscriptions ---------- */
+.porte-insc{position:relative;border-radius:20px;background:linear-gradient(160deg,rgba(26,46,108,.6),rgba(9,18,46,.85))!important;border:1px solid rgba(143,168,240,.18);border-top:4px solid var(--or);
+  box-shadow:0 18px 40px rgba(0,0,0,.32);transition:transform .3s var(--ressort),box-shadow .3s,border-color .3s}
+.porte-insc b{font-style:italic;text-transform:uppercase}
+.porte-insc:hover{transform:translateY(-4px)}
+.porte-insc[aria-pressed="true"]{border-color:var(--or)!important;box-shadow:0 0 0 2px rgba(227,182,76,.5),0 26px 54px rgba(0,0,0,.42)}
+.info-carte{border-radius:18px;border-color:rgba(143,168,240,.16);background:linear-gradient(160deg,rgba(26,46,108,.55),rgba(9,18,46,.85));box-shadow:0 16px 36px rgba(0,0,0,.3)}
+.info-carte .gros{font-style:italic}
+
+/* ---------- partenaires ---------- */
+.partenaires div{border-radius:18px;border:1px solid rgba(227,182,76,.3);background:linear-gradient(160deg,rgba(26,46,108,.4),rgba(9,18,46,.7));font-style:italic;transition:transform .3s var(--ressort),border-color .3s}
+.partenaires div:hover{transform:translateY(-3px);border-color:var(--or)}
+
+/* ---------- pied de page ---------- */
+footer{background:linear-gradient(180deg,#050C24,#02061A);position:relative;margin-top:50px}
+footer::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(227,182,76,.6),transparent)}
+.defile{background:linear-gradient(180deg,#081236,#050C24);border-top:0;padding:18px 0;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.piste img{height:58px;border-radius:12px;background:#fff;padding:6px 10px;box-shadow:0 8px 22px rgba(0,0,0,.35);transition:transform .3s var(--ressort)}
+.piste img:hover{transform:translateY(-3px) scale(1.04)}
+.pied-club b{font-style:italic;text-transform:uppercase;letter-spacing:.02em}
+.pied-blason{filter:drop-shadow(0 6px 16px rgba(227,182,76,.25))}
+.pied-liens a{text-decoration:none;position:relative;transition:color .2s}
+.pied-liens a:hover{color:var(--or-clair)}
+
+/* ---------- connexion et portail ---------- */
+.cx-fond{background:
+  radial-gradient(50% 40% at 50% 0%,rgba(143,194,255,.25),transparent 70%),
+  radial-gradient(40% 50% at 10% 100%,rgba(227,182,76,.12),transparent 70%),
+  linear-gradient(160deg,#0D2264 0%,#081840 45%,#040A1E 100%)}
+.cx-blason img{animation:blasonFlotte 6s ease-in-out infinite;filter:drop-shadow(0 12px 30px rgba(0,0,0,.5)) drop-shadow(0 0 24px rgba(227,182,76,.3))}
+.cx-cadre h1{font-style:italic;text-transform:uppercase;font-weight:900}
+.cx-porte,.cx-carte{border-radius:24px;border:1px solid transparent;background:linear-gradient(180deg,rgba(18,34,82,.92),rgba(8,16,42,.96)) padding-box,var(--verre-bord) border-box;color:#EEF2FC}
+.cx-porte{border-top-width:1px;transition:transform .35s var(--ressort),box-shadow .35s}
+.cx-porte:hover{transform:translateY(-5px);box-shadow:0 34px 80px rgba(0,0,0,.5),0 0 40px rgba(227,182,76,.12)}
+.cx-porte svg{stroke:var(--or-clair)}
+.hero.portail{background:radial-gradient(60% 60% at 50% 0%,rgba(143,194,255,.3),transparent 70%),linear-gradient(160deg,#0D2264,#060E26)}
+.porte{border-radius:22px;border-color:rgba(143,168,240,.16);border-top:4px solid var(--or);background:linear-gradient(160deg,rgba(26,46,108,.6),rgba(9,18,46,.85));box-shadow:0 20px 44px rgba(0,0,0,.35)}
+.porte h2{font-style:italic;text-transform:uppercase}
+
+/* ---------- fenêtres, menu du téléphone ---------- */
+.fiche-match{border-radius:22px;overflow:hidden;background:linear-gradient(180deg,#10204E,#081236);border:1px solid rgba(227,182,76,.25)}
+.fiche-match[open]{animation:fenetre .35s var(--ressort)}
+@keyframes fenetre{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.fiche-match::backdrop{background:rgba(3,8,23,.7);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.fm-tete{background:radial-gradient(80% 140% at 50% -40%,rgba(47,107,255,.55),transparent 70%),linear-gradient(135deg,#14418E,#0B1A4A)}
+.drawer-fond{background:rgba(3,8,23,.62);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+:root[data-theme="dark"] .drawer-panneau{background:linear-gradient(180deg,rgba(14,28,70,.97),rgba(5,12,34,.99));border-left:1px solid rgba(227,182,76,.2);animation:tiroir .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes tiroir{from{transform:translateX(30px);opacity:.4}to{transform:none;opacity:1}}
+.drawer-liste .rub-on,.drawer-liste .lien.rub[aria-selected="true"]{background:linear-gradient(135deg,rgba(227,182,76,.28),rgba(227,182,76,.08))!important;box-shadow:inset 3px 0 0 var(--or)}
+.toast{border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.4);border:1px solid rgba(227,182,76,.3)}
+
+/* ---------- apparition au défilement (navigateurs récents, sans script) ---------- */
+@keyframes surgit{from{opacity:0;translate:0 34px;scale:.97}to{opacity:1;translate:0 0;scale:1}}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    :is(#p-accueil,#p-resultats,#p-calendrier,#p-classement,#p-equipes,#p-club,#p-contact,#p-inscriptions,#p-partenaires,#p-compos,#p-tournois)
+      :is(.res-carte,.cal-bloc,.eq-carte,.ct-personne,.clx-marche,.fc,.info-carte,.frise > div,.partenaires > div,.porte-insc,.scroll,.diapo,.res-bilan > div){
+      animation:surgit linear both;animation-timeline:view();animation-range:entry 0% entry 160px}
+  }
+}
+
+/* ---------- thème clair (bouton « Changer de thème ») : les cartes sombres restent lisibles ---------- */
+:root[data-theme="light"] :is(.eq-carte,.ct-personne,.porte-insc,.info-carte,.fc,.cx-porte,.cx-carte,.porte,.partenaires > div,.res-carte,.cal-bloc,.clx-marche,.clx-table){
+  --texte:#EEF2FC;--texte-doux:#A5B0CE;--carte:#0F1C44;--ligne:#26356A;--bleu-texte:#8FA8F0;--bleu-clair:#1E2F66;color:#EEF2FC}
+:root[data-theme="light"] .fc input,:root[data-theme="light"] .cx-carte input,:root[data-theme="light"] .cx-carte select{background:#0A1536}
+/*/HABILLAGE-CSS*/
 </style>
 <script>window.ASFP_API = "/api";</script>
 </head>
@@ -2228,17 +2649,22 @@ tr.repeche td:first-child{box-shadow:inset 3px 0 0 #E3B64C}
 </div>
 
 <div class="page" id="p-accueil">
-  <section class="hero">
-    <div class="rayures"></div>
-    <div class="wrap">
-      <aside class="hero-actus" id="hero-actus" aria-label="Actualités du club" hidden></aside>
+  <section class="hero hero-stade">
+    <canvas class="stade3d" id="stade3d" aria-hidden="true"></canvas>
+    <div class="hero-voile" aria-hidden="true"></div>
+    <div class="wrap hero-scene">
       <div class="hero-texte">
         <div class="hero-tete"><span class="hero-blason" data-blason></span><div class="annee" aria-hidden="true">1923</div></div>
-        <h1>Le foot en bleu et blanc, à Pierrelatte</h1>
+        <p class="hero-sur"><span></span>Atom'Sports Football · Stade Gustave Jaume</p>
+        <h1>Le foot en bleu et blanc, <em>à Pierrelatte</em></h1>
         <p>Plus de 450 licenciés, des U6 aux vétérans, filles et garçons, au complexe sportif Gustave Jaume.</p>
         <div class="btns"><a class="btn plein" href="#inscriptions">S'inscrire au club</a>
           <button class="btn stage-bt" id="bt-stage" data-stage-ouvrir hidden>⚽ S'inscrire au stage</button></div>
       </div>
+      <div class="hero-ballon" id="hero-ballon" aria-hidden="true"><span class="hero-indice">Fais tourner le ballon · touche-le pour frapper</span></div>
+    </div>
+    <div class="wrap hero-dock">
+      <aside class="hero-actus" id="hero-actus" aria-label="Actualités du club" hidden></aside>
       <div class="tableau-score" id="prochain"></div>
     </div>
   </section>
@@ -9153,5 +9579,849 @@ if ("serviceWorker" in navigator && window.ASFP_API) navigator.serviceWorker.reg
 setInterval(() => { if (location.hash === "#espace" && S.ui.onglet === "affiches") genererAffichesAuto(); }, 10 * 60 * 1000);
 demarrer();
 </script>
+<!--HABILLAGE-JS-->
+<script id="stade3d-js">
+/* ============================================================
+   STADE 3D : nuit de match au stade Gustave Jaume
+   Scène dessinée en temps réel (WebGL 2, sans bibliothèque) :
+   ballon aux couleurs du club posé au point d'engagement, projecteurs,
+   tribune et ses flashs, panneaux LED, et le Rocher en fond.
+   Si le navigateur ne sait pas faire de 3D, le fond CSS reste affiché.
+   ============================================================ */
+(() => {
+  "use strict";
+  const cv = document.getElementById("stade3d");
+  const zoneBallon = document.getElementById("hero-ballon");
+  if (!cv || !zoneBallon) return;
+  const hero = cv.closest(".hero");
+  const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tactile = matchMedia("(pointer: coarse)").matches;
+
+  const VS = `#version 300 es
+in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  const FS = `#version 300 es
+precision highp float;
+out vec4 oCol;
+uniform vec2 uRes, uCentre;
+uniform float uTime, uFocal, uRad, uFade, uFlash, uKickT, uLogoOk, uPx;
+uniform vec3 uCam, uCR, uCU, uCF, uBall, uCrestU, uCrestV;
+uniform mat3 uRot;
+uniform vec4 uFaces[32];
+uniform float uLum[6];
+uniform sampler2D uLogo, uLed;
+
+const vec3 LP[6] = vec3[6](
+  vec3(-58.0, 31.0, -44.0), vec3(58.0, 31.0, -44.0),
+  vec3(-14.0, 10.0, -48.6), vec3(14.0, 10.0, -48.6),
+  vec3(-42.0, 30.0, 46.0), vec3(42.0, 30.0, 46.0));
+const vec3 LC[6] = vec3[6](
+  vec3(1.0, 0.95, 0.86), vec3(1.0, 0.95, 0.86),
+  vec3(0.78, 0.86, 1.0), vec3(0.78, 0.86, 1.0),
+  vec3(1.0, 0.96, 0.9), vec3(1.0, 0.96, 0.9));
+const float LI[6] = float[6](3400.0, 3400.0, 420.0, 420.0, 3900.0, 1500.0);
+const float HK[6] = float[6](0.55, 0.55, 0.16, 0.16, 0.22, 0.22);
+
+float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float h13(vec3 p3){ p3 = fract(p3 * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
+
+float sphHit(vec3 ro, vec3 rd, vec3 c, float r){
+  vec3 oc = ro - c; float b = dot(oc, rd); float h = b * b - dot(oc, oc) + r * r;
+  if (h < 0.0) return -1.0; return -b - sqrt(h); }
+float sphOmbre(vec3 ro, vec3 rd, vec3 c, float r, float k){
+  vec3 oc = ro - c; float b = dot(oc, rd); float cc = dot(oc, oc) - r * r; float h = b * b - cc;
+  float d = sqrt(max(0.0, r * r - h)) - r; float t = -b - sqrt(max(h, 0.0));
+  return (t < 0.0) ? 1.0 : smoothstep(0.0, 1.0, 2.5 * k * d / t); }
+float cylHit(vec3 ro, vec3 rd, vec2 c, float r){
+  vec2 oc = ro.xz - c, d = rd.xz; float a = dot(d, d); float b = dot(oc, d); float cc = dot(oc, oc) - r * r;
+  float h = b * b - a * cc; if (h < 0.0) return -1.0; return (-b - sqrt(h)) / a; }
+float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
+
+vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+
+/* ---------- ciel, collines et Rocher ---------- */
+vec3 ciel(vec3 rd){
+  float y = rd.y;
+  vec3 c = mix(vec3(0.030, 0.052, 0.125), vec3(0.005, 0.010, 0.032), smoothstep(-0.02, 0.5, y));
+  float st = h13(floor(rd * 340.0));
+  c += vec3(0.75, 0.82, 1.0) * step(0.9991, st) * smoothstep(0.08, 0.3, y) * (0.55 + 0.45 * sin(uTime * 1.7 + st * 90.0));
+  float az = atan(rd.x, -rd.z);
+  float coll = 0.03 + 0.018 * vn(vec2(az * 5.0, 1.7)) + 0.008 * vn(vec2(az * 23.0, 4.1));
+  float rocher = 0.205 * exp(-pow((az + 0.52) / 0.115, 2.0)) * (0.86 + 0.14 * vn(vec2(az * 38.0, 2.0)));
+  rocher = max(rocher, 0.15 * exp(-pow((az + 0.40) / 0.06, 2.0)));
+  float prof = max(coll, rocher);
+  if (y < prof){
+    c = vec3(0.010, 0.017, 0.040);
+    c += vec3(0.05, 0.08, 0.17) * smoothstep(prof - 0.025, prof, y) * (0.4 + 0.6 * smoothstep(-0.7, -0.3, az));
+    float ville = step(0.985, h12(floor(vec2(az * 420.0, y * 900.0)))) * smoothstep(0.03, 0.0, y);
+    c += vec3(1.0, 0.62, 0.28) * ville * 0.9;
+  }
+  return c;
+}
+
+/* ---------- reflets sur le ballon ---------- */
+vec3 envir(vec3 r){
+  if (r.y < 0.0) return vec3(0.03, 0.11, 0.05) * (0.6 + 2.0 * exp(r.y * 5.0));
+  vec3 c = mix(vec3(0.05, 0.08, 0.17), vec3(0.008, 0.016, 0.045), smoothstep(0.0, 0.6, r.y));
+  c += vec3(0.5, 0.58, 0.8) * exp(-pow((r.y - 0.14) / 0.035, 2.0)) * 0.55;
+  c += vec3(0.05, 0.2, 0.6) * exp(-pow((r.y - 0.02) / 0.02, 2.0)) * 0.6;
+  for (int i = 0; i < 6; i++){
+    vec3 l = normalize(LP[i] - uBall);
+    c += LC[i] * uLum[i] * pow(max(dot(r, l), 0.0), 900.0) * 30.0;
+  }
+  return c;
+}
+
+/* ---------- ballon du club ---------- */
+vec3 ballon(vec3 p, vec3 rd){
+  vec3 n = normalize(p - uBall);
+  vec3 q = uRot * n;
+  float s1 = -9.0, s2 = -9.0; int i1 = 0, i2 = 0;
+  for (int i = 0; i < 32; i++){
+    float s = dot(q, uFaces[i].xyz);
+    if (s > s1){ s2 = s1; i2 = i1; s1 = s; i1 = i; }
+    else if (s > s2){ s2 = s; i2 = i; }
+  }
+  vec3 f1 = uFaces[i1].xyz, f2 = uFaces[i2].xyz;
+  float e = (s1 - s2) / max(length(f1 - f2), 1e-3);
+  float aa = fwidth(e) + 1e-4;
+  float type = uFaces[i1].w;
+  vec3 c = normalize(f1);
+  vec3 tq = q - c * dot(q, c);
+  float pil = 1.0 - smoothstep(0.0, 0.16, e);
+  vec3 qn = normalize(q + normalize(tq + 1e-6) * 0.45 * pil * pil);
+  vec3 nn = normalize(transpose(uRot) * qn);
+
+  vec3 alb = type < 0.5 ? vec3(0.035, 0.11, 0.42) : vec3(0.86, 0.88, 0.93);
+  float or = 0.0;
+  if (type < 0.5){
+    or = 1.0 - smoothstep(0.009 - aa, 0.009 + aa, abs(e - 0.05));
+    alb = mix(alb, vec3(0.95, 0.66, 0.18), or);
+  } else {
+    float trait = 1.0 - smoothstep(0.006 - aa, 0.006 + aa, abs(e - 0.045));
+    alb = mix(alb, vec3(0.12, 0.30, 0.78), trait * 0.85);
+  }
+  if (type > 1.5){
+    vec2 uv = vec2(dot(q, uCrestU), dot(q, uCrestV)) / 0.30;
+    if (dot(uv, uv) < 1.0){
+      vec4 lg = texture(uLogo, vec2(0.5 + 0.5 * uv.x, 0.5 - 0.5 * uv.y));
+      alb = mix(alb, pow(lg.rgb, vec3(2.2)), lg.a * uLogoOk);
+    }
+  }
+  float couture = 1.0 - smoothstep(0.011 - aa, 0.011 + aa, e);
+  alb = mix(alb, vec3(0.012, 0.02, 0.05), couture);
+
+  vec3 V = -rd;
+  float ndv = max(dot(nn, V), 0.0);
+  vec3 col = alb * (vec3(0.03, 0.045, 0.09) * (0.6 + 0.4 * nn.y) + vec3(0.02, 0.07, 0.03) * max(-nn.y, 0.0));
+  for (int i = 0; i < 6; i++){
+    vec3 Lv = LP[i] - p; float d2 = dot(Lv, Lv); vec3 l = Lv * inversesqrt(d2);
+    float E = uLum[i] * LI[i] / d2;
+    float dif = max(dot(nn, l), 0.0);
+    vec3 h = normalize(l + V);
+    float nh = max(dot(nn, h), 0.0);
+    float sp = pow(nh, mix(80.0, 160.0, or)) * mix(1.6, 2.6, or) + pow(nh, 1200.0) * 14.0;
+    col += LC[i] * E * (alb * dif + sp * (1.0 - couture));
+  }
+  float F = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+  col += envir(reflect(rd, nn)) * F * (1.0 - couture) * 1.25;
+  col += vec3(0.95, 0.68, 0.25) * pow(1.0 - ndv, 4.0) * 0.22;
+  col += vec3(1.0, 0.75, 0.3) * uFlash * 0.25 * pow(1.0 - ndv, 2.0);
+  return col;
+}
+
+/* ---------- pelouse ---------- */
+float lignes(vec2 p){
+  vec2 q = abs(p);
+  float d = seg(q, vec2(0.0, 34.0), vec2(52.5, 34.0));
+  d = min(d, seg(q, vec2(52.5, 0.0), vec2(52.5, 34.0)));
+  d = min(d, seg(q, vec2(0.0, 0.0), vec2(0.0, 34.0)));
+  d = min(d, seg(q, vec2(36.0, 0.0), vec2(36.0, 20.16)));
+  d = min(d, seg(q, vec2(36.0, 20.16), vec2(52.5, 20.16)));
+  d = min(d, seg(q, vec2(47.0, 0.0), vec2(47.0, 9.16)));
+  d = min(d, seg(q, vec2(47.0, 9.16), vec2(52.5, 9.16)));
+  if (q.x < 36.0) d = min(d, abs(length(q - vec2(41.5, 0.0)) - 9.15));
+  if (q.x < 52.5 && q.y < 34.0) d = min(d, abs(length(q - vec2(52.5, 34.0)) - 1.0));
+  d = min(d, max(length(p) - 0.2, 0.0));
+  d = min(d, max(length(q - vec2(41.5, 0.0)) - 0.18, 0.0));
+  return d;
+}
+vec3 pelouse(vec3 p, vec3 rd, float t){
+  vec2 xz = p.xz, q = abs(xz);
+  float bande = mod(floor((xz.x + 52.5) / 5.25), 2.0);
+  vec3 g = mix(vec3(0.055, 0.205, 0.075), vec3(0.075, 0.26, 0.095), bande) ;
+  float fd = clamp(1.0 - t / 45.0, 0.0, 1.0);
+  g *= 0.82 + 0.36 * mix(0.5, vn(xz * 3.0), fd);
+  g *= 0.88 + 0.24 * vn(xz * 0.22 + 7.0);
+  float dedans = step(q.x, 57.0) * step(q.y, 38.0);
+  g = mix(vec3(0.022, 0.032, 0.06), g, dedans);
+  float d = lignes(xz);
+  float aa = fwidth(d) * 1.1 + 0.002;
+  float ln = (1.0 - smoothstep(0.065 - aa, 0.065 + aa, d)) * step(q.x, 53.2) * step(q.y, 34.8);
+  vec3 alb = mix(g, vec3(0.78, 0.80, 0.82), ln);
+  vec3 E = vec3(0.010, 0.016, 0.036);
+  vec3 sp = vec3(0.0);
+  vec3 r = reflect(rd, vec3(0.0, 1.0, 0.0));
+  for (int i = 0; i < 6; i++){
+    vec3 Lv = LP[i] - p; float d2 = dot(Lv, Lv); vec3 l = Lv * inversesqrt(d2);
+    float sh = sphOmbre(p + vec3(0.0, 0.01, 0.0), l, uBall, uRad, 6.0);
+    vec3 ci = LC[i] * uLum[i] * LI[i] / d2;
+    E += ci * max(l.y, 0.0) * sh;
+    sp += ci * pow(max(dot(r, l), 0.0), 18.0) * 0.55 * sh * dedans;
+  }
+  vec3 col = alb * E + sp * (0.35 + 0.65 * fd);
+  vec3 bc = uBall - p; float ao = clamp(uRad * uRad / dot(bc, bc) * (bc.y / length(bc)) * 1.6, 0.0, 1.0);
+  col *= 1.0 - 0.75 * ao;
+  // comète dorée sur le rond central
+  float dc = abs(length(xz) - 9.15);
+  float lc = 1.0 - smoothstep(0.08 - aa, 0.10 + aa, dc);
+  float a = atan(xz.y, xz.x);
+  float da = mod(a - uTime * 0.7 + 3.14159, 6.28318) - 3.14159;
+  float com = da < 0.0 ? exp(da * 1.6) : exp(-da * 60.0);
+  col += vec3(1.0, 0.7, 0.22) * (lc * (0.25 + 2.4 * com) + exp(-dc * 3.0) * com * 0.25);
+  col += vec3(1.0, 0.75, 0.3) * (1.0 - smoothstep(0.12, 0.3, length(xz))) * 0.6;
+  // onde de choc quand on frappe le ballon
+  if (uKickT < 3.0){
+    float rr = uKickT * 16.0;
+    float w = exp(-pow((length(xz) - rr) / 0.9, 2.0)) * exp(-uKickT * 1.5);
+    col += vec3(1.0, 0.72, 0.25) * w * 1.6;
+  }
+  return col;
+}
+
+/* ---------- panneaux LED, tribune, toit, pylônes ---------- */
+vec3 panneaux(vec3 p){
+  float u = (p.x + 56.0) / 112.0 * 3.0 - uTime * 0.03;
+  float v = 1.0 - p.y / 0.95;
+  vec3 tx = texture(uLed, vec2(u, v)).rgb;
+  vec2 g = fract(vec2(p.x, p.y) / 0.045) - 0.5;
+  float dotm = smoothstep(0.48, 0.22, length(g));
+  float fw = clamp(fwidth(p.x / 0.045) * 1.5 - 0.4, 0.0, 1.0);
+  return pow(tx, vec3(2.2)) * mix(0.25 + 1.6 * dotm, 0.95, fw) * 2.4 + vec3(0.004, 0.006, 0.014);
+}
+vec3 tribune(vec3 p){
+  if (p.y > 9.0) return vec3(0.006, 0.009, 0.02);
+  float along = (p.y - 1.2) * 1.73;
+  vec2 cell = vec2(p.x / 0.5, along / 0.56);
+  vec2 ci = floor(cell), cf = fract(cell);
+  float h = h12(ci);
+  float plein = step(0.2, h12(ci + 17.3));
+  vec3 maillot = h < 0.5 ? vec3(0.08, 0.22, 0.70) : h < 0.7 ? vec3(0.80, 0.82, 0.88) : h < 0.8 ? vec3(0.95, 0.66, 0.18) : vec3(0.12, 0.12, 0.16);
+  float corps = smoothstep(0.78, 0.05, length((cf - 0.5) * vec2(1.0, 0.85)));
+  vec3 alb = mix(vec3(0.025, 0.05, 0.15), maillot, plein * corps * (0.25 + 0.45 * h12(ci + 3.1)));
+  float allee = smoothstep(0.35, 0.9, abs(fract(p.x / 11.0) - 0.5) * 11.0);
+  alb *= mix(0.35, 1.0, allee) * (0.7 + 0.5 * vn(vec2(p.x * 0.15, along * 0.4)));
+  float lum = 0.16 + 0.30 * smoothstep(9.0, 1.5, p.y);
+  float onLum = (uLum[0] + uLum[1] + uLum[4] + uLum[5]) * 0.25;
+  vec3 col = alb * lum * (0.15 + 0.85 * onLum) * 0.42;
+  float tb = floor(uTime * 5.0 + h * 3.0);
+  float fh = h13(vec3(ci, tb));
+  float seuil = mix(0.9968, 0.955, uFlash);
+  float ph = fract(uTime * 5.0 + h * 3.0);
+  float fl = step(seuil, fh) * plein * allee;
+  col += vec3(1.0, 0.97, 0.92) * fl * exp(-ph * 5.0) * 7.0 * smoothstep(0.55, 0.0, length(cf - 0.5));
+  float tel = step(0.992, h12(ci + 91.7)) * plein * allee * (0.55 + 0.45 * sin(uTime * 2.0 + h * 40.0));
+  col += vec3(0.8, 0.88, 1.0) * tel * 0.9 * smoothstep(0.5, 0.0, length(cf - 0.5));
+  return col;
+}
+vec3 fronton(vec3 p){
+  vec3 c = vec3(0.016, 0.024, 0.05);
+  float s = 0.5 + 0.5 * sin(p.x * 0.18 - uTime * 1.2);
+  float bande = 1.0 - smoothstep(0.0, 0.06, abs(p.y - 10.55) - 0.09);
+  c += mix(vec3(0.08, 0.3, 1.0), vec3(1.0, 0.72, 0.22), s) * bande * 0.9;
+  float lx = fract(p.x / 2.4) - 0.5;
+  float lampe = 1.0 - smoothstep(0.10, 0.20, length(vec2(lx * 2.4, (p.y - 9.9) * 1.4)));
+  float onR = (uLum[2] + uLum[3]) * 0.5;
+  c += vec3(1.8, 1.9, 2.2) * lampe * onR * 2.2;
+  return c;
+}
+vec3 pylone(vec3 p, vec3 rd){
+  float hh = smoothstep(26.0, 30.0, p.y);
+  return mix(vec3(0.012, 0.016, 0.03), vec3(0.05, 0.06, 0.09), hh) + vec3(0.03, 0.05, 0.1) * pow(1.0 - abs(rd.x), 2.0) * 0.2;
+}
+
+/* ---------- halo des projecteurs dans la brume ---------- */
+vec3 halo(vec3 ro, vec3 rd, float T){
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 6; i++){
+    vec3 q = LP[i] - ro; float b = dot(q, rd); float h = sqrt(max(dot(q, q) - b * b, 0.05));
+    float s = (atan((T - b) / h) - atan(-b / h)) / h;
+    acc += LC[i] * uLum[i] * s * HK[i];
+  }
+  return acc * 0.55;
+}
+vec3 eclats(vec2 px){
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 4; i++){
+    vec3 v = LP[i] - uCam; float z = dot(v, uCF);
+    if (z < 1.0) continue;
+    vec2 sp = vec2(dot(v, uCR), dot(v, uCU)) / z * uFocal;
+    float vis = sphOmbre(uCam, normalize(v), uBall, uRad, 5.0);
+    vec2 d = (px - sp) / uPx;
+    float coeur = exp(-dot(d, d) / (2.0 * 10.0 * 10.0));
+    float trainee = exp(-abs(d.y) / 1.8) * exp(-abs(d.x) / (i < 2 ? 340.0 : 200.0));
+    float k = i < 2 ? 1.0 : 0.7;
+    acc += (LC[i] * coeur * 0.9 + vec3(0.35, 0.55, 1.0) * trainee * 0.55) * uLum[i] * vis * k;
+  }
+  return acc;
+}
+
+void main(){
+  vec2 px = gl_FragCoord.xy - uCentre;
+  vec3 rd = normalize(uCR * px.x + uCU * px.y + uCF * uFocal);
+  vec3 ro = uCam;
+  // couverture du ballon sur ce pixel (bord adouci)
+  vec3 oc = uBall - ro; float bc = dot(oc, rd);
+  float dperp = sqrt(max(dot(oc, oc) - bc * bc, 0.0));
+  float couv = clamp((uRad - dperp) / max(bc / uFocal, 1e-4) + 0.5, 0.0, 1.0);
+  float T = 1e4; int k = 0;
+  if (rd.y < 0.0){ float t = -ro.y / rd.y; if (t < T){ T = t; k = 2; } }
+  if (rd.z < 0.0){
+    float t = (-37.6 - ro.z) / rd.z; vec3 p = ro + rd * t;
+    if (t < T && p.y > 0.0 && p.y < 0.95 && abs(p.x) < 56.0){ T = t; k = 3; }
+    t = (-41.0 - ro.z) / rd.z; p = ro + rd * t;
+    if (t < T && p.y > 0.0 && p.y < 1.2 && abs(p.x) < 66.0){ T = t; k = 4; }
+    t = (-48.6 - ro.z) / rd.z; p = ro + rd * t;
+    if (t < T && p.y > 9.5 && p.y < 10.9 && abs(p.x) < 66.0){ T = t; k = 6; }
+  }
+  float den = rd.z + 1.41 * rd.y;
+  if (den < 0.0){
+    float t = -(ro.z + 1.41 * ro.y + 39.31) / den; vec3 p = ro + rd * t;
+    if (t > 0.0 && t < T && p.y > 1.2 && p.y < 11.0 && abs(p.x) < 66.0){ T = t; k = 5; }
+  }
+  for (int i = 0; i < 2; i++){
+    float t = cylHit(ro, rd, vec2(i == 0 ? -58.0 : 58.0, -44.0), 0.75);
+    if (t > 0.0 && t < T){ float y = ro.y + rd.y * t; if (y > 0.0 && y < 31.5){ T = t; k = 7; } }
+  }
+  vec3 p = ro + rd * T;
+  vec3 col = vec3(0.0);
+  if (couv < 1.0){
+    if (k == 2) col = pelouse(p, rd, T);
+    else if (k == 3) col = panneaux(p);
+    else if (k == 4) col = vec3(0.012, 0.022, 0.06) + vec3(0.02, 0.08, 0.3) * smoothstep(0.9, 1.15, p.y) * 0.6;
+    else if (k == 5) col = tribune(p);
+    else if (k == 6) col = fronton(p);
+    else if (k == 7) col = pylone(p, rd);
+    else col = ciel(rd);
+    if (k != 0){
+      float fa = 1.0 - exp(-T * 0.011);
+      col = mix(col, vec3(0.018, 0.03, 0.07), fa * 0.55);
+    }
+  }
+  if (couv > 0.0){
+    float tb = sphHit(ro, rd, uBall, uRad);
+    vec3 pb = tb > 0.0 ? ro + rd * tb : uBall + normalize(ro + rd * bc - uBall) * uRad;
+    col = mix(col, ballon(pb, rd), couv);
+    if (couv > 0.5){ T = max(tb, 0.0); k = 1; }
+  }
+  col += halo(ro, rd, min(T, 500.0));
+  col += eclats(px);
+  col = aces(col * 1.15);
+  col = pow(col, vec3(0.4545));
+  vec2 uv = gl_FragCoord.xy / uRes;
+  col *= mix(0.62, 1.0, smoothstep(1.15, 0.3, length((uv - vec2(0.55, 0.55)) * vec2(uRes.x / uRes.y, 1.0) * 0.85)));
+  col += (h12(gl_FragCoord.xy + fract(uTime * 7.3) * 113.0) - 0.5) * 0.018;
+  oCol = vec4(col * uFade, 1.0);
+}`;
+
+  /* ----- poussière dorée et étincelles ----- */
+  const VSP = `#version 300 es
+in vec4 aP;
+uniform vec2 uRes, uCentre;
+uniform float uTime, uFocal, uRad, uKickT, uPx;
+uniform vec3 uCam, uCR, uCU, uCF, uBall;
+out vec4 vC;
+float h11(float x){ return fract(sin(x * 127.1) * 43758.5453); }
+void main(){
+  float s = aP.w;
+  vec3 p; float a; vec3 c; float taille;
+  if (s < 0.82){
+    vec3 b = aP.xyz;
+    b.y = mod(b.y + uTime * (0.08 + 0.18 * h11(s * 7.0)), 9.0);
+    b.x += sin(uTime * 0.21 + s * 40.0) * 0.8; b.z += cos(uTime * 0.17 + s * 31.0) * 0.8;
+    p = b;
+    a = 0.22 + 0.5 * h11(s * 3.1);
+    a *= 0.6 + 0.4 * sin(uTime * (1.0 + 2.0 * h11(s)) + s * 50.0);
+    c = h11(s * 11.0) < 0.55 ? vec3(1.0, 0.78, 0.38) : vec3(0.65, 0.78, 1.0);
+    taille = 0.035 + 0.05 * h11(s * 5.0);
+  } else {
+    vec3 dir = normalize(aP.xyz);
+    float spd = 5.0 + 9.0 * h11(s * 9.7);
+    float t = uKickT;
+    p = uBall + dir * (uRad + spd * t) + vec3(0.0, -6.0, 0.0) * t * t;
+    a = (t < 3.0) ? exp(-t * 1.6) * 1.6 : 0.0;
+    c = h11(s * 13.0) < 0.6 ? vec3(1.0, 0.75, 0.3) : vec3(0.45, 0.7, 1.0);
+    taille = 0.05 + 0.05 * h11(s * 2.3);
+  }
+  vec3 v = p - uCam; float z = dot(v, uCF);
+  vec3 rd = normalize(v);
+  vec3 oc = uCam - uBall; float bb = dot(oc, rd); float hh = bb * bb - dot(oc, oc) + uRad * uRad;
+  if (hh > 0.0 && -bb - sqrt(hh) < length(v) - 0.05) a = 0.0;
+  if (z < 0.5) a = 0.0;
+  vec2 sp = vec2(dot(v, uCR), dot(v, uCU)) / max(z, 0.01) * uFocal + uCentre;
+  gl_Position = vec4(sp / uRes * 2.0 - 1.0, 0.0, 1.0);
+  float ps = taille * uFocal / max(z, 0.01);
+  gl_PointSize = clamp(ps, 1.0, 48.0 * uPx);
+  float flou = clamp(ps / (6.0 * uPx), 0.0, 1.0);
+  vC = vec4(c, a * mix(1.0, 0.35, flou));
+}`;
+  const FSP = `#version 300 es
+precision mediump float;
+in vec4 vC;
+out vec4 o;
+void main(){
+  vec2 d = gl_PointCoord * 2.0 - 1.0;
+  float r = dot(d, d);
+  float m = exp(-r * 3.5) * step(r, 1.0);
+  o = vec4(vC.rgb * m * vC.a, 0.0);
+}`;
+
+  /* ----- géométrie du ballon (icosaèdre tronqué) ----- */
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const norm = v => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const ico = [];
+  for (const a of [-1, 1]) for (const b of [-phi, phi]) ico.push(norm([0, a, b]), norm([a, b, 0]), norm([b, 0, a]));
+  const arete = 1 / Math.sqrt(5);
+  const faces = [];
+  for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) for (let k = j + 1; k < 12; k++){
+    const ok = x => Math.abs(x - arete) < 1e-4;
+    if (ok(dot(ico[i], ico[j])) && ok(dot(ico[j], ico[k])) && ok(dot(ico[i], ico[k])))
+      faces.push(norm([ico[i][0] + ico[j][0] + ico[k][0], ico[i][1] + ico[j][1] + ico[k][1], ico[i][2] + ico[j][2] + ico[k][2]]));
+  }
+  const POIDS_HEX = 1.026535;   // rapport des distances au centre des faces (pentagones / hexagones)
+  const IBL = 7;                // l'hexagone qui porte le blason
+  const tabFaces = new Float32Array(32 * 4);
+  ico.forEach((v, i) => tabFaces.set([v[0], v[1], v[2], 0], i * 4));
+  faces.forEach((v, i) => tabFaces.set([v[0] * POIDS_HEX, v[1] * POIDS_HEX, v[2] * POIDS_HEX, i === IBL ? 2 : 1], (12 + i) * 4));
+  const cB = faces[IBL];
+  const uB = norm(cross([0, 1, 0], cB)), vB = cross(cB, uB);
+
+  /* ----- petites matrices 3x3 (colonnes) ----- */
+  const matRot = (ax, ang) => {
+    const [x, y, z] = ax, c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+    return [t * x * x + c, t * x * y + s * z, t * x * z - s * y,
+            t * x * y - s * z, t * y * y + c, t * y * z + s * x,
+            t * x * z + s * y, t * y * z - s * x, t * z * z + c];
+  };
+  const mul = (a, b) => {
+    const r = new Array(9);
+    for (let c = 0; c < 3; c++) for (let l = 0; l < 3; l++)
+      r[c * 3 + l] = a[l] * b[c * 3] + a[3 + l] * b[c * 3 + 1] + a[6 + l] * b[c * 3 + 2];
+    return r;
+  };
+  const orthonormer = m => {
+    let a = norm([m[0], m[1], m[2]]), b = [m[3], m[4], m[5]];
+    const d = dot(a, b); b = norm([b[0] - a[0] * d, b[1] - a[1] * d, b[2] - a[2] * d]);
+    const c = cross(a, b);
+    return [...a, ...b, ...c];
+  };
+
+  /* ----- état de la scène ----- */
+  const R = 1;
+  const P = { elev: 0.045, taille: 0.35 };
+  const CIBLE = [0, 1.9, 0];
+  const st = {
+    t: 0, dernier: 0, rot: null, w: [0, 0, 0], y: CIBLE[1], vy: 0, kickT: 9, flash: 0,
+    souris: [0, 0], sourisL: [0, 0], defil: 0, intro: 0, lum: [0, 0, 0, 0, 0, 0],
+    premiere: true, drag: null, qualite: tactile ? 0.8 : 1, temps: [], actif: false, pret: false,
+  };
+  try { st.premiere = !sessionStorage.getItem("asfp-stade"); sessionStorage.setItem("asfp-stade", "1"); } catch (e) {}
+  if (reduit) { st.premiere = false; st.lum = [1, 1, 1, 1, 1, 1]; st.intro = 9; }
+
+  let gl, prog, progP, U = {}, UP = {}, vbo, vboP, texLogo, texLed, nbP = 0, logoOk = 0;
+
+  function compiler(type, src){
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function programme(vs, fs){
+    const p = gl.createProgram();
+    gl.attachShader(p, compiler(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compiler(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+  function ledCanvas(){
+    const c = document.createElement("canvas"); c.width = 2048; c.height = 128;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, 0, 128); g.addColorStop(0, "#071538"); g.addColorStop(1, "#030a22");
+    x.fillStyle = g; x.fillRect(0, 0, 2048, 128);
+    const morceaux = [["ASF PIERRELATTE", "#FFFFFF"], ["DEPUIS 1923", "#F2C94C"], ["ALLEZ PIERRELATTE", "#FFFFFF"], ["STADE GUSTAVE JAUME", "#8FC2FF"]];
+    x.font = "italic 800 86px 'Barlow Condensed','Arial Narrow',sans-serif"; x.textBaseline = "middle";
+    let px = 30;
+    morceaux.forEach(([t, coul]) => {
+      x.fillStyle = coul; x.fillText(t, px, 68); px += x.measureText(t).width + 34;
+      if (logo.complete && logo.naturalWidth) x.drawImage(logo, px, 14, 100, 100);
+      else { x.fillStyle = "#F2C94C"; x.beginPath(); x.arc(px + 50, 64, 14, 0, 7); x.fill(); }
+      px += 134;
+    });
+    return c;
+  }
+  const logo = new Image();
+  function chargerTextures(){
+    texLogo = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texLogo);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 0]));
+    texLed = gl.createTexture();
+    majLed();
+    const surLogo = () => {
+      if (!gl || gl.isContextLost()) return;
+      gl.bindTexture(gl.TEXTURE_2D, texLogo);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, logo);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      logoOk = 1; majLed();
+    };
+    if (logo.complete && logo.naturalWidth) surLogo();
+    else {
+      logo.onload = surLogo;
+      if (!logo.src) logo.src = (typeof LOGO_SRC !== "undefined" && LOGO_SRC) ? LOGO_SRC : "/img/blason.png";
+    }
+    if (document.fonts && document.fonts.load) document.fonts.load("italic 800 86px 'Barlow Condensed'").then(majLed).catch(() => {});
+  }
+  function majLed(){
+    if (!gl || gl.isContextLost()) return;
+    gl.bindTexture(gl.TEXTURE_2D, texLed);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ledCanvas());
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const ani = gl.getExtension("EXT_texture_filter_anisotropic");
+    if (ani) gl.texParameterf(gl.TEXTURE_2D, ani.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(ani.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  }
+
+  function init(){
+    gl = cv.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: "high-performance", preserveDrawingBuffer: false });
+    if (!gl) return false;
+    prog = programme(VS, FS);
+    progP = programme(VSP, FSP);
+    ["uRes", "uCentre", "uTime", "uFocal", "uRad", "uFade", "uFlash", "uKickT", "uLogoOk", "uPx", "uCam", "uCR", "uCU", "uCF", "uBall", "uCrestU", "uCrestV", "uRot", "uFaces", "uLum", "uLogo", "uLed"]
+      .forEach(n => U[n] = gl.getUniformLocation(prog, n));
+    ["uRes", "uCentre", "uTime", "uFocal", "uRad", "uKickT", "uPx", "uCam", "uCR", "uCU", "uCF", "uBall"]
+      .forEach(n => UP[n] = gl.getUniformLocation(progP, n));
+    vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    // particules : poussière autour du ballon, puis étincelles réservées à la frappe
+    const n = tactile ? 220 : 420, pts = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++){
+      const s = i / n;
+      if (s < 0.82) pts.set([(Math.random() - 0.5) * 30, Math.random() * 9, -16 + Math.random() * 22, s], i * 4);
+      else pts.set([Math.random() - 0.5, Math.random() * 0.9 - 0.15, Math.random() - 0.5, s], i * 4);
+    }
+    nbP = n;
+    vboP = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vboP);
+    gl.bufferData(gl.ARRAY_BUFFER, pts, gl.STATIC_DRAW);
+    chargerTextures();
+    gl.useProgram(prog);
+    gl.uniform4fv(U.uFaces, tabFaces);
+    gl.uniform3fv(U.uCrestU, uB); gl.uniform3fv(U.uCrestV, vB);
+    gl.uniform1i(U.uLogo, 0); gl.uniform1i(U.uLed, 1);
+    return true;
+  }
+
+  /* ----- cadrage : la place du ballon est donnée par la mise en page (#hero-ballon) ----- */
+  const cadre = { w: 1, h: 1, ech: 1, cx: 0, cy: 0, rpx: 100 };
+  function mesurer(){
+    const rc = cv.getBoundingClientRect(), rb = zoneBallon.getBoundingClientRect();
+    if (!rc.width || !rc.height) return false;
+    const dpr = Math.min(window.devicePixelRatio || 1, tactile ? 1.6 : 1.5);
+    let ech = dpr * st.qualite;
+    const budget = (tactile ? 0.85 : 1.9) * 1e6;
+    if (rc.width * rc.height * ech * ech > budget) ech = Math.sqrt(budget / (rc.width * rc.height));
+    const w = Math.max(2, Math.round(rc.width * ech)), h = Math.max(2, Math.round(rc.height * ech));
+    if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    cadre.w = w; cadre.h = h; cadre.ech = w / rc.width;
+    const bx = rb.width ? rb.left + rb.width / 2 - rc.left : rc.width * 0.68;
+    const by = rb.height ? rb.top + rb.height / 2 - rc.top : rc.height * 0.42;
+    cadre.cx = bx * cadre.ech; cadre.cy = (rc.height - by) * cadre.ech;
+    cadre.rpx = Math.max(60, (rb.width || 300) * P.taille) * cadre.ech;
+    return true;
+  }
+
+  /* ----- interactions ----- */
+  const axeCam = { R: [1, 0, 0], U: [0, 1, 0], F: [0, 0, -1] };
+  window.addEventListener("pointermove", ev => {
+    if (!hero) return;
+    const r = hero.getBoundingClientRect();
+    if (ev.clientY > r.bottom + 200) return;
+    st.souris = [Math.max(-1, Math.min(1, (ev.clientX - r.left) / r.width * 2 - 1)), Math.max(-1, Math.min(1, (ev.clientY - r.top) / Math.max(r.height, 1) * 2 - 1))];
+  }, { passive: true });
+  zoneBallon.addEventListener("pointerdown", ev => {
+    st.drag = { x: ev.clientX, y: ev.clientY, x0: ev.clientX, y0: ev.clientY, t0: performance.now(), t: performance.now(), id: ev.pointerId };
+    try { zoneBallon.setPointerCapture(ev.pointerId); } catch (e) {}
+    zoneBallon.classList.add("saisi");
+  });
+  zoneBallon.addEventListener("pointermove", ev => {
+    const d = st.drag; if (!d || d.id !== ev.pointerId) return;
+    const dx = ev.clientX - d.x, dy = ev.clientY - d.y, now = performance.now(), dt = Math.max(8, now - d.t) / 1000;
+    const k = 1 / Math.max(60, cadre.rpx / cadre.ech);
+    const ax = [axeCam.U[0] * dx + axeCam.R[0] * dy, axeCam.U[1] * dx + axeCam.R[1] * dy, axeCam.U[2] * dx + axeCam.R[2] * dy];
+    const ang = Math.hypot(dx, dy) * k;
+    if (ang > 1e-5){
+      st.rot = orthonormer(mul(matRot(norm(ax), ang), st.rot));
+      st.w = [ax[0] * k / dt, ax[1] * k / dt, ax[2] * k / dt];
+    }
+    d.x = ev.clientX; d.y = ev.clientY; d.t = now;
+    reveiller();
+  });
+  const lacher = ev => {
+    const d = st.drag; if (!d || d.id !== ev.pointerId) return;
+    st.drag = null; zoneBallon.classList.remove("saisi");
+    const bouge = Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0), duree = performance.now() - d.t0;
+    if (bouge < 8 && duree < 450) frapper();
+    else if (performance.now() - d.t > 90) st.w = [0, 0, 0];
+  };
+  zoneBallon.addEventListener("pointerup", lacher);
+  zoneBallon.addEventListener("pointercancel", lacher);
+  function frapper(){
+    st.vy = 8 + Math.random() * 1.5;
+    const s = 9 + Math.random() * 6;
+    st.w = [axeCam.R[0] * -s + (Math.random() - 0.5) * 4, axeCam.R[1] * -s + (Math.random() - 0.5) * 4, axeCam.R[2] * -s];
+    st.kickT = 0; st.flash = 1;
+    zoneBallon.classList.add("frappe");
+    setTimeout(() => zoneBallon.classList.remove("frappe"), 900);
+    reveiller();
+  }
+  window.addEventListener("scroll", () => {
+    if (!hero) return;
+    const r = hero.getBoundingClientRect();
+    st.defil = Math.max(0, Math.min(1, -r.top / Math.max(r.height, 1)));
+  }, { passive: true });
+
+  /* ----- boucle d'animation ----- */
+  let raf = 0, visible = true;
+  function reveiller(){ if (!raf && visible && !document.hidden && gl) raf = requestAnimationFrame(image); }
+  const lisse = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+  const h1 = x => { const s = Math.sin(x * 127.1) * 43758.5453; return s - Math.floor(s); };
+
+  function majLumieres(){
+    if (reduit) return;
+    const t = st.intro, debuts = st.premiere ? [0.55, 0.8, 1.15, 1.3, 1.6, 1.75] : [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < 6; i++){
+      const u = t - debuts[i];
+      if (u < 0) st.lum[i] = 0;
+      else if (u < 0.28) st.lum[i] = (h1(Math.floor(t * 28) + i * 7) > 0.45 ? 0.85 : 0.08);
+      else st.lum[i] = Math.min(1, 0.7 + (u - 0.28) * 1.2);
+    }
+  }
+
+  let derniereImage = 0;
+  function image(now){
+    raf = 0;
+    if (!gl || gl.isContextLost()) return;
+    // sur téléphone, 30 images par seconde suffisent et ménagent la batterie
+    if (tactile && st.pret && now - derniereImage < 30){ reveiller(); return; }
+    derniereImage = now;
+    if (!mesurer()){ return; }
+    const dtv = st.dernier ? (now - st.dernier) / 1000 : 0.016, dt = Math.min(0.05, dtv);
+    if (st.dernier){
+      st.temps.push(now - st.dernier);
+      if (st.temps.length > 40){
+        const moy = st.temps.reduce((a, b) => a + b, 0) / st.temps.length; st.temps = [];
+        if (moy > 26 && st.qualite > 0.5) st.qualite = Math.max(0.5, st.qualite - 0.15);
+        else if (moy < 15 && st.qualite < 1) st.qualite = Math.min(1, st.qualite + 0.05);
+      }
+    }
+    st.dernier = now;
+    if (!reduit){ st.t += dt; st.intro += Math.min(0.12, dtv); }
+    st.kickT += dt; st.flash = Math.max(0, st.flash - dt * 0.9);
+    majLumieres();
+
+    // ballon : flottement, rebond après une frappe, rotation
+    const repos = CIBLE[1] + (reduit ? 0 : 0.09 * Math.sin(st.t * 1.15));
+    if (!reduit || st.vy || st.y !== repos){
+      const a = st.y > repos ? -18 - 0.3 * st.vy : -120 * (st.y - repos) - 9 * st.vy;
+      st.vy += a * dt; st.y += st.vy * dt;
+      if (Math.abs(st.vy) < 0.01 && Math.abs(st.y - repos) < 0.002){ st.vy = 0; st.y = repos; }
+    }
+    const base = reduit ? [0, 0, 0] : [0.05, 0.32, 0.02];
+    const amort = st.drag ? 0 : Math.min(1, dt * 1.6);
+    st.w = st.w.map((v, i) => v + (base[i] - v) * amort);
+    const wl = Math.hypot(...st.w);
+    if (!st.drag && wl > 1e-5) st.rot = orthonormer(mul(matRot(st.w.map(v => v / wl), wl * dt), st.rot));
+
+    // caméra : légère contre-plongée, suit la souris, monte quand on fait défiler
+    st.sourisL = st.sourisL.map((v, i) => v + (st.souris[i] - v) * Math.min(1, dt * 2.5));
+    const ent = lisse(st.intro / (st.premiere ? 3.2 : 1.6));
+    const lacet = (reduit ? 0 : 0.05 * Math.sin(st.t * 0.11)) + st.sourisL[0] * 0.16 + (1 - ent) * 0.55;
+    const elev = P.elev + st.sourisL[1] * 0.04 + st.defil * 0.32 + (1 - ent) * 0.32;
+    const dist = 7.2 + (1 - ent) * (st.premiere ? 13 : 4);
+    const cam = [CIBLE[0] + dist * Math.sin(lacet) * Math.cos(elev), CIBLE[1] + dist * Math.sin(elev), CIBLE[2] + dist * Math.cos(lacet) * Math.cos(elev)];
+    const F = norm([CIBLE[0] - cam[0], CIBLE[1] - cam[1], CIBLE[2] - cam[2]]);
+    const Rr = norm(cross(F, [0, 1, 0])), Uu = cross(Rr, F);
+    axeCam.R = Rr; axeCam.U = Uu; axeCam.F = F;
+    const focal = cadre.rpx * 7.2 / R;
+    const fade = (1 - st.defil * 0.65) * (st.premiere ? Math.min(1, 0.25 + st.intro * 0.6) : 1);
+
+    gl.viewport(0, 0, cadre.w, cadre.h);
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    const aPos = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texLogo);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texLed);
+    gl.uniform2f(U.uRes, cadre.w, cadre.h);
+    gl.uniform2f(U.uCentre, cadre.cx, cadre.cy);
+    gl.uniform1f(U.uTime, st.t);
+    gl.uniform1f(U.uFocal, focal);
+    gl.uniform1f(U.uRad, R);
+    gl.uniform1f(U.uFade, fade);
+    gl.uniform1f(U.uFlash, st.flash);
+    gl.uniform1f(U.uKickT, st.kickT);
+    gl.uniform1f(U.uLogoOk, logoOk);
+    gl.uniform1f(U.uPx, cadre.ech);
+    gl.uniform3fv(U.uCam, cam); gl.uniform3fv(U.uCR, Rr); gl.uniform3fv(U.uCU, Uu); gl.uniform3fv(U.uCF, F);
+    gl.uniform3f(U.uBall, 0, st.y, 0);
+    // uRot passe du monde au repère du ballon : transposée de la matrice d'orientation
+    const m = st.rot;
+    gl.uniformMatrix3fv(U.uRot, false, [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+    gl.uniform1fv(U.uLum, st.lum);
+    gl.disable(gl.BLEND);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disableVertexAttribArray(aPos);
+
+    gl.useProgram(progP);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vboP);
+    const aP = gl.getAttribLocation(progP, "aP");
+    gl.enableVertexAttribArray(aP);
+    gl.vertexAttribPointer(aP, 4, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(UP.uRes, cadre.w, cadre.h);
+    gl.uniform2f(UP.uCentre, cadre.cx, cadre.cy);
+    gl.uniform1f(UP.uTime, st.t);
+    gl.uniform1f(UP.uFocal, focal);
+    gl.uniform1f(UP.uRad, R);
+    gl.uniform1f(UP.uKickT, st.kickT);
+    gl.uniform1f(UP.uPx, cadre.ech);
+    gl.uniform3fv(UP.uCam, cam); gl.uniform3fv(UP.uCR, Rr); gl.uniform3fv(UP.uCU, Uu); gl.uniform3fv(UP.uCF, F);
+    gl.uniform3f(UP.uBall, 0, st.y, 0);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.drawArrays(gl.POINTS, 0, nbP);
+    gl.disable(gl.BLEND);
+    gl.disableVertexAttribArray(aP);
+
+    if (!st.pret){ st.pret = true; cv.classList.add("pret"); document.documentElement.classList.add("stade3d-ok"); }
+    const anime = !reduit || st.drag || st.vy || st.kickT < 3 || Math.hypot(...st.w) > 0.01;
+    if (anime) reveiller();
+  }
+
+  /* orientation de départ : le blason face à la caméra */
+  function orienter(){
+    const vers = norm([0, -0.12, 1]), droite = norm(cross([0, 1, 0], vers)), haut = cross(vers, droite);
+    // M (ballon -> monde) envoie uB, vB, cB sur droite, haut, vers
+    const M = new Array(9);
+    for (let c = 0; c < 3; c++) for (let l = 0; l < 3; l++){
+      const e = [uB[c], vB[c], cB[c]];
+      M[c * 3 + l] = droite[l] * e[0] + haut[l] * e[1] + vers[l] * e[2];
+    }
+    st.rot = orthonormer(M);
+  }
+
+  const sans3d = () => document.documentElement.classList.add("stade3d-ko");
+  try {
+    if (!init()){ sans3d(); return; }
+  } catch (e) {
+    if (window.console) console.warn("Stade 3D indisponible :", e && e.message);
+    sans3d(); return;
+  }
+  orienter();
+  cv.addEventListener("webglcontextlost", ev => { ev.preventDefault(); cancelAnimationFrame(raf); raf = 0; });
+  cv.addEventListener("webglcontextrestored", () => { try { if (init()) reveiller(); } catch (e) {} });
+  if ("IntersectionObserver" in window){
+    new IntersectionObserver(e => { visible = e.some(x => x.isIntersecting); if (visible){ st.dernier = 0; reveiller(); } }).observe(cv);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden){ st.dernier = 0; reveiller(); } });
+  window.addEventListener("resize", () => { st.dernier = 0; reveiller(); });
+  window.addEventListener("hashchange", () => setTimeout(() => { st.dernier = 0; reveiller(); }, 30));
+  window.__stade3d = { st, frapper, P };
+  reveiller();
+})();
+</script>
+<script id="habillage-js">
+/* ============================================================
+   HABILLAGE : petites animations du site public
+   - cartes qui s'inclinent en 3D avec un reflet holographique (souris uniquement)
+   - chiffres clés de l'accueil qui défilent jusqu'à leur valeur
+   Rien ici ne touche aux données ni au fonctionnement du site.
+   ============================================================ */
+(() => {
+  "use strict";
+  const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduit) return;
+
+  /* ----- cartes en relief ----- */
+  const SEL = ".eq-carte,.res-carte,.ct-personne,.porte-insc,.info-carte,.cx-porte,.porte,.partenaires > div,.hero-stade .tableau-score,.hero-stade .hero-actus";
+  let actif = null;
+  const prendre = el => {
+    if (getComputedStyle(el).position === "static") el.style.position = "relative";
+    if (!el.querySelector(":scope > .reflet")){
+      const r = document.createElement("span"); r.className = "reflet"; r.setAttribute("aria-hidden", "true");
+      el.appendChild(r);
+    }
+    el.classList.add("relief", "survol");
+    el.style.transition = "transform .12s ease-out";
+  };
+  const relacher = el => {
+    el.classList.remove("survol");
+    el.style.transition = "transform .6s cubic-bezier(.2,.9,.25,1.15)";
+    el.style.transform = "";
+    setTimeout(() => { if (el !== actif) el.style.transition = ""; }, 650);
+  };
+  document.addEventListener("pointermove", ev => {
+    if (ev.pointerType !== "mouse") return;
+    const el = ev.target.closest && ev.target.closest(SEL);
+    if (el !== actif){ if (actif) relacher(actif); actif = el; if (el) prendre(el); }
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+    const fort = r.width > 460 ? 3.5 : 9;
+    el.style.transform = `perspective(900px) rotateX(${((0.5 - y) * fort).toFixed(2)}deg) rotateY(${((x - 0.5) * fort).toFixed(2)}deg) translateY(-4px)`;
+    el.style.setProperty("--mx", (x * 100).toFixed(1) + "%");
+    el.style.setProperty("--my", (y * 100).toFixed(1) + "%");
+    el.style.setProperty("--hx", (100 - x * 100).toFixed(1) + "%");
+    el.style.setProperty("--hy", (100 - y * 100).toFixed(1) + "%");
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { if (actif){ relacher(actif); actif = null; } });
+  window.addEventListener("blur", () => { if (actif){ relacher(actif); actif = null; } });
+
+  /* ----- chiffres clés qui défilent ----- */
+  const chiffres = document.querySelectorAll("#p-accueil .chiffres b");
+  if (chiffres.length && "IntersectionObserver" in window){
+    const compter = b => {
+      const final = b.textContent, m = final.match(/^(\D*)(\d+)(\D*)$/);
+      if (!m) return;
+      const fin = +m[2], debut = fin > 1000 ? fin - 60 : 0, duree = 1400, t0 = performance.now();
+      const pas = now => {
+        const k = Math.min(1, (now - t0) / duree), e = 1 - Math.pow(1 - k, 4);
+        b.textContent = m[1] + Math.round(debut + (fin - debut) * e) + m[3];
+        if (k < 1) requestAnimationFrame(pas); else b.textContent = final;
+      };
+      requestAnimationFrame(pas);
+    };
+    const io = new IntersectionObserver(entrees => entrees.forEach(e => {
+      if (e.isIntersecting){ io.unobserve(e.target); compter(e.target); }
+    }), { threshold: 0.6 });
+    chiffres.forEach(b => io.observe(b));
+  }
+
+  /* ----- le conseil « fais tourner le ballon » disparaît dès qu'on a joué avec ----- */
+  const ballon = document.getElementById("hero-ballon");
+  if (ballon) ballon.addEventListener("pointerdown", () => { const i = ballon.querySelector(".hero-indice"); if (i) i.style.display = "none"; }, { once: true });
+})();
+</script>
+<!--/HABILLAGE-JS-->
 </body>
 </html>
