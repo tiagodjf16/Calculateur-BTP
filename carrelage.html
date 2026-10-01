@@ -1,65 +1,109 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Calculateur Carrelage</title>
-
-<style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #eef1f5;
-}
-
-.header {
-  background: linear-gradient(90deg, #444, #777);
-  color: white;
-  padding: 20px;
-  text-align: center;
-}
-
-.container {
-  max-width: 1000px;
-  margin: 30px auto;
-  background: white;
-  padding: 25px;
-  border-radius: 10px;
-}
-
-.bloc {
-  background: #f9fafb;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 15px;
-}
-
-a {
-  text-decoration: none;
-  color: #444;
-  font-weight: bold;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calculateur carrelage – Calculateur BTP</title>
+  <meta name="description" content="Carrelage : calcul des surfaces et consommables.">
+  <meta name="theme-color" content="#0F172A">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-hat" viewBox="0 0 24 24"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><path d="M14 6a6 6 0 0 1 6 6v3"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-arrow-l" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+    <symbol id="i-arrow-r" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  </svg>
 
-<div class="header">
-  <h1>Carrelage</h1>
-  <p>Calcul des surfaces et consommables</p>
-</div>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
 
-<div class="container">
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark"><svg class="ico" aria-hidden="true"><use href="#i-hat"/></svg></span>
+        <span>Calculateur BTP<small>Quantités de chantier</small></span>
+      </a>
+      <nav class="nav" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a>
+        <a href="placo.html">Placo</a>
+        <a href="maconnerie.html">Maçonnerie</a>
+        <a href="carrelage.html" aria-current="page">Carrelage</a>
+        <a href="plomberie.html">Plomberie</a>
+      </nav>
+    </div>
+  </header>
 
-  <div class="bloc">🔲 Calcul surface carrelage</div>
-  <div class="bloc">🧴 Colle à carrelage</div>
-  <div class="bloc">🧴 Joint de carrelage</div>
-  <div class="bloc">📏 Plinthes</div>
+  <div class="page-head">
+    <div class="container">
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="index.html">Accueil</a> / <span>Carrelage</span></nav>
+      <div class="page-head-row">
+        <span class="trade-ico t-carrelage"><svg class="ico ico-lg" aria-hidden="true"><use href="#i-grid"/></svg></span>
+        <div>
+          <h1>Carrelage</h1>
+          <p>Calcul des surfaces et consommables.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <br>
-  <a href="index.html">← Retour à l’accueil</a>
+  <main id="contenu" class="main">
+    <div class="container">
+      <div class="modules">
+        <article class="module">
+          <span class="trade-ico t-carrelage"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></span>
+          <div>
+            <h2>Calcul surface carrelage</h2>
+            <span class="badge badge-soon"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Bientôt disponible</span>
+          </div>
+        </article>
+        <article class="module">
+          <span class="trade-ico t-carrelage"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></span>
+          <div>
+            <h2>Colle à carrelage</h2>
+            <span class="badge badge-soon"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Bientôt disponible</span>
+          </div>
+        </article>
+        <article class="module">
+          <span class="trade-ico t-carrelage"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></span>
+          <div>
+            <h2>Joint de carrelage</h2>
+            <span class="badge badge-soon"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Bientôt disponible</span>
+          </div>
+        </article>
+        <article class="module">
+          <span class="trade-ico t-carrelage"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></span>
+          <div>
+            <h2>Plinthes</h2>
+            <span class="badge badge-soon"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Bientôt disponible</span>
+          </div>
+        </article>
+      </div>
 
-</div>
+      <div class="callout">
+        <p>Ce module est en préparation. En attendant, le calculateur placo est déjà disponible.</p>
+        <a class="btn btn-primary" href="placo.html">
+          Calculer mon placo
+          <svg class="ico" aria-hidden="true"><use href="#i-arrow-r"/></svg>
+        </a>
+      </div>
 
+      <a class="back-link" href="index.html">
+        <svg class="ico" aria-hidden="true"><use href="#i-arrow-l"/></svg>
+        Retour à l’accueil
+      </a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© Calculateur BTP</span>
+      <span>Quantités estimatives — à vérifier avant commande.</span>
+    </div>
+  </footer>
 </body>
 </html>

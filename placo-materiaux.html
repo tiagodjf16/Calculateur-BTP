@@ -1,150 +1,177 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Matériaux Placo</title>
-
-<style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #eef1f5;
-}
-
-.header {
-  background: linear-gradient(90deg, #1e3c72, #2a5298);
-  color: white;
-  padding: 25px;
-  text-align: center;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 30px auto;
-  padding: 20px;
-}
-
-.section {
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 25px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-}
-
-.section h2 {
-  border-left: 5px solid #2a5298;
-  padding-left: 10px;
-}
-
-.liste {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.item {
-  background: #f9fafb;
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-}
-a {
-  text-decoration: none;
-  color: #2a5298;
-  font-weight: bold;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Matériaux placo – Liste complète</title>
+  <meta name="description" content="Liste complète des matériaux utilisés en plaquisterie : plaques, ossature, suspentes, fixations, isolation, bandes et enduits.">
+  <meta name="theme-color" content="#0F172A">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-hat" viewBox="0 0 24 24"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><path d="M14 6a6 6 0 0 1 6 6v3"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="i-frame" viewBox="0 0 24 24"><path d="M22 6H2M22 18H2M6 2v20M18 2v20"/></symbol>
+    <symbol id="i-hang" viewBox="0 0 24 24"><path d="M4 3h16M12 3v12"/><path d="M8 15h8v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-4z"/></symbol>
+    <symbol id="i-screw" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+    <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+    <symbol id="i-bucket" viewBox="0 0 24 24"><path d="M4 7h16l-1.5 13a2 2 0 0 1-2 1.8h-9a2 2 0 0 1-2-1.8L4 7z"/><path d="M4 7a8 3 0 0 1 16 0"/></symbol>
+    <symbol id="i-arrow-l" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+  </svg>
 
-<div class="header">
-  <h1>Matériaux Placo</h1>
-  <p>Liste complète des matériaux utilisés en plaquisterie</p>
-</div>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
 
-<div class="container">
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark"><svg class="ico" aria-hidden="true"><use href="#i-hat"/></svg></span>
+        <span>Calculateur BTP<small>Quantités de chantier</small></span>
+      </a>
+      <nav class="nav" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a>
+        <a href="placo.html" aria-current="page">Placo</a>
+        <a href="maconnerie.html">Maçonnerie</a>
+        <a href="carrelage.html">Carrelage</a>
+        <a href="plomberie.html">Plomberie</a>
+      </nav>
+    </div>
+  </header>
 
-  <div class="section">
-    <h2>🟦 Plaques de plâtre</h2>
-    <div class="liste">
-      <div class="item">BA13 / BA10 / BA15 / BA18</div>
-      <div class="item">Hydrofuge</div>
-      <div class="item">Phonique</div>
-      <div class="item">Ignifugé (Feu)</div>
-      <div class="item">Haute dureté</div>
-      <div class="item">Impact</div>
-      <div class="item">Marine</div>
-      <div class="item">Activ’Air</div>
-      <div class="item">Plafond</div>
-      <div class="item">Cintrable</div>
-      <div class="item">Anti-rayons X</div>
+  <div class="page-head">
+    <div class="container">
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="index.html">Accueil</a> / <a href="placo.html">Placo</a> / <span>Matériaux</span></nav>
+      <div class="page-head-row">
+        <span class="trade-ico t-materiaux"><svg class="ico ico-lg" aria-hidden="true"><use href="#i-list"/></svg></span>
+        <div>
+          <h1>Matériaux placo</h1>
+          <p>Liste complète des matériaux utilisés en plaquisterie.</p>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="section">
-    <h2>🟦 Ossature métallique</h2>
-    <div class="liste">
-      <div class="item">Rails (R48 à R120)</div>
-      <div class="item">Montants (M48 à M120)</div>
-      <div class="item">Fourrures F530</div>
-      <div class="item">Cornières</div>
-      <div class="item">Lisses</div>
+  <main id="contenu" class="main">
+    <div class="container">
+
+      <nav class="mat-toc" aria-label="Catégories">
+        <a href="#plaques">Plaques</a>
+        <a href="#ossature">Ossature</a>
+        <a href="#suspentes">Suspentes</a>
+        <a href="#vis">Vis &amp; fixations</a>
+        <a href="#isolation">Isolation</a>
+        <a href="#enduits">Bandes &amp; enduits</a>
+      </nav>
+
+      <section class="mat-section" id="plaques">
+        <div class="mat-section-head">
+          <span class="trade-ico t-placo"><svg class="ico" aria-hidden="true"><use href="#i-layers"/></svg></span>
+          <h2>Plaques de plâtre<small>11 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>BA13 / BA10 / BA15 / BA18</li>
+          <li>Hydrofuge</li>
+          <li>Phonique</li>
+          <li>Ignifugé (Feu)</li>
+          <li>Haute dureté</li>
+          <li>Impact</li>
+          <li>Marine</li>
+          <li>Activ’Air</li>
+          <li>Plafond</li>
+          <li>Cintrable</li>
+          <li>Anti-rayons X</li>
+        </ul>
+      </section>
+
+      <section class="mat-section" id="ossature">
+        <div class="mat-section-head">
+          <span class="trade-ico t-materiaux"><svg class="ico" aria-hidden="true"><use href="#i-frame"/></svg></span>
+          <h2>Ossature métallique<small>5 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>Rails (R48 à R120)</li>
+          <li>Montants (M48 à M120)</li>
+          <li>Fourrures F530</li>
+          <li>Cornières</li>
+          <li>Lisses</li>
+        </ul>
+      </section>
+
+      <section class="mat-section" id="suspentes">
+        <div class="mat-section-head">
+          <span class="trade-ico t-materiaux"><svg class="ico" aria-hidden="true"><use href="#i-hang"/></svg></span>
+          <h2>Suspentes &amp; fixations<small>7 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>Suspentes standards</li>
+          <li>Suspentes acoustiques</li>
+          <li>Suspentes antivibratiles</li>
+          <li>Tiges filetées</li>
+          <li>Cavaliers</li>
+          <li>Éclisses</li>
+          <li>Entretoises</li>
+        </ul>
+      </section>
+
+      <section class="mat-section" id="vis">
+        <div class="mat-section-head">
+          <span class="trade-ico t-materiaux"><svg class="ico" aria-hidden="true"><use href="#i-screw"/></svg></span>
+          <h2>Vis &amp; fixations<small>6 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>Vis TTPC</li>
+          <li>Vis TRPF</li>
+          <li>Vis autoperceuses</li>
+          <li>Vis bois</li>
+          <li>Chevilles Molly</li>
+          <li>Chevilles nylon</li>
+        </ul>
+      </section>
+
+      <section class="mat-section" id="isolation">
+        <div class="mat-section-head">
+          <span class="trade-ico t-maconnerie"><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg></span>
+          <h2>Isolation<small>5 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>Laine de verre</li>
+          <li>Laine de roche</li>
+          <li>Laine de bois</li>
+          <li>Ouate de cellulose</li>
+          <li>Isolants acoustiques</li>
+        </ul>
+      </section>
+
+      <section class="mat-section" id="enduits">
+        <div class="mat-section-head">
+          <span class="trade-ico t-materiaux"><svg class="ico" aria-hidden="true"><use href="#i-bucket"/></svg></span>
+          <h2>Bandes &amp; enduits<small>5 références</small></h2>
+        </div>
+        <ul class="chips">
+          <li>Bandes papier</li>
+          <li>Bandes armées</li>
+          <li>Bandes fibre</li>
+          <li>Enduit à joint</li>
+          <li>Enduit de lissage</li>
+        </ul>
+      </section>
+
+      <a class="back-link" href="placo.html">
+        <svg class="ico" aria-hidden="true"><use href="#i-arrow-l"/></svg>
+        Retour au calculateur placo
+      </a>
     </div>
-  </div>
+  </main>
 
-  <div class="section">
-    <h2>🟦 Suspentes & fixations</h2>
-    <div class="liste">
-      <div class="item">Suspentes standards</div>
-      <div class="item">Suspentes acoustiques</div>
-      <div class="item">Suspentes antivibratiles</div>
-      <div class="item">Tiges filetées</div>
-      <div class="item">Cavaliers</div>
-      <div class="item">Éclisses</div>
-      <div class="item">Entretoises</div>
+  <footer class="site-footer">
+    <div class="container">
+      <span>© Calculateur BTP</span>
+      <span>Quantités estimatives — à vérifier avant commande.</span>
     </div>
-  </div>
-
-  <div class="section">
-    <h2>🟦 Vis & fixations</h2>
-    <div class="liste">
-      <div class="item">Vis TTPC</div>
-      <div class="item">Vis TRPF</div>
-      <div class="item">Vis autoperceuses</div>
-      <div class="item">Vis bois</div>
-      <div class="item">Chevilles Molly</div>
-      <div class="item">Chevilles nylon</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>🟦 Isolation</h2>
-    <div class="liste">
-      <div class="item">Laine de verre</div>
-      <div class="item">Laine de roche</div>
-      <div class="item">Laine de bois</div>
-      <div class="item">Ouate de cellulose</div>
-      <div class="item">Isolants acoustiques</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>🟦 Bandes & enduits</h2>
-    <div class="liste">
-      <div class="item">Bandes papier</div>
-      <div class="item">Bandes armées</div>
-      <div class="item">Bandes fibre</div>
-      <div class="item">Enduit à joint</div>
-      <div class="item">Enduit de lissage</div>
-    </div>
-  </div>
-
-  <a href="placo.html">← Retour Placo</a>
-
-</div>
-
+  </footer>
 </body>
 </html>
