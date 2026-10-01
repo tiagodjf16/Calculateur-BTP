@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toutes les affiches · ASF Pierrelatte</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--fond:#0B1633;--carte:#13224A;--ligne:#243B7E;--or:#C9A227;--bleu:#1C3F9E;--texte:#EEF2FF;--doux:#9FB2E8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{position:sticky;top:0;z-index:5;background:rgba(11,22,51,.96);border-bottom:1px solid var(--ligne);padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:22px}
+  .reglages{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .reglages label{display:flex;gap:8px;align-items:center;color:var(--doux);font-size:14px}
+  input,select{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font:inherit}
+  main{max-width:1280px;margin:0 auto;padding:20px}
+  section{background:var(--carte);border:1px solid var(--ligne);border-radius:18px;padding:18px;margin-bottom:22px}
+  section h2{margin:0 0 4px;font-size:20px}
+  section p{margin:0 0 14px;color:var(--doux)}
+  .paire{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+  figure{margin:0;background:#050B1F;border-radius:14px;overflow:hidden;border:1px solid var(--ligne)}
+  figure img{display:block;width:100%;height:auto;min-height:240px;background:#0A1430 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='14' fill='none' stroke='%23C9A227' stroke-width='3' stroke-dasharray='60 30'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 20 20' to='360 20 20' dur='1s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E") center no-repeat}
+  figcaption{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;font-weight:700}
+  figcaption a{color:var(--or);font-weight:600;text-decoration:none;font-size:14px}
+  .texte{margin-top:12px}
+  .texte a{color:var(--or)}
+  .note{color:var(--doux);font-size:13.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Toutes les affiches du club</h1>
+  <div class="reglages">
+    <label>Week-end du <input type="date" id="date"></label>
+    <label>Format <select id="format"><option value="carre">Publication (fil)</option><option value="story">Story</option></select></label>
+  </div>
+</header>
+<main>
+  <p class="note">Chaque image est dessinée en direct par le serveur, avec les vrais matchs du week-end choisi. Une case vide ou une feuille « aucun match » veut dire qu'il n'y a rien à annoncer ce week-end-là : change la date.</p>
+
+  <section data-type="resultats">
+    <h2>1. Résultats du week-end</h2>
+    <p>Publiée le lundi à 9 h. Feuille domicile (maison, partenaires 1 à 15) et feuille extérieur (avion, partenaires 16 à 30).</p>
+    <div class="paire"></div>
+    <div class="texte"></div>
+  </section>
+
+  <section data-type="programme">
+    <h2>2. Rencontres du week-end</h2>
+    <p>Publiée le lundi à 9 h, pour le week-end qui arrive.</p>
+    <div class="paire"></div>
+    <div class="texte"></div>
+  </section>
+
+  <section data-type="plateaux">
+    <h2>3. Foot animation · rencontres</h2>
+    <p>Plateaux U6 à U11 et brassages U13, saisis dans l'onglet Foot animation.</p>
+    <div class="paire"></div>
+    <div class="texte"></div>
+  </section>
+
+  <section data-type="plateaux-resultats">
+    <h2>4. Foot animation · résultats</h2>
+    <p>Seulement les U10 · U11 et les U13 dont les scores ont été saisis. Sans score, l'annonce ne part pas.</p>
+    <div class="paire"></div>
+    <div class="texte"></div>
+  </section>
+
+  <section data-seul="match">
+    <h2>5. Jour de match</h2>
+    <p>Story publiée le matin du match, une par équipe.</p>
+    <div class="paire"></div>
+  </section>
+
+  <section data-seul="score">
+    <h2>6. Résultat d'un match</h2>
+    <p>Affiche du dernier score saisi, à faire à la main depuis l'espace club.</p>
+    <div class="paire"></div>
+  </section>
+
+  <section data-seul="evenement">
+    <h2>7. Événement</h2>
+    <p>Exemple : loto, tournoi, assemblée générale. Titre et textes réglables depuis l'espace club.</p>
+    <div class="paire"></div>
+  </section>
+</main>
+<script>
+  const $ = s => document.querySelector(s);
+  const base = "affiches.php";
+  function url(params){ return base + "?" + new URLSearchParams(params).toString() + "&t=" + Date.now(); }
+  function figure(titre, src){
+    return `<figure><img loading="lazy" src="${src}" alt="${titre}" onerror="this.alt='Rien à afficher pour ce week-end';this.style.minHeight='80px'">
+      <figcaption><span>${titre}</span><a href="${src}" target="_blank" rel="noopener">Ouvrir en grand</a></figcaption></figure>`;
+  }
+  function dessiner(){
+    const date = $("#date").value, format = $("#format").value;
+    const commun = date ? { date } : {};
+    document.querySelectorAll("section[data-type]").forEach(sec => {
+      const type = sec.dataset.type;
+      sec.querySelector(".paire").innerHTML =
+        figure("Domicile", url({ apercu: type, lieu: "dom", partie: 1, format, ...commun })) +
+        figure("Extérieur", url({ apercu: type, lieu: "ext", partie: 2, format, ...commun }));
+      sec.querySelector(".texte").innerHTML = `<a href="${url({ apercu: type, message: 1, ...commun })}" target="_blank" rel="noopener">Voir le texte de la publication</a>`;
+    });
+    const s = (q, p) => document.querySelector(`section[data-seul="${q}"] .paire`).innerHTML = figure(p.titreFig, url(p.params));
+    s("match", { titreFig: "Prochain match", params: { apercu: "match", format: "story" } });
+    s("score", { titreFig: "Dernier résultat", params: { apercu: "score", format: "story" } });
+    s("evenement", { titreFig: "Exemple d'événement", params: { apercu: "evenement", titre: "Grand loto du club", sous: "Salle des fêtes de Pierrelatte",
+      texte: "Venez nombreux : lots, buvette et bonne humeur !", date: date || new Date().toISOString().slice(0, 10), heure: "18:00", lieu: "Salle des fêtes", format: "story" } });
+  }
+  $("#date").addEventListener("change", dessiner);
+  $("#format").addEventListener("change", dessiner);
+  dessiner();
+</script>
+</body>
+</html>

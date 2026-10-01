@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Votre conversation avec le club · ASF Pierrelatte</title>
+<link rel="icon" href="/img/blason.png">
+<style>
+  *{box-sizing:border-box;margin:0}
+  html{-webkit-text-size-adjust:100%}
+  body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:#0B1633;color:#EEF2FF;min-height:100vh;display:flex;flex-direction:column}
+  .h{padding:calc(16px + env(safe-area-inset-top,0px)) 16px 14px;background:linear-gradient(135deg,#1C3F9E,#0B1633);display:flex;gap:12px;align-items:center;position:sticky;top:0;z-index:2}
+  .h img{width:48px;height:48px;object-fit:contain}
+  .h b{font-size:18px;display:block}.h small{color:#C9D4F2;font-size:13px}
+  main{flex:1;width:100%;max-width:760px;margin:0 auto;padding:16px 16px 180px}
+  .fil{display:grid;gap:14px}
+  .b{max-width:86%;display:grid;gap:4px}
+  .b .q{font-size:12px;color:#9FB2E8}
+  .b .t{padding:11px 14px;border-radius:16px;line-height:1.45;font-size:15.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .b.club{justify-self:start}.b.club .t{background:#1B2B5C;border-top-left-radius:4px}
+  .b.moi{justify-self:end;text-align:right}.b.moi .t{background:#1C63C4;color:#fff;border-top-right-radius:4px;text-align:left}
+  .rep{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(16px + env(safe-area-inset-bottom,0px));background:#0B1633;border-top:1px solid #26386E}
+  .rep form{max-width:760px;margin:0 auto;display:grid;gap:8px}
+  textarea{width:100%;min-height:74px;max-height:40vh;resize:vertical;background:#13224A;border:1px solid #2B4591;border-radius:14px;padding:12px;color:#fff;font-family:inherit;font-size:16px;line-height:1.4}
+  textarea:focus{outline:0;border-color:#8FA8F0}
+  .ligne{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .ligne small{color:#9FB2E8;font-size:12.5px}
+  button{background:#1C63C4;color:#fff;border:0;padding:12px 20px;border-radius:12px;font-family:inherit;font-weight:800;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.6}
+  .ferme{max-width:760px;margin:0 auto;padding:14px;border-radius:14px;background:rgba(227,182,76,.12);border:1px solid rgba(227,182,76,.45);color:#F3D48A;font-weight:600;line-height:1.5}
+  .ferme a{color:#fff}
+  .erreur{padding:30px 16px;text-align:center;color:#C9D4F2;line-height:1.6}
+  .ok{color:#22C55E}
+</style>
+</head>
+<body>
+<header class="h"><img src="/img/blason.png" alt="ASF Pierrelatte"><div><b>Votre conversation avec le club</b><small id="sous">ASF Pierrelatte</small></div></header>
+<main><div class="fil" id="fil"><p class="erreur">Chargement…</p></div></main>
+<div class="rep" id="zone-rep" hidden>
+  <form id="form">
+    <textarea id="texte" placeholder="Votre réponse…" required maxlength="3000"></textarea>
+    <div class="ligne"><small id="etat">Votre réponse arrive directement à la bonne personne du club.</small><button id="envoyer">Envoyer</button></div>
+  </form>
+</div>
+<script>
+  const p = new URLSearchParams(location.search), c = p.get("c") || "", j = p.get("j") || "";
+  const url = `/api/conversation.php?c=${encodeURIComponent(c)}&j=${encodeURIComponent(j)}`;
+  const esc = t => String(t ?? "").replace(/[&<>"']/g, x => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[x]));
+  async function charger(bas){
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.erreur || "Conversation introuvable.");
+      document.getElementById("sous").textContent = `${d.objet || "Votre message"}${d.pour ? " · avec " + d.pour : ""}`;
+      document.getElementById("fil").innerHTML = d.fil.map(x => `<div class="b ${x.de === "parent" ? "moi" : "club"}"><div class="q">${esc(x.de === "parent" ? "Vous" : x.auteur)} · ${esc(x.date)}</div><div class="t">${esc(x.texte)}</div></div>`).join("");
+      const z = document.getElementById("zone-rep");
+      if (d.statut === "fermee"){
+        z.hidden = false;
+        z.innerHTML = `<div class="ferme">Cette conversation a été clôturée par le club. Pour une nouvelle question, écrivez-nous depuis la <a href="/#contact">page Contact</a> du site.</div>`;
+      } else z.hidden = false;
+      if (bas) window.scrollTo(0, document.body.scrollHeight);
+    } catch(e){
+      document.getElementById("fil").innerHTML = `<p class="erreur">${esc(e.message)}<br>Vérifiez que vous avez ouvert le lien complet reçu par e-mail.</p>`;
+    }
+  }
+  document.getElementById("form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const t = document.getElementById("texte"), b = document.getElementById("envoyer"), etat = document.getElementById("etat");
+    if (!t.value.trim()) return;
+    b.disabled = true; b.textContent = "Envoi…";
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte: t.value.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.erreur || "Envoi impossible.");
+      t.value = ""; etat.innerHTML = `<span class="ok">✅ Message envoyé au club.</span>`;
+      await charger(true);
+    } catch(e){ etat.textContent = "❌ " + e.message; }
+    b.disabled = false; b.textContent = "Envoyer";
+  });
+  charger(true);
+  setInterval(() => { const tx = document.getElementById("texte"); if (!document.hidden && (!tx || !tx.value)) charger(false); }, 30000);   // les nouvelles réponses du club s'affichent toutes seules
+</script>
+</body>
+</html>
