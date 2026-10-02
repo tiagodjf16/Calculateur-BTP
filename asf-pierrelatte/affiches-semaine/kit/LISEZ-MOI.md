@@ -72,5 +72,5 @@ node capturer.mjs resultats-dom insta # une seule
 
 Sur le site en ligne, les affiches sont fabriquées par le serveur (`api/affiches.php`, chez o2switch), qui ne peut pas
 ouvrir de page web pour en faire une image. La mise en page de ce kit y a donc été recopiée en PHP (dessin avec GD) :
-tout est dans le dossier **`asf-pierrelatte/serveur/`**, avec son propre mode d'emploi (`serveur/LISEZ-MOI.md`).
+tout est dans le dossier **`asf-pierrelatte/serveur/`** : il suffit de remplacer les deux fonds (`img/fond-domicile.jpg`, `img/fond-exterieur.jpg`) et `api/affiches.php` (voir `serveur/LISEZ-MOI.md`).
 Les affiches restent publiées toutes seules chaque lundi sur Facebook et Instagram.

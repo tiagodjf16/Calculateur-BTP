@@ -1,8 +1,8 @@
 <?php
 // Affiches dessinées par le serveur, et publication sur la page Facebook du club.
-//  - depuis la V33 : affiches « stade de nuit » (décors dans img/affiches-nuit, voir la section du même nom) aux formats
-//    story 1080 x 1920, publication 1080 x 1350 et Facebook 1080 x 2160 ; sans ces décors, les anciennes feuilles
-//    (1080 x 1620 sur img/fond-domicile.jpg et img/fond-exterieur.jpg) sont dessinées comme avant.
+//  - depuis la V33 : affiches « stade de nuit » quand img/fond-domicile.jpg et img/fond-exterieur.jpg sont les nouveaux fonds
+//    (1520 x 2180, voir la section du même nom), faites pour chaque format : story 1080 x 1920, publication Instagram
+//    1080 x 1350, publication Facebook 1080 x 2160 ; avec les anciens fonds (feuilles 1080 x 1620), rien ne change.
 //  - chaque lundi à 9 h : résultats du week-end passé + rencontres du week-end à venir (2 stories + 1 publication avec texte)
 //  - le jour d'un match à 9 h : l'affiche de chaque équipe qui joue (story seule)
 // Appelé par sync.php (cron horaire). Aperçu pour le bureau : /api/affiches.php?apercu=programme|resultats|match
@@ -1567,11 +1567,13 @@ function aff_enregistrer($im, string $nom): string {
 }
 
 /* ================= Affiches « stade de nuit » (saison 2026-2027) =================
-   Le décor de chaque format est une image toute prête : img/affiches-nuit/decor-{fb|story|insta}-{dom|ext}.jpg
-   (le stade Gustave Jaume de nuit, le ballon du club, le blason, « 1923 » et la signature du club).
-   Le serveur y écrit tout le reste : le bandeau du haut, la pastille domicile / extérieur, les titres, la date,
-   la liste des matchs (sa taille est calculée pour que tout tienne, les noms ne sont jamais coupés) et les partenaires.
-   Sans ces images, les anciennes affiches sont dessinées comme avant. */
+   Fonds : img/fond-domicile.jpg et img/fond-exterieur.jpg (le stade Gustave Jaume de nuit avec le ballon du club,
+   image de 1520 x 2180). Une seule image par lieu sert aux trois formats : le serveur y découpe la story (1080 x 1920),
+   la publication Instagram (1080 x 1350) et la publication Facebook (1080 x 2160), le ballon toujours à sa place.
+   Il y dessine tout le reste : voile, bandeau du haut, blason et « 1923 », pastille domicile / extérieur, titres, date,
+   la liste des matchs (sa taille est calculée pour que tout tienne, les noms ne sont jamais coupés), la devise du club
+   et les partenaires.
+   Avec les anciens fonds (feuilles 1080 x 1620 avec la maison ou l'avion), les anciennes affiches sont dessinées comme avant. */
 const AFN_FORMATS = [   // positions en pixels, reprises du modèle (affiche.html du kit)
     'fb'    => ['H' => 2160, 'barre' => 58, 'tete' => 96, 'bl' => 120, 'titre' => 300, 't1' => 150, 't2' => 84, 'date' => 630, 'zone' => [792, 1812], 'part' => 1950, 'logo' => 58],
     'story' => ['H' => 1920, 'barre' => 58, 'tete' => 96, 'bl' => 112, 'titre' => 290, 't1' => 140, 't2' => 78, 'date' => 596, 'zone' => [740, 1590], 'part' => 1714, 'logo' => 54],
@@ -1584,7 +1586,10 @@ const AFN_ISSUE = ['V' => ['#2BB566', '#16773F'], 'D' => ['#D9534B', '#9C2A24'],
 const AFN_CIEL = '#C9D4F2';
 const AFN_SS = 2;                                   // la liste est dessinée deux fois plus grande puis réduite : bords bien lisses
 const AFN_POLICES = ['900i' => 'BarlowCondensed-BlackItalic.ttf', '800i' => 'BarlowCondensed-ExtraBoldItalic.ttf',
-    's600' => 'SourceSans3-SemiBold.ttf', 's700' => 'SourceSans3-Bold.ttf', 's800' => 'SourceSans3-ExtraBold.ttf', 's700i' => 'SourceSans3-BoldItalic.ttf'];
+    's600' => 'SourceSans3-SemiBold.ttf', 's700' => 'SourceSans3-Bold.ttf', 's800' => 'SourceSans3-ExtraBold.ttf', 's700i' => 'SourceSans3-BoldItalic.ttf',
+    'script' => 'KaushanScript-Regular.ttf'];
+const AFN_MAITRE = ['W' => 1520, 'H' => 2180, 'bx' => 1220, 'by' => 625, 'r' => 165];           // le fond : taille, centre et rayon du ballon
+const AFN_BALLON = ['fb' => [840, 610, 165], 'story' => [845, 566, 150], 'insta' => [870, 330, 118]];   // place du ballon sur chaque format
 
 /* police : '900', '800', '700' (Barlow Condensed), '900i' (italique), 's700', 's800', 's700i' (Source Sans 3) ;
    si une police manque, on prend la Barlow Condensed la plus proche */
@@ -1594,14 +1599,26 @@ function afn_police(string $p): string {
     if (!isset(AFN_POLICES[$p])) return $cache[$p] = aff_police($p);
     foreach ([__DIR__ . '/polices', dirname(__DIR__) . '/polices', dirname(__DIR__) . '/api/polices', __DIR__] as $d)
         if (is_file($f = $d . '/' . AFN_POLICES[$p]) && is_readable($f)) return $cache[$p] = $f;
+    if ($p === 'script') return $cache[$p] = afn_police('800i');
     return $cache[$p] = aff_police(['900i' => '900', '800i' => '800', 's600' => '600', 's700' => '700', 's800' => '800', 's700i' => '700'][$p]);
 }
 function afn_format(): string { $h = aff_h(); return $h >= 2000 ? 'fb' : ($h < 1500 ? 'insta' : 'story'); }
-function afn_decor(string $fmt, string $lieu): ?string {
-    foreach (['jpg', 'png', 'webp'] as $ext) if (is_file($p = dirname(__DIR__) . "/img/affiches-nuit/decor-$fmt-$lieu.$ext")) return $p;
+/* le fond du lieu, s'il s'agit du nouveau fond « stade de nuit » (repère écrit dans l'image, ou sa taille de 1520 x 2180) */
+function afn_fond(string $lieu): ?string {
+    foreach ($lieu === 'ext' ? ['fond-exterieur', 'fond-domicile'] : ['fond-domicile'] as $n) foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) {
+        if (!is_file($p = dirname(__DIR__) . "/img/$n.$ext")) continue;
+        return afn_fond_nuit($p) ? $p : null;                          // c'est le premier fond trouvé qui décide
+    }
     return null;
 }
-function afn_actif(?string $lieu = null): bool { return aff_polices_ok() && afn_decor(afn_format(), $lieu === 'ext' ? 'ext' : 'dom') !== null; }
+function afn_fond_nuit(string $p): bool {
+    static $cache = [];
+    if (isset($cache[$p])) return $cache[$p];
+    if (str_contains((string) @file_get_contents($p, false, null, 0, 65536), 'asf-stade-nuit')) return $cache[$p] = true;
+    $d = @getimagesize($p);
+    return $cache[$p] = $d && $d[0] >= 1400 && abs($d[1] / $d[0] - AFN_MAITRE['H'] / AFN_MAITRE['W']) < .03;
+}
+function afn_actif(?string $lieu = null): bool { return aff_polices_ok() && afn_fond($lieu === 'ext' ? 'ext' : 'dom') !== null; }
 
 /* ---------- texte ---------- */
 function afn_bb(string $t, float $px, string $f): array { return @imagettfbbox($px * .75, 0, $f, $t) ?: [0, 0, 0, 0, 0, 0, 0, 0]; }
@@ -2100,10 +2117,20 @@ function afn_debut(?string $lieu): array {
     $l = $lieu === 'ext' ? 'ext' : 'dom';
     $A = ['fmt' => $fmt, 'F' => $F, 'lieu' => $lieu, 'acc' => AFN_ACC[$l][0], 'accl' => AFN_ACC[$l][1], 'metal' => AFN_METAL[$l]];
     $im = imagecreatetruecolor($W, $H); imagealphablending($im, true);
-    $src = aff_image(afn_decor($fmt, $l));
-    if ($src) { imagecopyresampled($im, $src, 0, 0, 0, 0, $W, $H, imagesx($src), imagesy($src)); imagedestroy($src); }
-    else aff_rect($im, 0, 0, $W, $H, aff_c($im, '#030817'));
+    aff_rect($im, 0, 0, $W, $H, aff_c($im, '#030817'));
+    if ($src = aff_image((string) afn_fond($l))) {                     // la part du fond qui revient à ce format
+        [$cx, $cy, $r] = AFN_BALLON[$fmt]; $k = imagesx($src) / AFN_MAITRE['W'];
+        $s = $r / (AFN_MAITRE['r'] * $k);                                 // pixels de l'affiche par pixel du fond
+        $sw = $W / $s; $sh = $H / $s;
+        $sx = max(0, min(imagesx($src) - $sw, AFN_MAITRE['bx'] * $k - $cx / $s));
+        $sy = max(0, min(imagesy($src) - $sh, AFN_MAITRE['by'] * $k - $cy / $s));
+        imagecopyresampled($im, $src, 0, 0, (int) round($sx), (int) round($sy), $W, $H, (int) round($sw), (int) round($sh));
+        imagedestroy($src);
+    }
     $A['im'] = $im;
+    afn_voile($A);
+    afn_tete($A);
+    afn_devise($A);
     // bandeau : saison · site · compte Instagram
     $B = $F['barre']; $s = $B * .36; $sp = $s * .82;
     aff_rect($im, 0, 0, $W, $B, aff_c($im, '#050B1F'));
@@ -2132,6 +2159,76 @@ function afn_debut(?string $lieu): array {
         imagedestroy($c); imagedestroy($r);
     }
     return $A;
+}
+/* voile sombre : haut et bas de l'affiche, et côté gauche (sous les titres) ; le ballon et la tribune restent éclairés */
+function afn_voile(array $A): void {
+    $im = $A['im']; $F = $A['F']; $W = AFF_W; $H = $F['H']; $z0 = $F['zone'][0];
+    $v = [[0, .9], [$F['tete'] + $F['bl'] + 20, .35], [$F['titre'] + 60, .1], [$z0 - 160, 0], [$z0 - 10, .72], [$z0 + 160, .86], [$H, .9]];
+    for ($y = 0; $y < $H; $y++) {
+        for ($i = 0; $i < count($v) - 2 && $y > $v[$i + 1][0]; $i++);
+        [$y0, $o0] = $v[$i]; [$y1, $o1] = $v[$i + 1];
+        $o = $o0 + ($o1 - $o0) * max(0, min(1, ($y - $y0) / max(1, $y1 - $y0)));
+        if ($o > .003) imageline($im, 0, $y, $W - 1, $y, afn_c($im, [3, 8, 23], $o));
+    }
+    for ($x = 0; $x < $W * .64; $x++) {
+        $t = $x / $W; $o = $t < .44 ? .78 - (.78 - .4) * $t / .44 : .4 * (1 - ($t - .44) / .20);
+        imageline($im, $x, 0, $x, $H - 1, afn_c($im, [3, 8, 23], $o));
+    }
+}
+/* en-tête : le blason et « 1923 » en lettres évidées dorées (argentées à l'extérieur) */
+function afn_tete(array $A): void {
+    $im = $A['im']; $F = $A['F']; $bl = $F['bl']; $x = 46; $y = $F['tete'];
+    afn_ombre($im, $x - 40, $y - 30, $bl + 80, $bl + 80, function ($m, $k, $blanc) use ($bl) {
+        imagefilledellipse($m, (int) round((40 + $bl / 2) / $k), (int) round((30 + 8 + $bl / 2) / $k), (int) round($bl * .94 / $k), (int) round($bl * .94 / $k), $blanc);
+    }, 20, .6);
+    aff_blason_club($im, $x, $y, $bl);
+    $an = ['fb' => 118, 'story' => 110, 'insta' => 84][$A['fmt']];          // taille de « 1923 »
+    afn_texte_evide($im, '1923', $x + $bl + 18, $y + $bl / 2 + .4 * $an, $an, '900i', $A['accl'], .85, -.01 * $an);
+}
+/* texte évidé : seul un fin contour est tracé (dessiné deux fois plus grand puis réduit) */
+function afn_texte_evide($im, string $t, float $x, float $y, float $px, string $p, string $hex, float $op, float $ls = 0): void {
+    $f = afn_police($p); if ($f === '') return;
+    $z = AFN_SS; $w = (int) ceil(afn_larg($t, $px, $p, $ls) + $px * .5); $h = (int) ceil($px * 1.4);
+    $ox = (int) floor($x - $px * .15); $oy = (int) floor($y - $px * 1.1);
+    $l = afn_calque($w * $z, $h * $z); $c = afn_c($l, afn_rgb($hex), 1);
+    $bx = ($x - $ox) * $z; $by = ($y - $oy) * $z;
+    for ($i = 0; $i < 16; $i++) { $a = 2 * M_PI * $i / 16; afn_texte($l, $t, $bx + 4 * cos($a), $by + 4 * sin($a), $px * $z, $p, $c, 'left', $ls * $z); }
+    imagealphablending($l, false);
+    afn_texte($l, $t, $bx, $by, $px * $z, $p, imagecolorallocatealpha($l, 0, 0, 0, 127), 'left', $ls * $z);
+    $r = afn_calque($w, $h); imagealphablending($r, false);
+    imagecopyresampled($r, $l, 0, 0, 0, 0, $w, $h, $w * $z, $h * $z);
+    imagedestroy($l);
+    if ($op < 1) {                                                     // opacité du contour
+        for ($j = 0; $j < $h; $j++) for ($i = 0; $i < $w; $i++) {
+            $c = imagecolorat($r, $i, $j); $a = ($c >> 24) & 127;
+            if ($a < 127) imagesetpixel($r, $i, $j, ($c & 0xFFFFFF) | ((127 - (int) round((127 - $a) * $op)) << 24));
+        }
+    }
+    imagealphablending($im, true);
+    imagecopy($im, $r, $ox, $oy, 0, 0, $w, $h);
+    imagedestroy($r);
+}
+/* devise du club au-dessus des partenaires : « Plaisir · Respect · Effort · Progrès » et le nom du club en écriture manuscrite */
+function afn_devise(array $A): void {
+    $im = $A['im']; $W = AFF_W;
+    [$s0, $s1] = ['fb' => [1822, 1940], 'story' => [1598, 1706], 'insta' => [1106, 1150]][$A['fmt']]; $sh = $s1 - $s0;
+    $val = 'PLAISIR · RESPECT · EFFORT · PROGRÈS'; $nom = "Atom'Sports Football Pierrelatte";
+    $kaushan = basename(afn_police('script')) === AFN_POLICES['script'];
+    if ($A['fmt'] === 'insta') {                                       // sur une seule ligne
+        $pv = 13; $ps = $kaushan ? 30 : 28; $mid = ($s0 + $s1) / 2;
+        $wv = afn_larg($val, $pv, 's800', $pv * .32); $ws = afn_larg($nom, $ps, 'script'); $x = ($W - $wv - 26 - $ws) / 2;
+        afn_texte($im, $val, $x, $mid + .312 * $pv, $pv, 's800', aff_c($im, $A['accl']), 'left', $pv * .32);
+        afn_ombre_texte($im, $nom, $x + $wv + 26, $mid + 10.75, $ps, 'script', 4, 18, .7);
+        afn_texte($im, $nom, $x + $wv + 26, $mid + 10.75, $ps, 'script', aff_c($im, '#FFFFFF'));
+        return;
+    }
+    $pv = $sh * .15; $ps = $sh * .42; $hv = 1.424 * $pv; $hs = 1.05 * $ps;
+    $top = $s0 + ($sh - $hv - 2 - $hs) / 2;
+    afn_texte($im, $val, $W / 2, $top + 1.024 * $pv, $pv, 's800', aff_c($im, $A['accl']), 'center', $pv * .32);
+    $by = $top + $hv + 2 + ($hs - 1.451 * $ps) / 2 + 1.084 * $ps;
+    $wn = afn_larg($nom, $ps, 'script');
+    afn_ombre_texte($im, $nom, $W / 2 - $wn / 2, $by, $ps, 'script', 4, 18, .7);
+    afn_texte($im, $nom, $W / 2, $by, $ps, 'script', aff_c($im, '#FFFFFF'), 'center');
 }
 /* sur-titre, grand titre, sous-titre « métal », date */
 function afn_titres(array $A, string $sur, string $t1, string $t2, string $date, bool $deuxLignes = false): void {
@@ -3016,9 +3113,9 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
         echo "Autres fichiers dans img : " . implode(', ', array_map('basename', array_filter(glob(dirname(__DIR__) . '/img/*') ?: [], 'is_file'))) . "\n";
         foreach (['domicile', 'exterieur'] as $n) echo "Image $n : " . (($p = aff_fond_lieu($n === 'domicile' ? 'dom' : 'ext')) && str_contains($p, "fond-$n") ? basename($p) . ' · présente' : "MANQUANTE (attendu : img/fond-$n.jpg)") . "\n";
         echo "Version du moteur : V33 du 02/10 · affiches « stade de nuit »\n";
-        echo "Affiches « stade de nuit » : " . (aff_polices_ok() && afn_decor('story', 'dom') ? 'ACTIVES' : 'inactives (anciennes affiches)') . "\n";
-        foreach (['fb', 'story', 'insta'] as $f) foreach (['dom', 'ext'] as $l)
-            echo "  décor $f-$l : " . (afn_decor($f, $l) ? 'présent' : "MANQUANT (attendu : img/affiches-nuit/decor-$f-$l.jpg)") . "\n";
+        echo "Affiches « stade de nuit » : " . (afn_actif('dom') || afn_actif('ext') ? 'ACTIVES' : 'inactives (anciens fonds : anciennes affiches)') . "\n";
+        foreach (['dom' => 'domicile', 'ext' => 'extérieur'] as $l => $n)
+            echo "  fond $n : " . (afn_fond($l) ? 'nouveau fond « stade de nuit » (' . basename(afn_fond($l)) . ')' : 'ancien fond ou absent') . "\n";
         foreach (AFN_POLICES as $p => $f) echo "  police $f : " . (basename(afn_police($p)) === $f ? 'présente' : 'absente (remplacée par une Barlow Condensed)') . "\n";
         echo "Partenaires : " . count(glob(dirname(__DIR__) . '/img/partenaires/*') ?: []) . " logo(s) dans img/partenaires\n";
         $dossierAff = dirname(__DIR__) . '/affiches';
