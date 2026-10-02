@@ -292,7 +292,7 @@
 
   /* comptes aux onglets choisis (Accès et rôles) : qui a les Affiches a aussi les onglets d'affiches ajoutés.
      S.permissions est relu depuis la base : chaque nouvelle valeur passe par ici. */
-  const AVEC_AFFICHES = ["evenements", "affmatchs"];
+  const AVEC_AFFICHES = ["evenements"];
   const avecAffiches = p => {
     if (!p || typeof p !== "object") return p;
     let o = p;
@@ -339,15 +339,6 @@
     window.rendreEspace = function(){ if (S.ui.onglet === "evenements") focusGarde = memoFocus(); return espaceAvant.apply(this, arguments); };
   }
 
-  // onglet Affiches : un raccourci vers les affiches d'événement, en haut
-  if (typeof window.panAffiches === "function"){
-    const affichesAvant = window.panAffiches;
-    window.panAffiches = function(){
-      const h = affichesAvant.apply(this, arguments);
-      if (!S.heberge || !peutVoir()) return h;
-      return `<button type="button" class="carte af-reglages ev-raccourci" data-ev-a="aller"><span>🎉</span><div><b>Affiches stage, loto, tournoi</b><small>Écris les infos, l'affiche se dessine toute seule · onglet Événements</small></div><span class="af-fl">›</span></button>` + h;
-    };
-  }
   // onglet Stages : « Créer l'affiche » sur chaque stage, avec ses infos déjà remplies
   if (typeof window.panStages === "function"){
     const stagesAvant = window.panStages;
