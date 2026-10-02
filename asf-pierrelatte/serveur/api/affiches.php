@@ -292,6 +292,7 @@ function aff_fal(array $m): bool {
         && (bool) preg_match('/\bu\s?(6|7|8|9|10|11|13)\b|u6 à u11/i', (string) ($m['equipe'] ?? '') . ' ' . (string) ($m['comp'] ?? ''));
 }
 function aff_plan_weekend(array $matchs, string $samedi, bool $resultats, ?string $lieu = null): array {
+    if (isset($GLOBALS['aff_plan_manuel'])) return afn_plan_manuel($GLOBALS['aff_plan_manuel'], $resultats, $lieu);   // onglet « Affiches matchs »
     $fal = !empty($GLOBALS['aff_fal']);
     $matchs = array_values(array_filter($matchs, fn($m) => aff_fal($m) === $fal));
     if ($fal) $matchs = array_values(array_filter($matchs, 'aff_fal_valide'));   // pas de doublon avec une ancienne fiche « U10 · U11 »
@@ -2418,7 +2419,8 @@ function afn_match(array $m, array $opts = []) {
 /* événement du club (stage, loto, tournoi…) : titre, sous-titre, date, heure, lieu et informations ; null si le décor manque */
 function afn_evenement(array $o) {
     if (!afn_actif('dom')) return null;
-    $titre = trim((string) ($o['titre'] ?? '')); $sous = trim((string) ($o['sous'] ?? ''));
+    $titre = trim(afn_sans_emoji((string) ($o['titre'] ?? ''))); $sous = trim(afn_sans_emoji((string) ($o['sous'] ?? '')));
+    $o['lieu'] = afn_sans_emoji((string) ($o['lieu'] ?? '')); $o['texte'] = afn_sans_emoji((string) ($o['texte'] ?? ''));
     $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($o['date'] ?? '')) ? afn_quand($o['date']) : '';
     $heure = trim((string) ($o['heure'] ?? '')); $heure = $heure !== '' ? aff_hfr($heure) : '';
     $lignes = array_slice(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) ($o['texte'] ?? ''))))), 0, 8);
@@ -2457,6 +2459,111 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
     afn_partenaires($A, (bool) ($opts['sponsors'] ?? true));
     $GLOBALS['aff_sp_partie'] = null;
     return $A['im'];
+}
+
+/* ---------- affiches de matchs saisis à la main (onglet « Affiches matchs » de l'espace club) ----------
+   POST /api/affiches.php?manuel=1, corps JSON :
+     { type: rencontres | resultats | fal-rencontres | fal-resultats | vet-rencontres | vet-resultats | match | score,
+       lieu: dom | ext | "" (feuille), format: story | carre | fb, titre, sponsors, samedi,
+       matchs: [{ equipe, comp, adv, dom, date, heure, bp, bc, adresse, adversaires: [..], resultats: [{adv, bp, bc}] }] }
+   &message=1 : le texte de la publication ; &telecharger=1 : l'image en pièce jointe.
+   Les matchs saisis remplacent ceux de la base le temps de la requête (aff_plan_weekend lit $GLOBALS['aff_plan_manuel']) :
+   les affiches et les messages sont donc exactement ceux du lundi, avec ces matchs-là. */
+const AFN_TYPES_MANUEL = ['rencontres', 'resultats', 'fal-rencontres', 'fal-resultats', 'vet-rencontres', 'vet-resultats', 'match', 'score'];
+const AFN_MAX_MANUEL = 12;                                                  // au-delà, l'affiche devient illisible : en faire deux
+/* les émojis ne sont pas dans la police de l'affiche : on les retire du texte dessiné */
+function afn_sans_emoji(string $s): string {
+    return preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}\x{20E3}\x{E0020}-\x{E007F}]/u', '', $s) ?? $s;
+}
+function afn_manuel_lire(array $d): array {
+    $type = $d['type'] ?? '';
+    $fal = str_starts_with($type, 'fal-'); $vet = str_starts_with($type, 'vet-');
+    // texte d'une ligne, sans émoji (la police de l'affiche ne les a pas)
+    $txt = fn($v, int $n) => is_scalar($v) ? mb_substr(trim(preg_replace('/\s+/u', ' ', afn_sans_emoji((string) $v))), 0, $n) : '';
+    $but = fn($v) => (is_numeric($v) && (float) $v == (int) $v && $v >= 0 && $v <= 99) ? (int) $v : null;
+    $out = [];
+    foreach (array_slice(is_array($d['matchs'] ?? null) ? $d['matchs'] : [], 0, AFN_MAX_MANUEL) as $i => $m) {
+        if (!is_array($m)) continue;
+        $date = (string) ($m['date'] ?? '');
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $dd) || !checkdate((int) $dd[2], (int) $dd[3], (int) $dd[1])) continue;
+        $heure = preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', (string) ($m['heure'] ?? '')) ? (string) $m['heure'] : '';
+        $x = ['id' => ($fal ? 'pl-man' : ($vet ? 'vet-man' : 'man-')) . $i, 'equipe' => $txt($m['equipe'] ?? '', 40), 'comp' => $txt($m['comp'] ?? '', 40),
+              'adv' => $txt($m['adv'] ?? '', 60), 'dom' => !empty($m['dom']), 'date' => $date, 'heure' => $heure,
+              'bp' => $but($m['bp'] ?? null), 'bc' => $but($m['bc'] ?? null), 'adresse' => $txt($m['adresse'] ?? '', 120), '_maj' => ''];
+        if ($vet && $x['equipe'] === '') $x['equipe'] = 'Vétérans';
+        if ($fal) {
+            // « U10-U11 », « u10/u11 espoir » → « U10 · U11 ESPOIR », comme les fiches du foot animation
+            $x['equipe'] = preg_replace('/^(U\s?\d{1,2})\s*[-\/·]\s*(U\s?\d{1,2})/u', '$1 · $2', aff_maj($x['equipe']));
+            if ($x['comp'] === '') $x['comp'] = preg_match('/U\s?13/i', $x['equipe']) ? 'Brassage' : 'Plateau';
+            $x['adversaires'] = array_values(array_filter(array_map(fn($a) => aff_maj($txt($a, 60)), array_slice(is_array($m['adversaires'] ?? null) ? $m['adversaires'] : [], 0, 8)), 'strlen'));
+            $x['resultats'] = [];
+            foreach (array_slice(is_array($m['resultats'] ?? null) ? $m['resultats'] : [], 0, 6) as $r)
+                if (is_array($r) && $txt($r['adv'] ?? '', 60) !== '') $x['resultats'][] = ['adv' => aff_maj($txt($r['adv'], 60)), 'bp' => $but($r['bp'] ?? null), 'bc' => $but($r['bc'] ?? null)];
+            $x['bp'] = $x['bc'] = null;
+            if (!$x['dom'] && $x['adv'] === '' && $x['adresse'] === '') continue;          // plateau à l'extérieur : il faut savoir où
+            if ($x['equipe'] === '') continue;
+        } elseif ($x['adv'] === '') continue;                                         // un match sans adversaire n'est pas dessiné
+        $out[] = $x;
+    }
+    $ref = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($d['samedi'] ?? '')) ? (string) $d['samedi'] : ($out ? min(array_column($out, 'date')) : date('Y-m-d'));
+    $t = strtotime($ref . ' 12:00'); $w = (int) date('w', $t);
+    return [$type, $out, date('Y-m-d', $t + (($w === 0 ? -1 : 6 - $w) * 86400))];
+}
+/* le « plan » du week-end pour des matchs saisis à la main : tous gardés (aucun tri par la base), par jour puis par heure */
+function afn_plan_manuel(array $matchs, bool $resultats, ?string $lieu): array {
+    $sel = array_values(array_filter($matchs, fn($m) => $lieu === null || ($lieu === 'dom') === !empty($m['dom'])));
+    if (!empty($GLOBALS['aff_fal']) && $resultats) $sel = array_values(array_filter($sel, fn($m) => aff_scores_brassage($m)));
+    foreach ($sel as &$m) {
+        $m['sous'] = aff_sous_etiquette((string) ($m['comp'] ?? ''));
+        $m['etiquette'] = $m['equipe'] . ($m['sous'] !== '' ? ' (' . mb_convert_case(mb_strtolower($m['sous']), MB_CASE_TITLE) . ')' : '');
+    }
+    unset($m);
+    $jours = array_values(array_unique(array_column($sel, 'date'))); sort($jours);
+    $out = [];
+    foreach ($jours as $d) {
+        $l = array_values(array_filter($sel, fn($m) => $m['date'] === $d));
+        usort($l, fn($a, $b) => strcmp((string) ($a['heure'] ?? ''), (string) ($b['heure'] ?? '')));
+        $out[] = ['date' => $d, 'matchs' => $l];
+    }
+    return $out;
+}
+function afn_manuel_route(): void {
+    $refus = function (int $code, string $t) { http_response_code($code); header('Content-Type: text/plain; charset=utf-8'); echo $t; exit; };
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $refus(405, 'Envoi en POST seulement.');
+    $brut = (string) file_get_contents('php://input');
+    if (strlen($brut) > 100000) $refus(413, 'Trop de données.');
+    $d = json_decode($brut, true, 32, JSON_BIGINT_AS_STRING);
+    if (!is_array($d)) $refus(400, 'Données illisibles.');
+    if (!in_array($d['type'] ?? '', AFN_TYPES_MANUEL, true)) $refus(400, "Type d'affiche inconnu.");
+    [$type, $matchs, $samedi] = afn_manuel_lire($d);
+    $res = in_array($type, ['resultats', 'fal-resultats', 'vet-resultats', 'score'], true);
+    $fal = str_starts_with($type, 'fal-'); $vet = str_starts_with($type, 'vet-');
+    $lieu = in_array($d['lieu'] ?? '', ['dom', 'ext'], true) ? $d['lieu'] : null;
+    $GLOBALS['aff_plan_manuel'] = $matchs;
+    if (isset($_GET['message'])) {                                            // texte de la publication (toute l'annonce)
+        header('Content-Type: text/plain; charset=utf-8');
+        if ($type === 'match' || $type === 'score') { echo ''; exit; }      // un seul match : message écrit par l'espace club
+        echo $fal ? aff_message_plateaux($matchs, $samedi, $res) : ($vet ? aff_message_veterans($matchs, $samedi, $res)
+            : ($res ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi)));
+        exit;
+    }
+    aff_format(in_array($d['format'] ?? '', ['carre', 'post', 'fb'], true) ? $d['format'] : 'story');
+    $opts = ['titre' => mb_substr(trim(afn_sans_emoji((string) ($d['titre'] ?? ''))), 0, 80), 'sponsors' => ($d['sponsors'] ?? true) !== false];
+    ob_start();                                                                // un avertissement PHP ne doit jamais casser l'image
+    if ($type === 'match' || $type === 'score') {
+        if (!$matchs) { http_response_code(422); header('Content-Type: text/plain; charset=utf-8'); echo 'Ajoute le match : date et adversaire.'; exit; }
+        $im = aff_match($matchs[0], $opts + ['score' => $type === 'score']);
+    } else {
+        $GLOBALS['aff_fal'] = $fal; $GLOBALS['aff_vet'] = $vet;
+        $im = aff_liste($matchs, $samedi, $res, $opts + ['lieu' => $lieu, 'partie' => $lieu === 'dom' ? 1 : ($lieu === 'ext' ? 2 : null)]);
+        $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false;
+    }
+    ob_end_clean();
+    if (!$im) $refus(500, "L'affiche n'a pas pu être dessinée.");
+    header('Content-Type: image/jpeg'); header('Cache-Control: no-store');
+    if (!empty($_GET['telecharger'])) header('Content-Disposition: attachment; filename="asf-pierrelatte-' . $type . ($lieu ? "-$lieu" : '') . "-$samedi.jpg\"");
+    imagejpeg($im, null, 92);
+    exit;
 }
 
 /* ---------- Facebook ---------- */
@@ -2774,8 +2881,8 @@ function aff_message_rencontres(array $matchs, string $samedi, ?string $lieu = n
         foreach ($j['matchs'] as $m) {
             $adv = aff_nom_club((string) $m['adv']); $h = aff_hfr($m['heure'] ?? '');
             $eq = aff_nom_equipe($m);
-            if (!empty($m['dom'])) { $domicile = true; $txt[] = "🏠 $eq reçoit $adv à $h"; }
-            else $txt[] = "✈️ $eq se déplace à $adv à $h";
+            if (!empty($m['dom'])) { $domicile = true; $txt[] = "🏠 $eq reçoit $adv" . ($h !== '' ? " à $h" : ''); }
+            else $txt[] = "✈️ $eq se déplace à $adv" . ($h !== '' ? " à $h" : '');
         }
         $txt[] = '';
     }
@@ -3131,6 +3238,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
         echo "Dossier affiches : " . (is_dir($dossierAff) ? (is_writable($dossierAff) ? 'présent, écriture possible' : 'présent mais ÉCRITURE IMPOSSIBLE') : 'absent (sera créé)') . "\n";
         exit;
     }
+    if (isset($_GET['manuel'])) afn_manuel_route();                     // affiches de matchs saisis à la main (POST JSON)
     $matchs = aff_matchs(); $type = $_GET['apercu'] ?? 'programme';
     $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'] ?? '') ? $_GET['date'] : null;
     $opts = ['titre' => mb_substr((string) ($_GET['titre'] ?? ''), 0, 80), 'sponsors' => ($_GET['sponsors'] ?? '1') !== '0'];
