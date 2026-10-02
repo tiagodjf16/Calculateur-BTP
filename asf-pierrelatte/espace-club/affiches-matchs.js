@@ -46,7 +46,7 @@
     const parCat = new Map();
     liste.forEach((m, i) => { const c = catSimple(m.equipe); if (!parCat.has(c)) parCat.set(c, []); parCat.get(c).push(i); });
     for (const idx of parCat.values()){
-      const n = i => Math.max(1, Math.min(MAX_EQUIPES, +liste[i].equipes || 1));
+      const n = i => enPoules(liste[i]) ? 0 : Math.max(1, Math.min(MAX_EQUIPES, +liste[i].equipes || 1));
       const fixes = i => String(liste[i].numeros || "").split(/[^\d]+/).filter(Boolean).map(Number).filter(x => x > 0);
       const pris = new Set(idx.flatMap(i => fixes(i).length === n(i) ? fixes(i) : []));
       let k = 1;
@@ -60,6 +60,7 @@
   /* foot animation : chaque équipe de Pierrelatte du plateau a sa poule (A, B…) et ses matchs (heure, adversaire, score).
      Les anciens brouillons et les matchs automatiques (« contre » et scores sans poule) deviennent les matchs de la 1re équipe. */
   const POULES = ["A", "B", "C", "D", "E", "F", "G", "H"], MAX_RENC = 8;
+  const garder = (l, ok, max) => { for (let k = l.length - 1; k >= 0; k--) if (!ok(l[k])) l.splice(k, 1); if (l.length > max) l.length = max; return l; };
   function det(m){
     if (!Array.isArray(m.equipesDet)){
       const ms = (m.resultats || []).filter(r => r && String(r.adv || "").trim()).map(r => ({ heure: "", adv: String(r.adv).trim(), bp: r.bp ?? "", bc: r.bc ?? "" }));
@@ -67,11 +68,42 @@
       m.equipesDet = [{ poule: "", matchs: ms.slice(0, MAX_RENC) }];
     }
     const n = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
-    m.equipesDet = m.equipesDet.filter(q => q && typeof q === "object").slice(0, n).map(q => ({ poule: POULES.includes(q.poule) ? q.poule : "",
-      matchs: (Array.isArray(q.matchs) ? q.matchs : []).filter(p => p && typeof p === "object").slice(0, MAX_RENC)
-        .map(p => ({ heure: /^\d{2}:\d{2}$/.test(p.heure || "") ? p.heure : "", adv: String(p.adv ?? ""), bp: p.bp ?? "", bc: p.bc ?? "" })) }));
-    while (m.equipesDet.length < n) m.equipesDet.push({ poule: "", matchs: [] });
+    garder(m.equipesDet, q => q && typeof q === "object", n);                // remis en ordre sur place : les objets gardés restent les mêmes
+    for (const q of m.equipesDet){
+      if (!Array.isArray(q.matchs)) q.matchs = [];
+      garder(q.matchs, p => p && typeof p === "object", MAX_RENC);
+      q.matchs.forEach(p => { if (!/^\d{2}:\d{2}$/.test(p.heure || "")) p.heure = ""; p.adv = String(p.adv ?? ""); if (p.bp == null) p.bp = ""; if (p.bc == null) p.bc = ""; });
+    }
+    while (m.equipesDet.length < n) m.equipesDet.push({ matchs: [] });
     return m.equipesDet;
+  }
+  /* poules (brassage, tournoi…) : toutes leurs équipes, Pierrelatte parfois plusieurs fois, et leurs matchs.
+     Une équipe = { id, nom } ; un match = { heure, a, b (id des équipes), sa, sb (buts de a et de b) } */
+  const uidc = () => Math.random().toString(36).slice(2, 9);
+  function pls(m){
+    if (!Array.isArray(m.poulesT)) m.poulesT = [];
+    garder(m.poulesT, q => q && typeof q === "object", POULES.length);      // sur place, comme det()
+    for (const q of m.poulesT){
+      if (!Array.isArray(q.equipes)) q.equipes = [];
+      garder(q.equipes, e => e && e.id && String(e.nom || "").trim(), 12);
+      const ids = new Set(q.equipes.map(e => e.id));
+      if (!Array.isArray(q.matchs)) q.matchs = [];
+      garder(q.matchs, p => p && ids.has(p.a) && ids.has(p.b), 30);
+      q.matchs.forEach(p => { if (!/^\d{2}:\d{2}$/.test(p.heure || "")) p.heure = ""; if (p.sa == null) p.sa = ""; if (p.sb == null) p.sb = ""; });
+    }
+    if (!m.poulesT.length) m.poulesT.push({ equipes: [], matchs: [] });
+    return m.poulesT;
+  }
+  const enPoules = m => m.mode === "poules";
+  /* le même club déjà dans les poules du plateau : la 2e équipe devient « USVJ B », la 3e « USVJ C »… (comme le district) */
+  function suffixe(m, v){
+    const base = n => cleClub(String(n).replace(/\s+[A-Ha-h]$/, ""));
+    if (/\s([A-Ha-h]|\d{1,2})$/.test(v)) return v;
+    const memes = pls(m).flatMap(q => q.equipes).map(e => e.nom).filter(n => base(n) === base(v));
+    if (!memes.length) return v;
+    const pris = new Set(memes.map(n => (n.match(/\s([A-Ha-h])$/) || [, "A"])[1].toUpperCase()));
+    const l = "BCDEFGH".split("").find(x => !pris.has(x));
+    return l ? `${v} ${l}` : v;
   }
   const libelleEquipes = r => r.total < 2 ? "" : r.nums.length === 1 ? `équipe ${r.nums[0]}` : `équipes ${r.nums.length <= 3 ? r.nums.join(", ").replace(/, (\d+)$/, " et $1") : r.nums[0] + " à " + r.nums[r.nums.length - 1]}`;
   /* même club plusieurs fois (plusieurs de ses équipes) : Donzère 1, Donzère 2… */
@@ -147,17 +179,24 @@
       dom: !!m.dom, date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : net(m.adresse) };
     if (t.fam === "fal"){
       o.equipe = catSimple(o.equipe);
+      if (enPoules(m)){
+        o.equipes = 1;
+        o.poules = pls(m).map((q, k) => {
+          const nom = new Map(q.equipes.map(e => [e.id, net(e.nom)]));
+          let ms = q.matchs.map(p => ({ heure: p.heure || "", a: nom.get(p.a) || "", b: nom.get(p.b) || "", sa: nombre(p.sa), sb: nombre(p.sb) })).filter(p => p.a && p.b && p.a !== p.b);
+          if (m.seulNous) ms = ms.filter(p => nousMeme(p.a) || nousMeme(p.b));
+          return { nom: POULES[k], equipes: q.equipes.map(e => net(e.nom)).filter(Boolean), matchs: ms };
+        }).filter(q => q.equipes.length || q.matchs.length);
+        return o;
+      }
       const d = det(m);
       o.equipes = d.length;
       if (num && num.total > 1) o.numeros = num.nums;
-      o.poules = d.map((q, k) => {
+      o.nos = d.map((q, k) => {
         const ms = q.matchs.map(p => ({ heure: p.heure || "", adv: net(p.adv), bp: nombre(p.bp), bc: nombre(p.bc) })).filter(p => p.adv);
         const noms = numeroterClubs(ms.map(p => p.adv)); ms.forEach((p, j) => { p.adv = noms[j]; });
-        return { numero: num && num.total > 1 ? num.nums[k] || 0 : 0, poule: q.poule, matchs: ms };
+        return { numero: num && num.total > 1 ? num.nums[k] || 0 : 0, matchs: ms };
       });
-      // les mêmes matchs à l'ancienne (serveur d'avant les poules)
-      o.adversaires = o.poules.flatMap(q => q.matchs.map(p => p.adv));
-      o.resultats = o.poules.flatMap(q => q.matchs.filter(p => p.bp !== null && p.bc !== null).map(p => ({ adv: p.adv, bp: p.bp, bc: p.bc })));
     } else if (t.res){ o.bp = nombre(m.bp); o.bc = nombre(m.bc); }
     return o;
   }
@@ -171,7 +210,11 @@
     if (!m.date) x.push("la date");
     if (t.fam === "fal"){
       if (!m.dom && !String(m.adv || "").trim() && !String(m.adresse || "").trim()) x.push("le club qui reçoit");
-      if (t.res && !det(m).some(q => q.matchs.some(p => String(p.adv || "").trim() && nombre(p.bp) !== null && nombre(p.bc) !== null))) x.push("au moins un score");
+      if (enPoules(m)){
+        if (!pls(m).some(q => q.equipes.length)) x.push("les équipes des poules");
+        else if (t.res && !pls(m).some(q => q.matchs.some(p => nombre(p.sa) !== null && nombre(p.sb) !== null))) x.push("au moins un score");
+      }
+      else if (t.res && !det(m).some(q => q.matchs.some(p => String(p.adv || "").trim() && nombre(p.bp) !== null && nombre(p.bc) !== null))) x.push("au moins un score");
     } else if (!String(m.adv || "").trim()) x.push("l'adversaire");
     return x;
   }
@@ -266,7 +309,8 @@
     const garde = n => { const k = slug(n).replace(/-/g, ""); return mots.every(w => k.includes(w)); };
     const deja = CLUBS.deja.filter(garde), tous = CLUBS.tous.filter(garde).slice(0, tape ? 80 : 400);
     const exact = tape && [...CLUBS.deja, ...CLUBS.tous].find(n => cleClub(n) === cleClub(tape));
-    const deDans = ajout ? ((det(L()[+inp.dataset.i] || {})[+inp.dataset.k] || {}).matchs || []).map(p => p.adv) : [];
+    const poule = ajout && inp.dataset.q !== undefined, mm = L()[+inp.dataset.i] || {};
+    const deDans = !ajout ? [] : poule ? ((pls(mm)[+inp.dataset.q] || {}).equipes || []).map(e => e.nom) : ((det(mm)[+inp.dataset.k] || {}).matchs || []).map(p => p.adv);
     let k = 0;
     const opt = (v, lib, cl = "") => `<span class="am-club-opt${cl}" role="option" id="${boite.id}-${k++}" data-v="${esc(v)}" aria-selected="false">${lib}</span>`;
     const surl = n => { let t = esc(joli(n)); if (!mots.length) return t;
@@ -276,6 +320,7 @@
     const deja2 = n => deDans.some(a => memeClub(a, n)) ? ` <small>déjà ajouté · une autre équipe</small>` : "";
     let h = "";
     if (tape && !exact) h += opt(tape, `${ajout ? "➕ Ajouter" : "✏️ Mettre"} « <b>${esc(tape)}</b> »<small>${deja.length || tous.length ? "s'il n'est pas dans la liste" : "club pas encore dans la liste"}</small>`, " am-club-libre");
+    if (poule && garde("Pierrelatte")) h += `<span class="am-club-gr" role="presentation">Notre club</span>` + opt("Pierrelatte", surl("Pierrelatte") + (pls(mm).some(q => q.equipes.some(e => nousMeme(e.nom))) ? ` <small>une autre équipe : ${esc(suffixe(mm, "Pierrelatte"))}</small>` : ""));
     if (deja.length) h += `<span class="am-club-gr" role="presentation">Déjà rencontrés</span>` + deja.map(n => opt(n, surl(n) + deja2(n))).join("");
     if (tous.length) h += `<span class="am-club-gr" role="presentation">Clubs du district</span>` + tous.map(n => opt(n, surl(n) + deja2(n))).join("");
     if (!h) h = `<span class="am-club-vide">Tape le nom du club</span>`;
@@ -304,9 +349,19 @@
     const x = w.querySelector(".am-club-x"); if (x) x.hidden = !v;
     const ok = w.querySelector(".am-club-ok"); if (ok) ok.hidden = !v;
   }
-  function choisirClub(inp, v){
+  function choisirClub(inp, v, libre){
     v = String(v || "").trim(); if (!v) return;
     const i = +inp.dataset.i, m = L()[i]; if (!m) return;
+    if (inp.dataset.amClub === "ajout" && inp.dataset.q !== undefined){
+      const q = pls(m)[+inp.dataset.q]; if (!q) return;
+      if (q.equipes.length >= 12){ toast("12 équipes au plus par poule", true); return; }
+      const e = { id: uidc(), nom: suffixe(m, libre || /[a-zà-ÿ]/.test(v) ? v : joli(v)) };
+      q.matchs.push(...q.equipes.map(o => ({ heure: "", a: o.id, b: e.id, sa: "", sb: "" })));   // chacun contre chacun
+      q.equipes.push(e);
+      inp.value = ""; fermerClubs(inp); inp.blur();
+      marquer(); sauver(); majMessage(); rendrePanneau();
+      return;
+    }
     if (inp.dataset.amClub === "ajout"){
       const q = det(m)[+inp.dataset.k]; if (!q) return;
       if (q.matchs.length >= MAX_RENC){ toast(`${MAX_RENC} matchs au plus par équipe`, true); return; }
@@ -350,8 +405,8 @@
     if (ev.key === "Escape" && ouvert){ ev.preventDefault(); fermerClubs(inp); return; }
     if (ev.key === "Enter"){
       ev.preventDefault();
-      if (n >= 0) choisirClub(inp, os[n].dataset.v);
-      else if (inp.dataset.amClub === "ajout") choisirClub(inp, inp.value);
+      if (n >= 0) choisirClub(inp, os[n].dataset.v, os[n].classList.contains("am-club-libre"));
+      else if (inp.dataset.amClub === "ajout") choisirClub(inp, inp.value, true);
       else { fermerClubs(inp); if (tactile()) inp.blur(); }
     }
   });
@@ -362,8 +417,8 @@
     if (!o && !b) return;
     ev.preventDefault();                                                // dans un <label> : pas de clic renvoyé au champ
     const inp = (o || b).closest(".am-club").querySelector("[data-am-club]"); if (!inp) return;
-    if (o){ choisirClub(inp, o.dataset.v); return; }
-    if (b.dataset.amClubA === "ajouter"){ choisirClub(inp, inp.value); return; }
+    if (o){ choisirClub(inp, o.dataset.v, o.classList.contains("am-club-libre")); return; }
+    if (b.dataset.amClubA === "ajouter"){ choisirClub(inp, inp.value, true); return; }
     inp.value = ""; boutonsClub(inp);
     inp.dispatchEvent(new Event("input", { bubbles: true }));
     inp.focus();
@@ -377,7 +432,7 @@
     const at = j => `data-i="${i}" data-k="${k}"${j === undefined ? "" : ` data-j="${j}"`}`;
     return `<div class="am-eq">
       <div class="am-eq-tete"><b>${esc(titre)}</b>
-        <label class="am-poule">Poule<select data-am="p-poule" ${at()}><option value="" ${q.poule ? "" : "selected"}>Aucune</option>${POULES.map(p => `<option ${q.poule === p ? "selected" : ""}>${p}</option>`).join("")}</select></label></div>
+      </div>
       ${q.matchs.map((p, j) => `<div class="am-rencontre${t.res ? " am-rencontre-res" : ""}">
         ${t.res ? "" : `<span class="am-rh"><input type="time" data-am="p-heure" ${at(j)} value="${esc(p.heure)}" aria-label="Heure du match"></span>`}
         ${champClub(`data-am="p-adv" ${at(j)} aria-label="Adversaire"`, p.adv, "Adversaire : chercher ou taper…")}
@@ -387,9 +442,31 @@
       ${q.matchs.length < MAX_RENC ? champClub(`${at()} aria-label="Ajouter un match : ${esc(titre)}"`, "", "+ Un match : chercher ou taper l'adversaire…", true) : ""}
     </div>`;
   }
+  /* une poule : ses équipes (étiquettes), puis ses matchs (heure ou score, équipe – équipe) */
+  function blocPoule(m, i, iq, q, t, nb){
+    const at = j => `data-i="${i}" data-q="${iq}"${j === undefined ? "" : ` data-j="${j}"`}`;
+    const opts = sel => q.equipes.map(e => `<option value="${esc(e.id)}" ${e.id === sel ? "selected" : ""}>${esc(e.nom)}</option>`).join("");
+    const nom = id => (q.equipes.find(e => e.id === id) || {}).nom || "";
+    return `<div class="am-eq am-pl">
+      <div class="am-eq-tete"><b>Poule ${POULES[iq]}</b>${nb > 1 ? `<button type="button" class="btn contour petit" data-am-a="poule-suppr" ${at()}>Retirer la poule</button>` : ""}</div>
+      <div class="am-puces">${q.equipes.map((e, j) => `<span class="am-puce${nousMeme(e.nom) ? " am-nous" : ""}">${esc(e.nom)}<button type="button" data-am-a="peq-suppr" ${at(j)} aria-label="Retirer ${esc(e.nom)}">✕</button></span>`).join("")
+        || `<span class="quoi">Ajoute les équipes de la poule (Pierrelatte en premier dans la liste).</span>`}</div>
+      ${q.equipes.length < 12 ? champClub(`${at()} aria-label="Ajouter une équipe à la poule ${POULES[iq]}"`, "", "+ Une équipe : chercher ou taper…", true) : ""}
+      ${q.matchs.length ? `<b class="ps-lab am-pl-lab">Les matchs${t.res ? " et les scores" : ""}</b>` : q.equipes.length > 1 ? "" : ""}
+      ${q.matchs.map((p, j) => `<div class="am-pm${t.res ? " am-pm-res" : ""}">
+        <select class="am-pm-a" data-am="t-a" ${at(j)} aria-label="Équipe">${opts(p.a)}</select>
+        ${t.res ? `<input class="am-pm-sa" type="number" min="0" max="99" inputmode="numeric" data-am="t-sa" ${at(j)} value="${esc(p.sa)}" aria-label="Buts de ${esc(nom(p.a))}">` : ""}
+        <span class="am-pm-t">–</span>
+        ${t.res ? `<input class="am-pm-sb" type="number" min="0" max="99" inputmode="numeric" data-am="t-sb" ${at(j)} value="${esc(p.sb)}" aria-label="Buts de ${esc(nom(p.b))}">` : ""}
+        <select class="am-pm-b" data-am="t-b" ${at(j)} aria-label="Équipe">${opts(p.b)}</select>
+        ${t.res ? "" : `<span class="am-rh am-pm-h"><input type="time" data-am="t-heure" ${at(j)} value="${esc(p.heure)}" aria-label="Heure du match"></span>`}
+        <button type="button" class="btn contour petit am-pm-x" data-am-a="t-suppr" ${at(j)} aria-label="Retirer ce match">✕</button></div>`).join("")}
+      ${q.equipes.length > 1 ? `<button type="button" class="btn contour petit" data-am-a="t-ajout" ${at()}>+ Un match</button>` : ""}
+    </div>`;
+  }
   function carteMatch(m, i, n, num){
     const t = T(), fal = t.fam === "fal", seul = t.fam === "seul";
-    const eqLib = fal && num ? libelleEquipes(num) : "";
+    const eqLib = fal && num && num.nums.length ? libelleEquipes(num) : "";
     const x = manque(m);
     const lieuBtns = `<div class="am-lieu" role="group" aria-label="Lieu">
       <button type="button" class="as-fmt ${m.dom ? "on" : ""}" data-am-a="dom" data-i="${i}" data-k="1">🏠 À domicile</button>
@@ -397,14 +474,21 @@
     let corps;
     if (fal){
       const cat = catSimple(m.equipe);
-      const d = det(m);
-      corps = `<label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
-        <label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${d.length === k + 1 ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>
+      const d = det(m), po = enPoules(m), pl = po ? pls(m) : [];
+      corps = `<div class="am-plein am-mode" role="group" aria-label="Organisation">
+          <button type="button" class="as-fmt ${po ? "" : "on"}" data-am-a="mode" data-i="${i}" data-k="">⚽ Plateau : nos matchs</button>
+          <button type="button" class="as-fmt ${po ? "on" : ""}" data-am-a="mode" data-i="${i}" data-k="poules">🗂️ Poules</button></div>
+        <label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+        ${po ? "" : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${d.length === k + 1 ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
         <label>Type<select data-am="comp" data-i="${i}">${["Plateau", "Brassage"].map(c => `<option ${c === m.comp ? "selected" : ""}>${c}</option>`).join("")}</select></label>
         ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", t.res ? "Heure" : "Heure du plateau", m.heure, "", "time")}
         ${m.dom ? "" : `<label>Chez (club qui reçoit)${champClub(`data-am="adv" data-i="${i}"`, m.adv, "Rechercher ou taper un club…")}</label>`}
         ${m.dom ? "" : champ(i, "adresse", "Stade, ville", m.adresse, `maxlength="120" placeholder="Stade Marcel Pagnol, Donzère"`)}
-        <div class="am-plein am-eqs">${d.map((q, k) => blocEquipe(i, k, q, num, t)).join("")}</div>`;
+        ${po ? `<div class="am-plein am-eqs"><p class="quoi am-aide">Chaque poule avec toutes ses équipes : Pierrelatte peut y être plusieurs fois (Pierrelatte B, Pierrelatte C…). Les matchs se créent tout seuls, chacun contre chacun${t.res ? " : mets les scores" : " : mets l'heure de chacun"}, retire ceux qui ne se jouent pas.</p>
+            ${pl.map((q, iq) => blocPoule(m, i, iq, q, t, pl.length)).join("")}
+            ${pl.length < POULES.length ? `<button type="button" class="btn contour petit" data-am-a="poule-ajout" data-i="${i}">+ Une poule (${POULES[pl.length]})</button>` : ""}
+            <label class="af-choix am-seul ${m.seulNous ? "on" : ""}"><input type="checkbox" data-am="seulNous" data-i="${i}" ${m.seulNous ? "checked" : ""}>Sur l'affiche, seulement les matchs de Pierrelatte</label></div>`
+          : `<div class="am-plein am-eqs">${d.map((q, k) => blocEquipe(i, k, q, num, t)).join("")}</div>`}`;
     } else {
       corps = `${t.fam === "vet" ? "" : champ(i, "equipe", "Équipe", m.equipe, `maxlength="40" list="am-equipes" placeholder="Seniors 1"`)}
         ${champ(i, "comp", "Compétition", m.comp, `maxlength="40" placeholder="D1, Régional 2, Coupe de la Drôme…"`)}
@@ -537,8 +621,8 @@
     if (!a || !a.matches || !a.matches("#panneau [data-am], #panneau [data-am-g], #panneau [data-am-msg], #panneau [data-am-club]")) return null;
     const ajout = a.dataset.amClub === "ajout";
     const sel = a.dataset.amMsg !== undefined ? "[data-am-msg]" : a.dataset.amG ? `[data-am-g="${a.dataset.amG}"]`
-      : ajout ? `[data-am-club="ajout"][data-i="${a.dataset.i}"][data-k="${a.dataset.k}"]`
-      : `[data-am="${a.dataset.am}"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.j !== undefined ? `[data-j="${a.dataset.j}"]` : ""}`;
+      : ajout ? `[data-am-club="ajout"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.q !== undefined ? `[data-q="${a.dataset.q}"]` : ""}`
+      : `[data-am="${a.dataset.am}"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.q !== undefined ? `[data-q="${a.dataset.q}"]` : ""}${a.dataset.j !== undefined ? `[data-j="${a.dataset.j}"]` : ""}`;
     let d = null, f = null; try { d = a.selectionStart; f = a.selectionEnd; } catch(err){}
     return { sel, d, f, v: ajout ? a.value : null };
   }
@@ -751,7 +835,13 @@
     const m = L()[+t.dataset.i]; if (!m) return;
     marquer();
     const k = t.dataset.am;
-    if (/^p-/.test(k)){
+    if (k === "seulNous"){ m.seulNous = t.checked; const l = t.closest(".af-choix"); if (l) l.classList.toggle("on", t.checked); apresSaisie(); return; }
+    if (/^t-/.test(k)){
+      const q = pls(m)[+t.dataset.q], p = q && q.matchs[+t.dataset.j]; if (!p) return; const kk = k.slice(2);
+      if (p[kk] === t.value) return; p[kk] = t.value;
+      if (kk === "a" || kk === "b"){ sauver(); rendrePanneau(); majMessage(); return; }
+    }
+    else if (/^p-/.test(k)){
       const q = det(m)[+t.dataset.k]; if (!q) return; const kk = k.slice(2);
       if (kk === "poule"){ if (q.poule === t.value) return; q.poule = t.value; }
       else { const p = q.matchs[+t.dataset.j]; if (!p || p[kk] === t.value) return; p[kk] = t.value; }
@@ -792,7 +882,7 @@
     }
     if (a === "suppr"){
       const m = l[i]; if (!m) return;
-      const vide = !String(m.adv || "").trim() && !(T().fam === "fal" && det(m).some(q => q.matchs.some(p => String(p.adv || "").trim())));
+      const vide = !String(m.adv || "").trim() && !(T().fam === "fal" && (det(m).some(q => q.matchs.some(p => String(p.adv || "").trim())) || (enPoules(m) && pls(m).some(q => q.equipes.length))));
       if (!vide && !confirm("Supprimer ce match de l'affiche ?")) return;
       l.splice(i, 1); marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
@@ -801,6 +891,23 @@
       [l[i], l[j]] = [l[j], l[i]]; marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
     if (a === "dom"){ const m = l[i]; if (!m) return; m.dom = b.dataset.k === "1"; marquer(); sauver(); rendrePanneau(); majMessage(); return; }
+    if (["mode", "poule-ajout", "poule-suppr", "peq-suppr", "t-ajout", "t-suppr"].includes(a)){
+      const m = l[i]; if (!m) return;
+      const q = b.dataset.q !== undefined ? pls(m)[+b.dataset.q] : null, j = +b.dataset.j;
+      const rempli = p => p.heure || String(p.sa ?? "") !== "" || String(p.sb ?? "") !== "";
+      if (a === "mode"){ if ((m.mode || "") === b.dataset.k) return; m.mode = b.dataset.k; if (enPoules(m)) pls(m); }
+      else if (a === "poule-ajout"){ if (pls(m).length < POULES.length) m.poulesT.push({ equipes: [], matchs: [] }); }
+      else if (a === "poule-suppr"){ if (!q) return; if (q.equipes.length && !confirm(`Retirer la poule ${POULES[+b.dataset.q]} et ses matchs ?`)) return; m.poulesT.splice(+b.dataset.q, 1); }
+      else if (a === "peq-suppr"){
+        const e = q && q.equipes[j]; if (!e) return;
+        const ms = q.matchs.filter(p => p.a === e.id || p.b === e.id);
+        if (ms.some(rempli) && !confirm(`Retirer ${e.nom} et ses matchs ?`)) return;
+        q.equipes.splice(j, 1); q.matchs = q.matchs.filter(p => !ms.includes(p));
+      }
+      else if (a === "t-ajout"){ if (!q || q.equipes.length < 2) return; q.matchs.push({ heure: "", a: q.equipes[0].id, b: q.equipes[1].id, sa: "", sb: "" }); }
+      else if (a === "t-suppr"){ if (!q || !q.matchs[j]) return; q.matchs.splice(j, 1); }
+      marquer(); sauver(); rendrePanneau(); majMessage(); return;
+    }
     if (a === "p-suppr"){ const m = l[i]; if (!m) return; const q = det(m)[+b.dataset.k]; if (!q) return; q.matchs.splice(+b.dataset.j, 1); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
     if (a === "reprendre"){
       const au = e.auto[e.type];
@@ -866,6 +973,28 @@
 .am-sc input{width:60px;text-align:center;font-weight:800}
 .am-eq-vide{margin:0 0 8px;font-size:14px}
 .am-eq > .am-club{margin-bottom:8px}
+.am-mode{display:flex;flex-wrap:wrap;gap:6px}
+.am-aide{margin:0;font-size:14px}
+.am-pl .am-puces{margin:0 0 8px}
+.am-puce.am-nous{border-color:var(--or,#E3B64C);background:rgba(227,182,76,.16)}
+.am-pl-lab{display:block;margin:4px 0 8px}
+.am-pm{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto auto;align-items:center;gap:8px;margin-bottom:8px}
+.am-pm-res{grid-template-columns:minmax(0,1fr) 56px auto 56px minmax(0,1fr) auto}
+.am-pm input[type=number]{text-align:center;font-weight:800;padding-left:4px;padding-right:4px}
+.am-pm-t{font-weight:800;color:var(--texte-doux)}
+.am-seul{margin-top:2px}
+.am-pm select{padding-left:8px;padding-right:22px;background-position:right 6px center;text-overflow:ellipsis}
+@media (max-width:560px){
+  .am-eq{padding:8px 6px 2px}
+  .am-pm{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;padding:6px;border:1px solid var(--ligne);border-radius:10px}
+  .am-pm select{padding-right:18px}
+  .am-pm .am-pm-h{grid-column:1/3}
+  .am-pm .am-pm-x{grid-column:3;justify-self:end}
+  .am-pm-res{grid-template-columns:minmax(0,1fr) 52px auto 52px minmax(0,1fr)}
+  .am-pm-res .am-pm-a{grid-column:1/3}.am-pm-res .am-pm-b{grid-column:4/6}
+  .am-pm-res .am-pm-sa{grid-column:2;grid-row:2}.am-pm-res .am-pm-t{grid-column:3;grid-row:2}.am-pm-res .am-pm-sb{grid-column:4;grid-row:2}
+  .am-pm-res .am-pm-x{grid-column:5;grid-row:2;justify-self:end}
+}
 .am-eqnum{font:700 14px var(--corps);color:var(--texte-doux)}
 .am-puces{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px}
 .am-puce{display:inline-flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;border-radius:999px;border:1px solid var(--ligne);background:rgba(28,99,196,.16);font:700 14px var(--corps)}

@@ -1902,7 +1902,8 @@ function afn_hauteur(array $b, float $wc): float {
             if (!$b['adv']) return 92;
             return max(92, 12 + 24.2 + 8 + afn_lignes_contre($b, $wc - 150 - 128 - 36) * 42 - 8 + 12);
         case 'plateau-res': return max(92, 12 + 24.2 + count($b['res']) * 52 + 14);
-        case 'poules': return afn_poules_geo($b, $wc)['h'];
+        case 'nos': return afn_poules_geo($b, $wc)['h'];
+        case 'tableau': return afn_tableau_geo($b, $wc)['h'];
         case 'duo': return 63.2 + afn_duo_corps($b, $wc)['h'] + 1 + 74;
         case 'evt': return afn_evt($b, $wc)['h'];
         default: return 189.3;
@@ -2013,7 +2014,8 @@ function afn_bloc($im, array $A, array $b, float $x, float $y, float $u, float $
         afn_heure($im, $A, $b['jour'], $b['heure'], $cx0 + $col + 4 * $u, $y + 12 * $u, 112 * $u, $h - 24 * $u, 14 * $u, 40 * $u, $u, 10 * $u);
         return;
     }
-    if ($b['t'] === 'poules') { afn_poules($im, $A, $b, $x, $y, $h, $u, $wc, $cx0, $fondRepere); return; }
+    if ($b['t'] === 'nos') { afn_poules($im, $A, $b, $x, $y, $h, $u, $wc, $cx0, $fondRepere); return; }
+    if ($b['t'] === 'tableau') { afn_tableau($im, $A, $b, $x, $y, $h, $u, $wc, $cx0, $fondRepere); return; }
     // plateau-res : une ligne par match du plateau (Pierrelatte · score · adversaire)
     $zw = ($wc - 150 - 36) * $u; $lx = $cx0 + 18 * $u;
     afn_lieu($im, $A, $b['lieu'], $lx, $y + 12 * $u, $zw, 17 * $u, $u, $fondRepere);
@@ -2029,7 +2031,7 @@ function afn_bloc($im, array $A, array $b, float $x, float $y, float $u, float $
         afn_nom($im, $e['nom'], $rx + 54 * $u, $cy, $max, 24 * $u, .66, '700', '#D3DDF4', 'left');
     }
 }
-/* plateau avec des poules : une partie par équipe de Pierrelatte (« ÉQUIPE 1 · POULE A »), puis ses matchs :
+/* plateau : une partie par équipe de Pierrelatte (« ÉQUIPE 1 » quand il y en a plusieurs), puis ses matchs :
    l'heure et l'adversaire (rencontres) ou le score et l'adversaire (résultats), sur deux colonnes quand la carte est large */
 function afn_poules_geo(array $b, float $wc): array {
     $zw = $b['res'] ? $wc - 150 - 36 : $wc - 278 - 36;
@@ -2068,6 +2070,72 @@ function afn_poules($im, array $A, array $b, float $x, float $y, float $h, float
             afn_nom($im, aff_maj($p['adv']), $nx + 44 * $u, $cy, $max, 23 * $u, .66, '800', '#E6ECFA', 'left');
         }
         $ty += max(1, (int) ceil(count($e['m']) / $g['cols'])) * 46 * $u;
+    }
+    if (!$b['res']) afn_heure($im, $A, $b['jour'], $b['heure'], $cx0 + ($wc - 278) * $u + 4 * $u, $y + 12 * $u, 112 * $u, $h - 24 * $u, 14 * $u, 40 * $u, $u, 10 * $u);
+}
+/* poules : « POULE A », ses équipes (Pierrelatte en couleur), puis ses matchs « 10h00  PIERRELATTE – USVJ »
+   (rencontres) ou « PIERRELATTE 3 1 USVJ » (résultats), sur deux colonnes quand la carte est large */
+function afn_tableau_geo(array $b, float $wc): array {
+    $zw = $b['res'] ? $wc - 150 - 36 : $wc - 278 - 36;
+    $cols = $zw >= 640 ? 2 : 1; $cw = ($zw - ($cols - 1) * 26) / $cols;
+    $h = 12 + 24.2 + 6;
+    foreach ($b['pls'] as $k => $q) $h += ($k ? 12 : 0) + 30 + ($q['eqs'] ? 30 : 0) + (int) ceil(count($q['m']) / $cols) * 44;
+    return ['h' => max(92, $h + 10), 'zw' => $zw, 'cols' => $cols, 'cw' => $cw];
+}
+/* noms à la suite (« A · B · C ») sur une ligne, Pierrelatte en couleur ; réduits pour tenir dans $max */
+function afn_noms_ligne($im, array $A, array $noms, float $x, float $y, float $max, float $px, float $u): void {
+    $sep = '  ·  '; $t = implode($sep, $noms);
+    $s = afn_fit($t, $px, 's800', $max, .55, .04);
+    foreach ($noms as $i => $n) {
+        if ($i) $x += afn_texte($im, $sep, $x, $y, $s, 's800', aff_c($im, '#7F8DB3'), 'left', $s * .04);
+        $x += afn_texte($im, $n, $x, $y, $s, 's800', aff_c($im, afn_nous($n) ? $A['acc'] : '#D3DDF4'), 'left', $s * .04);
+    }
+}
+function afn_tableau($im, array $A, array $b, float $x, float $y, float $h, float $u, float $wc, float $cx0, int $fondRepere): void {
+    $g = afn_tableau_geo($b, $wc); $lx = $cx0 + 18 * $u; $zw = $g['zw'] * $u; $cw = $g['cw'] * $u;
+    afn_lieu($im, $A, $b['lieu'], $lx, $y + 12 * $u, $zw, 17 * $u, $u, $fondRepere);
+    $heures = !$b['res'] && array_filter(array_merge(...array_map(fn($q) => array_column($q['m'], 'h'), $b['pls'])), 'strlen');
+    $ty = $y + (12 + 24.2 + 6) * $u;
+    $coul = fn($n) => aff_c($im, afn_nous($n) ? $A['acc'] : '#E6ECFA');
+    foreach ($b['pls'] as $k => $q) {
+        if ($k) $ty += 12 * $u;
+        $t = aff_maj($q['nom']); $pt = 16 * $u;
+        $tw = afn_texte($im, $t, $lx, $ty + 21 * $u, $pt, 's800', aff_c($im, $A['accl']), 'left', $pt * .12);
+        afn_boite($im, $lx + $tw + 12 * $u, $ty + 15 * $u, max(0, $zw - $tw - 12 * $u), max(1, $u), 0, $A['accl'], .28);
+        $ty += 30 * $u;
+        if ($q['eqs']) { afn_noms_ligne($im, $A, $q['eqs'], $lx, $ty + 20 * $u, $zw, 17 * $u, $u); $ty += 30 * $u; }
+        foreach ($q['m'] as $i => $p) {
+            $c = $i % $g['cols']; $r = intdiv($i, $g['cols']);
+            $rx = $lx + $c * ($cw + 26 * $u); $cy = $ty + $r * 44 * $u + 22 * $u; $nx = $rx; $fin = $rx + $cw;
+            if ($b['res']) {
+                $mid = $rx + $cw / 2; $demi = ($cw - 84 * $u) / 2 - 12 * $u;
+                $na = aff_maj($p['a']); $nb = aff_maj($p['b']);
+                $sa = afn_fit($na, 21 * $u, '800', $demi, .55); $sb = afn_fit($nb, 21 * $u, '800', $demi, .55);
+                afn_texte($im, $na, $mid - 42 * $u - 12 * $u, $cy + .36 * $sa, $sa, '800', $coul($p['a']), 'right');
+                if (afn_nous($p['b']) && !afn_nous($p['a'])) afn_cases($im, $A, $p['sb'], $p['sa'], false, $mid - 40 * $u, $cy - 18 * $u, 38 * $u, 36 * $u, 6 * $u, 4 * $u, 25 * $u, $u);
+                elseif (afn_nous($p['a']) && !afn_nous($p['b'])) afn_cases($im, $A, $p['sa'], $p['sb'], true, $mid - 40 * $u, $cy - 18 * $u, 38 * $u, 36 * $u, 6 * $u, 4 * $u, 25 * $u, $u);
+                else foreach ([$p['sa'], $p['sb']] as $j => $v) {                       // match sans Pierrelatte, ou entre deux équipes de Pierrelatte
+                    $bx = $mid - 40 * $u + $j * 42 * $u;
+                    afn_boite($im, $bx, $cy - 18 * $u, 38 * $u, 36 * $u, 6 * $u, ['v', [[0, AFN_ISSUE['N'][0]], [1, AFN_ISSUE['N'][1]]]]);
+                    afn_texte($im, (string) $v, $bx + 19 * $u, $cy + 9 * $u, 25 * $u, '900', aff_c($im, '#FFFFFF'), 'center');
+                }
+                afn_texte($im, $nb, $mid + 42 * $u + 12 * $u, $cy + .36 * $sb, $sb, '800', $coul($p['b']), 'left');
+                continue;
+            }
+            if ($heures) {
+                afn_boite($im, $rx, $cy - 16 * $u, 80 * $u, 32 * $u, 9 * $u, ['v', $A['metal']]);
+                $th = $p['h'] !== '' ? $p['h'] : '–'; $ph = afn_fit($th, 22 * $u, '900i', 70 * $u, .7);
+                afn_texte($im, $th, $rx + 40 * $u, $cy + .36 * $ph, $ph, '900i', aff_c($im, '#0B1633'), 'center');
+                $nx += 80 * $u + 14 * $u;
+            }
+            $na = aff_maj($p['a']); $nb = aff_maj($p['b']); $tiret = 26 * $u; $place = $fin - $nx - $tiret;
+            $s = min(21 * $u, afn_fit($na . $nb, 21 * $u, '800', $place, .5));
+            $wa = afn_larg($na, $s, '800');
+            afn_texte($im, $na, $nx, $cy + .36 * $s, $s, '800', $coul($p['a']));
+            afn_texte($im, '–', $nx + $wa + $tiret / 2, $cy + .36 * $s, $s, '800', aff_c($im, '#7F8DB3'), 'center');
+            afn_texte($im, $nb, $nx + $wa + $tiret, $cy + .36 * $s, $s, '800', $coul($p['b']));
+        }
+        $ty += (int) ceil(count($q['m']) / $g['cols']) * 44 * $u;
     }
     if (!$b['res']) afn_heure($im, $A, $b['jour'], $b['heure'], $cx0 + ($wc - 278) * $u + 4 * $u, $y + 12 * $u, 112 * $u, $h - 24 * $u, 14 * $u, 40 * $u, $u, 10 * $u);
 }
@@ -2447,8 +2515,8 @@ function afn_blocs(array $liste, bool $resultats, bool $fal): array {
                 : ($ville !== '' ? "$quoi à " . mb_convert_case(mb_strtolower($ville), MB_CASE_TITLE) . ($club !== '' ? " · $club" : '') : "$quoi chez $club");
             if ($resultats) { $b['t'] = 'plateau-res'; $b['res'] = array_slice(aff_scores_brassage($m), 0, 6); }
             else { $b['t'] = 'plateau'; $b['adv'] = array_values(array_filter(array_map('strval', $m['adversaires'] ?? []), 'strlen')); }
-            $eqs = afn_poules_blocs($m, $resultats);
-            if ($eqs) { $b['t'] = 'poules'; $b['res'] = $resultats; $b['eqs'] = $eqs; }
+            if ($eqs = afn_nos_blocs($m, $resultats)) { $b['t'] = 'nos'; $b['res'] = $resultats; $b['eqs'] = $eqs; }
+            if ($pls = afn_tableau_blocs($m, $resultats)) { $b['t'] = 'tableau'; $b['res'] = $resultats; $b['pls'] = $pls; }
         } else {
             $b['t'] = 'match'; $b['res'] = $resultats; $b['bp'] = $m['bp'] ?? null; $b['bc'] = $m['bc'] ?? null;
         }
@@ -2456,39 +2524,65 @@ function afn_blocs(array $liste, bool $resultats, bool $fal): array {
     }
     return $out;
 }
-/* les équipes d'un plateau avec poules : en-tête (« Équipe 1 · Poule A ») et matchs ; [] sans poules ni matchs */
-function afn_poules_blocs(array $m, bool $resultats): array {
-    $q = is_array($m['poules'] ?? null) ? $m['poules'] : [];
+/* plateau : les matchs de chacune de nos équipes (en-tête « Équipe 1 » s'il y en a plusieurs) ; [] sans matchs */
+function afn_nos_blocs(array $m, bool $resultats): array {
+    $q = is_array($m['nos'] ?? null) ? $m['nos'] : [];
     $plus = count($q) > 1; $out = [];
     foreach ($q as $k => $e) {
-        if (!$e['matchs'] && $e['poule'] === '') continue;
         $ms = $resultats ? array_values(array_filter($e['matchs'], fn($p) => $p['bp'] !== null && $p['bc'] !== null)) : $e['matchs'];
-        if ($resultats && !$ms) continue;
-        $tete = $plus ? 'Équipe ' . ($e['n'] ?: $k + 1) : '';
-        if ($e['poule'] !== '') $tete .= ($tete !== '' ? ' · ' : '') . 'Poule ' . $e['poule'];
-        $out[] = ['tete' => $tete, 'm' => array_map(fn($p) => ['h' => $p['heure'] !== '' ? aff_hfr($p['heure']) : '', 'adv' => $p['adv'], 'bp' => $p['bp'], 'bc' => $p['bc']], array_slice($ms, 0, 8))];
+        if (!$ms) continue;
+        $out[] = ['tete' => $plus ? 'Équipe ' . ($e['n'] ?: $k + 1) : '', 'm' => array_map(fn($p) => ['h' => $p['heure'] !== '' ? aff_hfr($p['heure']) : '', 'adv' => $p['adv'], 'bp' => $p['bp'], 'bc' => $p['bc']], array_slice($ms, 0, 8))];
     }
     return $out;
 }
-/* message : une ligne par équipe avec ses matchs (rencontres), ou ses scores (résultats) */
+/* poules : nom, équipes et matchs de chaque poule (résultats : les matchs joués) ; [] sans poules */
+function afn_tableau_blocs(array $m, bool $resultats): array {
+    $out = [];
+    foreach ($m['tableau'] ?? [] as $q) {
+        $ms = $resultats ? array_values(array_filter($q['matchs'], fn($p) => $p['sa'] !== null && $p['sb'] !== null)) : $q['matchs'];
+        if ($resultats && !$ms) continue;
+        $out[] = ['nom' => 'Poule ' . $q['nom'], 'eqs' => $q['equipes'], 'm' => array_map(fn($p) => ['h' => $p['heure'] !== '' ? aff_hfr($p['heure']) : ''] + $p, $ms)];
+    }
+    return $out;
+}
+/* message : les matchs de chaque équipe (plateau), ou chaque poule avec ses équipes et ses matchs */
 function afn_msg_poules(array $m, string $eq, string $ou, string $h): array {
-    $plus = count($m['poules']) > 1;
     $txt = [(!empty($m['dom']) ? '🏠 ' : '✈️ ') . "$eq · " . mb_strtolower((string) ($m['comp'] ?? 'plateau')) . " $ou" . ($h ? " à $h" : '')];
-    foreach ($m['poules'] as $k => $e) {
-        if (!$e['matchs'] && $e['poule'] === '') continue;
-        $qui = $plus ? 'Équipe ' . ($e['n'] ?: $k + 1) . ($e['poule'] !== '' ? ' (poule ' . $e['poule'] . ')' : '') : ($e['poule'] !== '' ? 'Poule ' . $e['poule'] : 'Les matchs');
-        $l = array_map(fn($p) => ($p['heure'] !== '' ? aff_hfr($p['heure']) . ' ' : '') . aff_joli($p['adv']), $e['matchs']);
-        $txt[] = "   • $qui" . ($l ? ' : ' . implode(', ', $l) : '');
+    if (!empty($m['tableau'])) {
+        foreach ($m['tableau'] as $q) {
+            $txt[] = '   Poule ' . $q['nom'] . ($q['equipes'] ? ' : ' . implode(', ', array_map('afn_joli', $q['equipes'])) : '');
+            foreach ($q['matchs'] as $p) $txt[] = '      ' . ($p['heure'] !== '' ? aff_hfr($p['heure']) . ' ' : '• ') . afn_joli($p['a']) . ' – ' . afn_joli($p['b']);
+        }
+        return $txt;
+    }
+    $plus = count($m['nos']) > 1;
+    foreach ($m['nos'] as $k => $e) {
+        if (!$e['matchs']) continue;
+        $l = array_map(fn($p) => ($p['heure'] !== '' ? aff_hfr($p['heure']) . ' ' : '') . afn_joli($p['adv']), $e['matchs']);
+        $txt[] = '   • ' . ($plus ? 'Équipe ' . ($e['n'] ?: $k + 1) . ' : ' : 'Contre ') . implode(', ', $l);
     }
     return $txt;
 }
 function afn_msg_poules_res(array $m): array {
-    $plus = count($m['poules']) > 1; $out = [];
-    foreach ($m['poules'] as $k => $e) {
+    $out = []; $em = fn($n, $e) => $n > $e ? '✅' : ($n < $e ? '❌' : '🤝');
+    if (!empty($m['tableau'])) {
+        foreach ($m['tableau'] as $q) {
+            $ms = array_values(array_filter($q['matchs'], fn($p) => $p['sa'] !== null && $p['sb'] !== null));
+            if (!$ms) continue;
+            $out[] = '   Poule ' . $q['nom'];
+            foreach ($ms as $p) {
+                $i = afn_nous($p['a']) && !afn_nous($p['b']) ? $em($p['sa'], $p['sb']) : (afn_nous($p['b']) && !afn_nous($p['a']) ? $em($p['sb'], $p['sa']) : '⚽');
+                $out[] = "   $i " . afn_joli($p['a']) . ' ' . $p['sa'] . '-' . $p['sb'] . ' ' . afn_joli($p['b']);
+            }
+        }
+        return $out;
+    }
+    $plus = count($m['nos']) > 1;
+    foreach ($m['nos'] as $k => $e) {
         $ms = array_values(array_filter($e['matchs'], fn($p) => $p['bp'] !== null && $p['bc'] !== null));
         if (!$ms) continue;
-        if ($plus || $e['poule'] !== '') $out[] = '   ' . ($plus ? 'Équipe ' . ($e['n'] ?: $k + 1) . ($e['poule'] !== '' ? ' · poule ' . $e['poule'] : '') : 'Poule ' . $e['poule']);
-        foreach ($ms as $p) $out[] = '   ' . ($p['bp'] > $p['bc'] ? '✅' : ($p['bp'] < $p['bc'] ? '❌' : '🤝')) . ' ' . $p['bp'] . '-' . $p['bc'] . ' contre ' . aff_joli($p['adv']);
+        if ($plus) $out[] = '   Équipe ' . ($e['n'] ?: $k + 1);
+        foreach ($ms as $p) $out[] = '   ' . $em($p['bp'], $p['bc']) . ' ' . $p['bp'] . '-' . $p['bc'] . ' contre ' . afn_joli($p['adv']);
     }
     return $out;
 }
@@ -2576,6 +2670,22 @@ function afn_numeros(array $n, string $sep): string {
     sort($n);
     return count($n) > 3 && end($n) - $n[0] === count($n) - 1 ? $n[0] . ' À ' . end($n) : implode($sep, $n);
 }
+/* nom d'équipe dans le message : « FC MONTÉLIMAR » → « FC Montélimar », mais les sigles courts restent (« USVJ B ») */
+function afn_joli(string $n): string {
+    $n = trim($n);
+    if ($n !== mb_strtoupper($n)) return $n === mb_strtolower($n) ? aff_joli($n) : $n;
+    $mots = ['DE', 'DU', 'DES', 'LA', 'LE', 'LES', 'ET', 'SUR', 'EN', 'AUX', 'AU', 'SUD', 'NORD', 'EST', 'PONT', 'ST', 'STE', 'MONT', 'VAL', 'PORT', 'CAP', 'LAC', 'MAS', 'COL', 'GAP', 'BAS', 'HAUT'];
+    $o = preg_split('/(\s+)/u', $n, -1, PREG_SPLIT_DELIM_CAPTURE); $j = preg_split('/(\s+)/u', aff_joli($n), -1, PREG_SPLIT_DELIM_CAPTURE);
+    if (count($o) === count($j))
+        foreach ($o as $i => $w) if (preg_match('/^\p{Lu}{2,4}$/u', $w) && !in_array($w, $mots, true) && preg_match_all('/[AEIOUYÀÂÉÈÊËÎÏÔÛÙÜ]/u', $w) <= 1) $j[$i] = $w;
+    return implode('', $j);
+}
+function afn_nous(string $n): bool { return (bool) preg_match("/pierrelatte|atom'?\s*sports?/iu", $n); }
+/* poules : au moins un score (affiche des résultats) */
+function afn_tableau_joue(array $m): bool {
+    foreach ($m['tableau'] ?? [] as $q) foreach ($q['matchs'] as $p) if ($p['sa'] !== null && $p['sb'] !== null) return true;
+    return false;
+}
 function afn_manuel_lire(array $d): array {
     $type = $d['type'] ?? '';
     $fal = str_starts_with($type, 'fal-'); $vet = str_starts_with($type, 'vet-');
@@ -2611,26 +2721,55 @@ function afn_manuel_lire(array $d): array {
             $x['resultats'] = [];
             foreach (array_slice(is_array($m['resultats'] ?? null) ? $m['resultats'] : [], 0, 6) as $r)
                 if (is_array($r) && $txt($r['adv'] ?? '', 60) !== '') $x['resultats'][] = ['adv' => aff_maj($txt($r['adv'], 60)), 'bp' => $but($r['bp'] ?? null), 'bc' => $but($r['bc'] ?? null)];
-            // nos équipes du plateau : leur poule (A, B…) et leurs matchs (heure, adversaire, score), triés par heure
-            $poules = [];
-            foreach (array_slice(is_array($m['poules'] ?? null) ? $m['poules'] : [], 0, 8) as $k => $q) {
+            $hhf = fn($v) => preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', (string) $v, $hm) ? sprintf('%02d:%s', $hm[1], $hm[2]) : '';
+            $parHeure = fn($a, $b) => (($a['heure'] === '') <=> ($b['heure'] === '')) ?: strcmp($a['heure'], $b['heure']);
+            // plateau : les matchs de chacune de nos équipes (heure, adversaire, score), triés par heure
+            $nosEq = [];
+            foreach (array_slice(is_array($m['nos'] ?? null) ? $m['nos'] : [], 0, 8) as $q) {
                 if (!is_array($q)) continue;
                 $ms = [];
-                foreach (array_slice(is_array($q['matchs'] ?? null) ? $q['matchs'] : [], 0, 8) as $p) {
-                    if (!is_array($p) || $txt($p['adv'] ?? '', 60) === '') continue;
-                    $hh = preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', (string) ($p['heure'] ?? ''), $hm) ? sprintf('%02d:%s', $hm[1], $hm[2]) : '';
-                    $ms[] = ['heure' => $hh, 'adv' => aff_maj($txt($p['adv'], 60)), 'bp' => $but($p['bp'] ?? null), 'bc' => $but($p['bc'] ?? null)];
-                }
-                usort($ms, fn($a, $b) => (($a['heure'] === '') <=> ($b['heure'] === '')) ?: strcmp($a['heure'], $b['heure']));
-                $pl = mb_strtoupper(trim((string) ($q['poule'] ?? '')));
-                $poules[] = ['n' => is_numeric($q['numero'] ?? null) ? max(0, min(16, (int) $q['numero'])) : 0, 'poule' => preg_match('/^[A-H]$/', $pl) ? $pl : '', 'matchs' => $ms];
+                foreach (array_slice(is_array($q['matchs'] ?? null) ? $q['matchs'] : [], 0, 8) as $p)
+                    if (is_array($p) && $txt($p['adv'] ?? '', 60) !== '')
+                        $ms[] = ['heure' => $hhf($p['heure'] ?? ''), 'adv' => aff_maj($txt($p['adv'], 60)), 'bp' => $but($p['bp'] ?? null), 'bc' => $but($p['bc'] ?? null)];
+                usort($ms, $parHeure);
+                $nosEq[] = ['n' => is_numeric($q['numero'] ?? null) ? max(0, min(16, (int) $q['numero'])) : 0, 'matchs' => $ms];
             }
-            if (array_filter($poules, fn($q) => $q['matchs'] || $q['poule'] !== '')) {
-                $x['poules'] = $poules;
-                $tous = array_merge(...array_column($poules, 'matchs'));
+            if (array_filter($nosEq, fn($q) => $q['matchs'])) {
+                $x['nos'] = $nosEq;
+                $tous = array_merge(...array_column($nosEq, 'matchs'));
                 $x['adversaires'] = array_values(array_unique(array_column($tous, 'adv')));
                 $x['resultats'] = array_values(array_map(fn($p) => ['adv' => $p['adv'], 'bp' => $p['bp'], 'bc' => $p['bc']], array_filter($tous, fn($p) => $p['bp'] !== null && $p['bc'] !== null)));
                 if ($x['heure'] === '' && ($hs = array_filter(array_column($tous, 'heure'), 'strlen'))) $x['heure'] = min($hs);
+            }
+            // poules (brassage, tournoi…) : toutes leurs équipes, Pierrelatte parfois plusieurs fois, et leurs matchs
+            $tab = [];
+            foreach (array_slice(is_array($m['poules'] ?? null) ? $m['poules'] : [], 0, 8) as $k => $q) {
+                if (!is_array($q) || !is_array($q['equipes'] ?? null)) continue;
+                $eqs = array_values(array_filter(array_map(fn($e) => aff_maj($txt($e, 60)), array_slice($q['equipes'], 0, 12)), 'strlen'));
+                $ms = [];
+                foreach (array_slice(is_array($q['matchs'] ?? null) ? $q['matchs'] : [], 0, 30) as $p) {
+                    if (!is_array($p)) continue;
+                    $a = aff_maj($txt($p['a'] ?? '', 60)); $bb = aff_maj($txt($p['b'] ?? '', 60));
+                    if ($a !== '' && $bb !== '' && $a !== $bb) $ms[] = ['heure' => $hhf($p['heure'] ?? ''), 'a' => $a, 'b' => $bb, 'sa' => $but($p['sa'] ?? null), 'sb' => $but($p['sb'] ?? null)];
+                }
+                usort($ms, $parHeure);
+                $nom = mb_strtoupper($txt($q['nom'] ?? '', 3));
+                if (!preg_match('/^[A-Z0-9]{1,3}$/', $nom)) $nom = chr(65 + min(25, $k));
+                if ($eqs || $ms) $tab[] = ['nom' => $nom, 'equipes' => $eqs, 'matchs' => $ms];
+            }
+            if ($tab) {
+                $x['tableau'] = $tab; $x['resultats'] = []; $adv = []; $hs = [];
+                foreach ($tab as $q) {
+                    foreach ($q['equipes'] as $e) if (!afn_nous($e)) $adv[] = $e;
+                    foreach ($q['matchs'] as $p) {
+                        if ($p['heure'] !== '') $hs[] = $p['heure'];
+                        if ($p['sa'] === null || $p['sb'] === null) continue;
+                        if (afn_nous($p['a']) && !afn_nous($p['b'])) $x['resultats'][] = ['adv' => $p['b'], 'bp' => $p['sa'], 'bc' => $p['sb']];
+                        elseif (afn_nous($p['b']) && !afn_nous($p['a'])) $x['resultats'][] = ['adv' => $p['a'], 'bp' => $p['sb'], 'bc' => $p['sa']];
+                    }
+                }
+                $x['adversaires'] = array_values(array_unique($adv));
+                if ($x['heure'] === '' && $hs) $x['heure'] = min($hs);
             }
             $x['bp'] = $x['bc'] = null;
             if (!$x['dom'] && $x['adv'] === '' && $x['adresse'] === '') continue;          // plateau à l'extérieur : il faut savoir où
@@ -2645,7 +2784,7 @@ function afn_manuel_lire(array $d): array {
 /* le « plan » du week-end pour des matchs saisis à la main : tous gardés (aucun tri par la base), par jour puis par heure */
 function afn_plan_manuel(array $matchs, bool $resultats, ?string $lieu): array {
     $sel = array_values(array_filter($matchs, fn($m) => $lieu === null || ($lieu === 'dom') === !empty($m['dom'])));
-    if (!empty($GLOBALS['aff_fal']) && $resultats) $sel = array_values(array_filter($sel, fn($m) => aff_scores_brassage($m)));
+    if (!empty($GLOBALS['aff_fal']) && $resultats) $sel = array_values(array_filter($sel, fn($m) => aff_scores_brassage($m) || afn_tableau_joue($m)));
     foreach ($sel as &$m) {
         $m['sous'] = aff_sous_etiquette((string) ($m['comp'] ?? ''));
         $m['etiquette'] = $m['equipe'] . ($m['sous'] !== '' ? ' (' . mb_convert_case(mb_strtolower($m['sous']), MB_CASE_TITLE) . ')' : '');
@@ -2990,7 +3129,7 @@ function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = f
             foreach ($j['matchs'] as $m) {
                 $eq = aff_nom_equipe($m); $h = aff_hfr($m['heure'] ?? '');
                 $ou = !empty($m['dom']) ? 'à domicile, au stade Gustave Jaume' : 'chez ' . aff_nom_club((string) $m['adv']);
-                if (!empty($m['poules'])) { array_push($txt, ...afn_msg_poules($m, $eq, $ou, $h)); continue; }
+                if (!empty($m['nos']) || !empty($m['tableau'])) { array_push($txt, ...afn_msg_poules($m, $eq, $ou, $h)); continue; }
                 $contre = afn_noms_clubs($m['adversaires'] ?? []);
                 $txt[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . "$eq · " . mb_strtolower((string) ($m['comp'] ?? 'plateau')) . " $ou" . ($h ? " à $h" : '')
                     . ($contre ? ', avec ' . $liste($contre) : '');
@@ -3011,7 +3150,7 @@ function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = f
             if ($bp > $bc) { $v++; $e = '✅'; } elseif ($bp < $bc) { $d++; $e = '❌'; } else { $n++; $e = '🤝'; }
             $lignes[] = "   $e $bp-$bc contre " . $nomsR[$iR];
         }
-        if (!empty($m['poules'])) $lignes = afn_msg_poules_res($m);
+        if (!empty($m['nos']) || !empty($m['tableau'])) $lignes = afn_msg_poules_res($m);
         $blocs[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . aff_nom_equipe($m) . ' · ' . (!empty($m['dom']) ? 'à domicile' : 'chez ' . aff_nom_club((string) $m['adv']))
             . "\n" . implode("\n", $lignes);
     }
