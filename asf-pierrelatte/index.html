@@ -10861,8 +10861,8 @@ void main(){
 <script id="evenements-js">
 /* Onglet « Événements » (rubrique Communication) : affiches stage, loto, tournoi.
    Le dirigeant écrit ce qui doit être sur l'affiche et le message de l'annonce ; le serveur dessine l'affiche
-   (api/affiches.php?apercu=evenement) au format story 1080 × 1920, publication Instagram 1080 × 1350 ou publication
-   Facebook 1080 × 2160. On la télécharge pour la poster soi-même, ou on la publie : story Facebook, story Instagram
+   (api/affiches.php?apercu=evenement) au format story 1080 × 1920 ou annonce 1080 × 1350 (Facebook et Instagram la montrent
+   en entier dans le fil). On la télécharge pour la poster soi-même, ou on la publie : story Facebook, story Instagram
    ou les deux, annonce Facebook, annonce Instagram ou les deux (envoi à api/publier.php, comme « Publier une affiche
    déjà faite »). Ajouté sans modifier le script de l'application : nouvel onglet, rendu de son panneau, raccourci depuis
    l'onglet Affiches et bouton « Créer l'affiche » sur chaque stage. Les brouillons restent dans ce navigateur. */
@@ -10886,7 +10886,8 @@ void main(){
                ex: { titre: "Repas du club", sous: "Ouvert à tous", lieu: "Club-house du stade",
                      texte: "Apéritif offert à 19h\nRéservations auprès des dirigeants" } },
   };
-  const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Instagram", "1080 × 1350", "4/5"], ["fb", "Facebook", "1080 × 2160", "1/2"]];
+  // l'annonce est en 4:5 (1080 × 1350) : Facebook et Instagram la montrent en entier dans le fil (une image plus haute est coupée)
+  const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Annonce", "1080 × 1350", "4/5"]];
   const MAX_LIGNES = 8;
 
   /* ---------- état (gardé dans ce navigateur) ---------- */
@@ -10991,7 +10992,7 @@ void main(){
         <div class="af-tete"><h2 id="ev-h-pub">📣 Publier</h2><small>Chaque format part au bon endroit</small></div>
         <div class="ps-reseau"><span class="ps-reseau-nom">📘 Facebook</span><div class="af-choix-l">${opt("fb_pub", "Annonce")}${opt("fb_story", "Story")}</div></div>
         <div class="ps-reseau"><span class="ps-reseau-nom">📸 Instagram</span><div class="af-choix-l">${opt("ig_pub", "Annonce")}${opt("ig_story", "Story")}</div></div>
-        <p class="ev-note">Story : affiche 1080 × 1920 · annonce Facebook : 1080 × 2160 · annonce Instagram : 1080 × 1350.</p>
+        <p class="ev-note">Story : affiche 1080 × 1920 · annonce : 1080 × 1350, montrée en entier dans le fil Facebook et Instagram.</p>
         <button type="button" class="btn bleu af-go" data-ev-a="publier" ${e.enCours ? "disabled" : ""}>${esc(e.enCours || "📣 Publier maintenant")}</button>
         ${e.etat ? `<p class="af-etat" id="ev-etat">${esc(e.etat)}</p>` : `<p class="af-etat" id="ev-etat" hidden></p>`}
         <b class="ps-lab ev-lab">Ou la poster toi-même</b>
@@ -11139,8 +11140,7 @@ void main(){
     if (!c.fb_pub && !c.ig_pub && !c.fb_story && !c.ig_story){ toast("Choisis où publier : annonce ou story, Facebook ou Instagram.", true); return; }
     const envois = [];
     if (c.fb_story || c.ig_story) envois.push({ fmt: "story", nom: "Story " + [c.fb_story && "Facebook", c.ig_story && "Instagram"].filter(Boolean).join(" et "), fb: c.fb_story, ig: c.ig_story, pub: false, story: true });
-    if (c.fb_pub) envois.push({ fmt: "fb", nom: "Annonce Facebook", fb: true, ig: false, pub: true, story: false });
-    if (c.ig_pub) envois.push({ fmt: "carre", nom: "Annonce Instagram", fb: false, ig: true, pub: true, story: false });
+    if (c.fb_pub || c.ig_pub) envois.push({ fmt: "carre", nom: "Annonce " + [c.fb_pub && "Facebook", c.ig_pub && "Instagram"].filter(Boolean).join(" et "), fb: c.fb_pub, ig: c.ig_pub, pub: true, story: false });
     if (!confirm(`Publier maintenant l'affiche « ${titreDe(b, t)} » ?\n\n${envois.map(x => "• " + x.nom).join("\n")}`)) return;
     sauver();
     // le panneau peut être redessiné pendant l'envoi (relecture de la base) : on retrouve toujours le bouton actuel

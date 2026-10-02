@@ -2460,6 +2460,14 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
 }
 
 /* ---------- Facebook ---------- */
+/* images d'une annonce Facebook : les deux feuilles en 1080 x 2160 (Facebook les montre en entier côte à côte) ;
+   une feuille seule en 1080 x 1350, car Facebook coupe dans le fil une image seule plus haute que 4:5 */
+function aff_images_fb(array $f, string $pre = ''): array {
+    $fb = array_values(array_filter([$f[$pre . 'dom_fb'] ?? null, $f[$pre . 'ext_fb'] ?? null]));
+    if (count($fb) > 1) return $fb;
+    $carre = array_values(array_filter([$f[$pre . 'dom_carre'] ?? null, $f[$pre . 'ext_carre'] ?? null]));
+    return $carre ?: $fb;
+}
 function fb_pret(): bool { return reglage('fb_page_id') && reglage('fb_token') && reglage('fb_pause') !== '1'; }
 function fb_appel(string $chemin, array $champs): array {
     $ch = curl_init('https://graph.facebook.com/' . FB_VERSION . '/' . $chemin);
@@ -2845,7 +2853,7 @@ function aff_publier_annonce(string $quoi, array &$journal): void {
         $etats = [];
         if (fb_pret()) {
             try {
-                fb_publication(array_values(array_filter([$f['dom_fb'] ?? null, $f['ext_fb'] ?? null])), $texte);   // les deux feuilles dans la même annonce
+                fb_publication(aff_images_fb($f), $texte);   // les deux feuilles dans la même annonce (une seule : en 4:5)
                 foreach ($stories as $st) fb_story($st);
                 $etats[] = 'Facebook : publié';
             } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
@@ -2878,7 +2886,7 @@ function aff_publier_choix(array $annonces, array $o, array &$journal): void {
         if (!$lieux) { $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false; $journal[] = $noms[$cle] . ' : rien à publier'; continue; }
         $f = [];
         foreach ($lieux as $l) {
-            $formats = array_filter(['story' => $fbSt || $igSt, 'carre' => $igPub, 'fb' => $fbPub]);
+            $formats = array_filter(['story' => $fbSt || $igSt, 'carre' => $igPub || ($fbPub && count($lieux) === 1), 'fb' => $fbPub && count($lieux) > 1]);
             foreach (array_keys($formats) as $fmt) {
                 aff_format($fmt);
                 $f["{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]),
@@ -2894,7 +2902,7 @@ function aff_publier_choix(array $annonces, array $o, array &$journal): void {
         if ($fbPub || $fbSt) {
             if (!fb_pret()) $etats[] = 'Facebook : non relié ou en pause';
             else try {
-                if ($fbPub && $pris('fb')) fb_publication($pris('fb'), $texte);
+                if ($fbPub && aff_images_fb($f)) fb_publication(aff_images_fb($f), $texte);
                 if ($fbSt) foreach ($pris('story') as $st) fb_story($st);
                 $etats[] = 'Facebook : ' . implode(' + ', array_filter([$fbPub ? 'publication' : '', $fbSt ? 'story' : '']));
             } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
@@ -2942,9 +2950,9 @@ function affiches_cron(array &$journal, bool $force = false): void {
             'Facebook' => function (array $f) use ($matchs, $samPasse, $sam) {
                 foreach ($f as $k => $fichier) if (str_ends_with($k, '_story')) fb_story($fichier);
                 // une annonce = une publication : feuille domicile + feuille extérieur, au format 1:2 que Facebook montre en entier côte à côte
-                $res = array_values(array_filter([$f['resultats_dom_fb'] ?? null, $f['resultats_ext_fb'] ?? null]));
+                $res = aff_images_fb($f, 'resultats_');
                 if ($res) fb_publication($res, aff_message_resultats($matchs, $samPasse));
-                $ren = array_values(array_filter([$f['programme_dom_fb'] ?? null, $f['programme_ext_fb'] ?? null]));
+                $ren = aff_images_fb($f, 'programme_');
                 if ($ren) fb_publication($ren, aff_message_rencontres($matchs, $sam));
             },
             'Instagram' => function (array $f) use ($matchs, $samPasse, $sam) {
@@ -2977,7 +2985,7 @@ function affiches_cron(array &$journal, bool $force = false): void {
                 return $f;
             }, [
                 'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
-                    $imgs = array_values(array_filter([$f['vet_dom_fb'] ?? null, $f['vet_ext_fb'] ?? null]));
+                    $imgs = aff_images_fb($f, 'vet_');
                     if ($imgs) fb_publication($imgs, aff_message_veterans($matchs, $samedi, $res));
                     foreach (['vet_dom_story', 'vet_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
                 },
@@ -3012,7 +3020,7 @@ function affiches_cron(array &$journal, bool $force = false): void {
                 return $f;
             }, [
                 'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
-                    $imgs = array_values(array_filter([$f['fal_dom_fb'] ?? null, $f['fal_ext_fb'] ?? null]));
+                    $imgs = aff_images_fb($f, 'fal_');
                     if ($imgs) fb_publication($imgs, aff_message_plateaux($matchs, $samedi, $res));       // les deux feuilles dans la même annonce
                     foreach (['fal_dom_story', 'fal_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
                 },

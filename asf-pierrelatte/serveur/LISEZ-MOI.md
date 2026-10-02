@@ -27,7 +27,7 @@ Chaque feuille est faite pour chaque format, sans bande vide ni affiche réduite
 |---|---|---|
 | Story | 1080 × 1920 | story Facebook et story Instagram |
 | Publication Instagram | 1080 × 1350 | annonce (carrousel domicile + extérieur) dans le fil Instagram |
-| Publication Facebook | 1080 × 2160 | annonce (les deux feuilles) dans le fil Facebook |
+| Publication Facebook | 1080 × 2160 | annonce dans le fil Facebook quand il y a les deux feuilles (montrées en entier côte à côte) ; une feuille seule part en 1080 × 1350, sinon Facebook la coupe |
 
 Une seule image de fond par lieu suffit : le serveur y prend la bonne partie pour chaque format, le ballon toujours à sa place.
 
