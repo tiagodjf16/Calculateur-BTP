@@ -1907,10 +1907,20 @@ function afn_hauteur(array $b, float $wc): float {
         default: return 189.3;
     }
 }
+/* noms courts des clubs ; un club présent plusieurs fois (plusieurs de ses équipes) garde le numéro : DONZÈRE 1, DONZÈRE 2 */
+function afn_noms_numerotes(array $noms, callable $court): array {
+    $c = array_map(fn($n) => $court((string) $n), $noms);
+    $fois = array_count_values(array_map('mb_strtolower', $c));
+    foreach ($c as $i => $n)
+        if ($fois[mb_strtolower($n)] > 1 && preg_match('/\s(\d{1,2})$/', trim((string) $noms[$i]), $x)) $c[$i] = $n . ' ' . $x[1];
+    return $c;
+}
+function afn_noms_clubs(array $noms): array { return afn_noms_numerotes($noms, 'aff_nom_club'); }
 /* « contre » puis une pastille par club : nombre de lignes, et position de chaque élément */
 function afn_contre(array $b, float $max): array {
     $el = [['em', 'contre', afn_larg('contre', 18, 's700i')]];
-    foreach ($b['adv'] as $a) $el[] = ['adv', $a, 34 + 8 + min($max - 42, afn_larg(aff_maj(aff_nom_court($a)), 24, '800'))];
+    $noms = afn_noms_numerotes($b['adv'], fn($a) => aff_maj(aff_nom_court($a)));
+    foreach ($b['adv'] as $k => $a) $el[] = ['adv', $a, 34 + 8 + min($max - 42, afn_larg($noms[$k], 24, '800')), $noms[$k]];
     $x = 0; $ligne = 0; $pos = [];
     foreach ($el as $e) {
         if ($x > 0 && $x + $e[2] > $max) { $x = 0; $ligne++; }
@@ -1993,7 +2003,7 @@ function afn_bloc($im, array $A, array $b, float $x, float $y, float $u, float $
             foreach ($pos as [$e, $ex, $li]) {
                 $ly = $y + (12 + 24.2 + 8 + $li * 42) * $u; $ex = $lx + $ex * $u;
                 if ($e[0] === 'em') { afn_texte($im, 'contre', $ex, $ly + 22.6 * $u, 18 * $u, 's700i', aff_c($im, AFN_CIEL)); continue; }
-                $n = aff_maj(aff_nom_court($e[1]));
+                $n = $e[3];
                 afn_blason($im, $e[1], false, $ex + 17 * $u, $ly + 17 * $u, 34 * $u, $u, $n); $max = ($e[2] - 42) * $u;
                 $s = afn_fit($n, 24 * $u, '800', $max, 0);
                 afn_texte($im, $n, $ex + 42 * $u, $ly + 17 * $u + .4 * $s, $s, '800', aff_c($im, '#E6ECFA'));
@@ -2350,7 +2360,7 @@ function afn_partenaires(array $A, bool $avec): void {
 function afn_cat(array $m, bool $fal): array {
     if ($fal) {
         [$a, $b] = aff_cat_lignes($m);
-        if ((int) ($m['nb_equipes'] ?? 0) > 1) $b = (int) $m['nb_equipes'] . ' ÉQUIPES';            // saisi dans l'onglet Affiches matchs
+        if ((int) ($m['nb_equipes'] ?? 0) > 1) $b = !empty($m['numeros']) ? 'ÉQUIPES ' . afn_numeros($m['numeros'], ' · ') : (int) $m['nb_equipes'] . ' ÉQUIPES';   // onglet Affiches matchs
         return [preg_replace('/^(U\s?\d{1,2})-(U\s?\d{1,2})$/u', '$1 · $2', $a), $b];
     }
     $sous = (string) ($m['sous'] ?? aff_sous_etiquette((string) ($m['comp'] ?? '')));
@@ -2479,6 +2489,11 @@ const AFN_MAX_MANUEL = 12;                                                  // a
 function afn_sans_emoji(string $s): string {
     return preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}\x{20E3}\x{E0020}-\x{E007F}]/u', '', $s) ?? $s;
 }
+/* [1, 2, 3] → « 1 · 2 · 3 » ; une suite plus longue → « 1 À 5 » */
+function afn_numeros(array $n, string $sep): string {
+    sort($n);
+    return count($n) > 3 && end($n) - $n[0] === count($n) - 1 ? $n[0] . ' À ' . end($n) : implode($sep, $n);
+}
 function afn_manuel_lire(array $d): array {
     $type = $d['type'] ?? '';
     $fal = str_starts_with($type, 'fal-'); $vet = str_starts_with($type, 'vet-');
@@ -2498,11 +2513,17 @@ function afn_manuel_lire(array $d): array {
         if ($fal) {
             // « U10-U11 », « u10/u11 espoir » → « U10 · U11 ESPOIR », comme les fiches du foot animation
             $x['equipe'] = preg_replace('/^(U\s?\d{1,2})\s*[-\/·]\s*(U\s?\d{1,2})/u', '$1 · $2', aff_maj($x['equipe']));
-            // plusieurs équipes de la catégorie sur le plateau (rencontres), ou le numéro de l'équipe (résultats)
+            // plusieurs équipes de la catégorie sur le plateau, et leurs numéros (équipe 1, 2, 3… donnés par l'appli)
             $nb = is_numeric($m['equipes'] ?? null) ? max(1, min(8, (int) $m['equipes'])) : 1;
-            $no = is_numeric($m['numero'] ?? null) ? max(1, min(8, (int) $m['numero'])) : 0;
-            if ($no && !preg_match('/ÉQUIPE\s*\d/u', $x['equipe'])) $x['equipe'] .= (str_contains($x['equipe'], '·') ? ' ' : ' · ') . "ÉQUIPE $no";
-            if ($nb > 1) { $x['nb_equipes'] = $nb; $x['equipeDetail'] = $x['equipe'] . " ($nb équipes)"; }
+            $nos = is_array($m['numeros'] ?? null) ? $m['numeros'] : (is_numeric($m['numero'] ?? null) ? [$m['numero']] : []);
+            $nos = array_slice(array_values(array_unique(array_filter(array_map(fn($v) => is_numeric($v) ? (int) $v : 0, $nos), fn($v) => $v >= 1 && $v <= 16))), 0, 8);
+            if (count($nos) > 1) $nb = count($nos);
+            if (count($nos) === 1 && $nb === 1 && !preg_match('/ÉQUIPE\s*\d/u', $x['equipe'])) $x['equipe'] .= (str_contains($x['equipe'], '·') ? ' ' : ' · ') . 'ÉQUIPE ' . $nos[0];
+            if ($nb > 1) {
+                $x['nb_equipes'] = $nb;
+                if (count($nos) === $nb) { sort($nos); $x['numeros'] = $nos; }
+                $x['equipeDetail'] = $x['equipe'] . (isset($x['numeros']) ? ' (équipes ' . preg_replace('/, (\d+)$/', ' et $1', str_replace(' À ', ' à ', afn_numeros($nos, ', '))) . ')' : " ($nb équipes)");
+            }
             if ($x['comp'] === '') $x['comp'] = preg_match('/U\s?13/i', $x['equipe']) ? 'Brassage' : 'Plateau';
             $x['adversaires'] = array_values(array_filter(array_map(fn($a) => aff_maj($txt($a, 60)), array_slice(is_array($m['adversaires'] ?? null) ? $m['adversaires'] : [], 0, 8)), 'strlen'));
             $x['resultats'] = [];
@@ -2866,7 +2887,7 @@ function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = f
             foreach ($j['matchs'] as $m) {
                 $eq = aff_nom_equipe($m); $h = aff_hfr($m['heure'] ?? '');
                 $ou = !empty($m['dom']) ? 'à domicile, au stade Gustave Jaume' : 'chez ' . aff_nom_club((string) $m['adv']);
-                $contre = array_map('aff_nom_club', $m['adversaires'] ?? []);
+                $contre = afn_noms_clubs($m['adversaires'] ?? []);
                 $txt[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . "$eq · " . mb_strtolower((string) ($m['comp'] ?? 'plateau')) . " $ou" . ($h ? " à $h" : '')
                     . ($contre ? ', avec ' . $liste($contre) : '');
             }
@@ -2880,10 +2901,11 @@ function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = f
     $v = $n = $d = 0; $blocs = [];
     foreach ($plan as $j) foreach ($j['matchs'] as $m) {
         $lignes = [];
-        foreach (aff_scores_brassage($m) as $r) {
+        $nomsR = afn_noms_clubs(array_column(aff_scores_brassage($m), 'adv'));
+        foreach (aff_scores_brassage($m) as $iR => $r) {
             $bp = (int) $r['bp']; $bc = (int) $r['bc'];
             if ($bp > $bc) { $v++; $e = '✅'; } elseif ($bp < $bc) { $d++; $e = '❌'; } else { $n++; $e = '🤝'; }
-            $lignes[] = "   $e $bp-$bc contre " . aff_nom_club((string) $r['adv']);
+            $lignes[] = "   $e $bp-$bc contre " . $nomsR[$iR];
         }
         $blocs[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . aff_nom_equipe($m) . ' · ' . (!empty($m['dom']) ? 'à domicile' : 'chez ' . aff_nom_club((string) $m['adv']))
             . "\n" . implode("\n", $lignes);

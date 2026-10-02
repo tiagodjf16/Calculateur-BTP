@@ -37,7 +37,38 @@
     if (n === 12 || n === 13) return "U13";
     return t || CATS_FAL[0];
   }
-  const numeroEquipe = eq => { const m = String(eq || "").match(/[ée]quipe\s*(\d)/i); return m ? m[1] : ""; };
+  const numeroEquipe = eq => { const m = String(eq || "").match(/[ée]quipe\s*(\d{1,2})/i); return m ? m[1] : ""; };
+  /* équipes de Pierrelatte numérotées toutes seules : dans une même catégorie, équipe 1, 2, 3…
+     (un numéro déjà connu, comme « U13 · équipe 4 » du calendrier, est gardé) */
+  function numeroter(liste, t){
+    const res = liste.map(() => ({ nums: [], total: 1 }));
+    if (t.fam !== "fal") return res;
+    const parCat = new Map();
+    liste.forEach((m, i) => { const c = catSimple(m.equipe); if (!parCat.has(c)) parCat.set(c, []); parCat.get(c).push(i); });
+    for (const idx of parCat.values()){
+      const n = i => t.res ? 1 : Math.max(1, Math.min(MAX_EQUIPES, +liste[i].equipes || 1));
+      const fixes = i => String(liste[i].numeros || "").split(/[^\d]+/).filter(Boolean).map(Number).filter(x => x > 0);
+      const pris = new Set(idx.flatMap(i => fixes(i).length === n(i) ? fixes(i) : []));
+      let k = 1;
+      const libre = () => { while (pris.has(k)) k++; pris.add(k); return k; };
+      for (const i of idx){ const f = fixes(i); res[i].nums = f.length === n(i) ? f : Array.from({ length: n(i) }, libre); }
+      const total = Math.max(idx.reduce((s, i) => s + n(i), 0), ...idx.flatMap(i => res[i].nums));
+      idx.forEach(i => { res[i].total = total; });
+    }
+    return res;
+  }
+  const libelleEquipes = r => r.total < 2 ? "" : r.nums.length === 1 ? `équipe ${r.nums[0]}` : `équipes ${r.nums.length <= 3 ? r.nums.join(", ").replace(/, (\d+)$/, " et $1") : r.nums[0] + " à " + r.nums[r.nums.length - 1]}`;
+  /* même club plusieurs fois (plusieurs de ses équipes) : Donzère 1, Donzère 2… */
+  function numeroterClubs(noms){
+    const base = n => String(n || "").replace(/\s+\d+$/, "").trim(), num = n => /\s\d+$/.test(String(n || "").trim());
+    const compte = new Map();
+    noms.forEach(n => { if (!num(n)) compte.set(slug(base(n)), (compte.get(slug(base(n))) || 0) + 1); });
+    const vu = new Map();
+    return noms.map(n => {
+      if (num(n) || (compte.get(slug(base(n))) || 0) < 2) return n;
+      const k = slug(base(n)), i = (vu.get(k) || 0) + 1; vu.set(k, i); return `${base(n)} ${i}`;
+    });
+  }
   const MAX_EQUIPES = 8;
   const MAX = 12;
 
@@ -47,7 +78,7 @@
   function nouveau(t, samedi){
     const fam = TYPES[t].fam;
     const m = { dom: true, equipe: fam === "vet" ? "Vétérans" : "", comp: fam === "fal" ? "Plateau" : "", adv: "", date: samedi, heure: "", adresse: "", bp: "", bc: "" };
-    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.equipes = "1"; m.numero = ""; m.adversaires = ""; m.resultats = [{ adv: "", bp: "", bc: "" }]; }
+    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.equipes = "1"; m.numeros = ""; m.adversaires = ""; m.resultats = [{ adv: "", bp: "", bc: "" }]; }
     return m;
   }
   function charger(){
@@ -95,21 +126,24 @@
   const nombre = v => (v === "" || v === null || v === undefined || isNaN(+v)) ? null : Math.max(0, Math.min(99, Math.round(+v)));
   // les émojis ne vont que dans le message : la police de l'affiche ne les a pas
   const net = v => sansEmoji(String(v || "")).trim();
-  function matchServeur(m, t){
+  function matchServeur(m, t, num){
     const o = { equipe: t.fam === "vet" ? "Vétérans" : net(m.equipe), comp: net(m.comp), adv: net(m.adv),
       dom: !!m.dom, date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : net(m.adresse) };
     if (t.fam === "fal"){
       o.equipe = catSimple(o.equipe);
-      if (t.res){ if (m.numero) o.numero = +m.numero; } else o.equipes = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
-      o.adversaires = lignes(sansEmoji(m.adversaires));
-      o.resultats = (m.resultats || []).map(r => ({ adv: net(r.adv), bp: nombre(r.bp), bc: nombre(r.bc) })).filter(r => r.adv);
+      if (!t.res) o.equipes = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
+      if (num && num.total > 1) o.numeros = num.nums;
+      o.adversaires = numeroterClubs(lignes(sansEmoji(m.adversaires)));
+      const rs = (m.resultats || []).map(r => ({ adv: net(r.adv), bp: nombre(r.bp), bc: nombre(r.bc) })).filter(r => r.adv);
+      const noms = numeroterClubs(rs.map(r => r.adv)); rs.forEach((r, k) => { r.adv = noms[k]; });
+      o.resultats = rs;
     } else if (t.res){ o.bp = nombre(m.bp); o.bc = nombre(m.bc); }
     return o;
   }
   // instantané de l'affiche : ce qui part à la publication ne bouge plus si on continue à taper pendant l'envoi
   const instantane = () => JSON.parse(JSON.stringify({ type: E().type, titre: E().titre, sponsors: E().sponsors, samedi: SAM(), liste: L() }));
   const donnees = (lieu, fmt, s = instantane()) => ({ type: s.type, lieu: lieu || "", format: fmt, titre: net(s.titre), sponsors: s.sponsors, samedi: s.samedi,
-    matchs: s.liste.map(m => matchServeur(m, TYPES[s.type])) });
+    matchs: (nums => s.liste.map((m, i) => matchServeur(m, TYPES[s.type], nums[i])))(numeroter(s.liste, TYPES[s.type])) });
   /* ce qui manque à un match pour être sur l'affiche (le serveur l'ignore sinon) */
   function manque(m, t = T()){
     const x = [];
@@ -176,10 +210,35 @@
     }, tout ? 0 : 1200);
   }
 
+  /* ---------- clubs pour les menus déroulants : déjà rencontrés, puis tous ceux du district ---------- */
+  const joli = n => { try { return typeof joliClub === "function" ? joliClub(n) : String(n || ""); } catch(err){ return String(n || ""); } };
+  let CLUBS = { deja: [], tous: [] };
+  function preparerClubs(){
+    const vus = new Map(), deja = [];
+    const ajout = (liste, nom) => { nom = String(nom || "").replace(/\s+\d+$/, "").trim(); if (!nom || /pierrelatte|atom'?\s*sports?/i.test(nom)) return;
+      const k = slug(nom); if (vus.has(k)) return; vus.set(k, true); liste.push(nom.toUpperCase()); };
+    (S.matchsAnimation || []).forEach(m => { ajout(deja, m.adv); (m.adversaires || []).forEach(a => ajout(deja, a)); (m.resultats || []).forEach(r => ajout(deja, r.adv)); });
+    (S.matchs || []).forEach(m => ajout(deja, m.adv));
+    const tous = [];
+    try { if (typeof clubsConnus === "function") clubsConnus().forEach(c => ajout(tous, c[0])); } catch(err){}
+    CLUBS = { deja: deja.sort((a, b) => a.localeCompare(b)), tous: tous.sort((a, b) => a.localeCompare(b)) };
+  }
+  const memeClub = (a, b) => slug(String(a || "").replace(/\s+\d+$/, "")) === slug(String(b || "").replace(/\s+\d+$/, ""));
+  function menuClub(attrs, valeur, invite){
+    const opt = n => `<option value="${esc(n)}" ${valeur && memeClub(n, valeur) ? "selected" : ""}>${esc(joli(n))}</option>`;
+    const connu = !valeur || [...CLUBS.deja, ...CLUBS.tous].some(n => memeClub(n, valeur));
+    return `<select ${attrs}><option value="">${esc(invite)}</option>
+      ${connu ? "" : `<option value="${esc(valeur)}" selected>${esc(joli(valeur))}</option>`}
+      ${CLUBS.deja.length ? `<optgroup label="Déjà rencontrés">${CLUBS.deja.map(opt).join("")}</optgroup>` : ""}
+      ${CLUBS.tous.length ? `<optgroup label="Clubs du district">${CLUBS.tous.map(opt).join("")}</optgroup>` : ""}
+      <option value="__autre">✏️ Autre club…</option></select>`;
+  }
+
   /* ---------- le panneau ---------- */
   const champ = (i, k, l, val, attrs = "", type = "text") => `<label>${l}<input type="${type}" data-am="${k}" data-i="${i}" value="${esc(val ?? "")}" ${attrs}></label>`;
-  function carteMatch(m, i, n){
+  function carteMatch(m, i, n, num){
     const t = T(), fal = t.fam === "fal", seul = t.fam === "seul";
+    const eqLib = fal && num ? libelleEquipes(num) : "";
     const x = manque(m);
     const lieuBtns = `<div class="am-lieu" role="group" aria-label="Lieu">
       <button type="button" class="as-fmt ${m.dom ? "on" : ""}" data-am-a="dom" data-i="${i}" data-k="1">🏠 À domicile</button>
@@ -188,20 +247,21 @@
     if (fal){
       const cat = catSimple(m.equipe);
       corps = `<label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
-        ${t.res ? `<label>Équipe<select data-am="numero" data-i="${i}"><option value="" ${!m.numero ? "selected" : ""}>Une seule équipe</option>${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.numero) === String(k + 1) ? "selected" : ""}>Équipe ${k + 1}</option>`).join("")}</select></label>`
-          : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.equipes || 1) === String(k + 1) ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
+        ${t.res ? "" : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.equipes || 1) === String(k + 1) ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
         <label>Type<select data-am="comp" data-i="${i}">${["Plateau", "Brassage"].map(c => `<option ${c === m.comp ? "selected" : ""}>${c}</option>`).join("")}</select></label>
         ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", "Heure", m.heure, "", "time")}
-        ${m.dom ? "" : champ(i, "adv", "Chez (club qui reçoit)", m.adv, `maxlength="60" list="am-clubs" placeholder="C.O. Donzérois"`)}
+        ${m.dom ? "" : `<label>Chez (club qui reçoit)${menuClub(`data-am="adv" data-i="${i}"`, m.adv, "Choisir le club…")}</label>`}
         ${m.dom ? "" : champ(i, "adresse", "Stade, ville", m.adresse, `maxlength="120" placeholder="Stade Marcel Pagnol, Donzère"`)}
         ${t.res ? `<div class="am-plein"><b class="ps-lab">Les matchs du plateau</b>${(m.resultats || []).map((r, j) => `<div class="am-score">
-            <input data-am="r-adv" data-i="${i}" data-j="${j}" value="${esc(r.adv)}" maxlength="60" list="am-clubs" placeholder="Adversaire" aria-label="Adversaire">
+            ${menuClub(`data-am="r-adv" data-i="${i}" data-j="${j}" aria-label="Adversaire"`, r.adv, "Adversaire…")}
             <input type="number" min="0" max="99" inputmode="numeric" data-am="r-bp" data-i="${i}" data-j="${j}" value="${esc(r.bp)}" aria-label="Buts de Pierrelatte" placeholder="Nous">
             <span>–</span>
             <input type="number" min="0" max="99" inputmode="numeric" data-am="r-bc" data-i="${i}" data-j="${j}" value="${esc(r.bc)}" aria-label="Buts de l'adversaire" placeholder="Eux">
             <button type="button" class="btn contour petit" data-am-a="r-suppr" data-i="${i}" data-j="${j}" aria-label="Retirer ce match">✕</button></div>`).join("")}
             ${(m.resultats || []).length < 6 ? `<button type="button" class="btn contour petit" data-am-a="r-ajout" data-i="${i}">+ Un match du plateau</button>` : ""}</div>`
-          : `<label class="am-plein">Contre (un club par ligne)<textarea data-am="adversaires" data-i="${i}" rows="3" placeholder="Donzère&#10;Montélimar&#10;Malataverne">${esc(m.adversaires || "")}</textarea></label>`}`;
+          : `<div class="am-plein"><b class="ps-lab">Contre</b>
+              <div class="am-puces">${numeroterClubs(lignes(m.adversaires)).map((a, j) => `<span class="am-puce">${esc(joli(a))}<button type="button" data-am-a="adv-suppr" data-i="${i}" data-j="${j}" aria-label="Retirer ${esc(joli(a))}">✕</button></span>`).join("") || `<span class="quoi">Aucun club pour l'instant</span>`}</div>
+              ${lignes(m.adversaires).length < 8 ? menuClub(`data-am-add="adv" data-i="${i}" aria-label="Ajouter un club"`, "", "+ Ajouter un club…") : ""}</div>`}`;
     } else {
       corps = `${t.fam === "vet" ? "" : champ(i, "equipe", "Équipe", m.equipe, `maxlength="40" list="am-equipes" placeholder="Seniors 1"`)}
         ${champ(i, "comp", "Compétition", m.comp, `maxlength="40" placeholder="D1, Régional 2, Coupe de la Drôme…"`)}
@@ -215,7 +275,7 @@
             <span>${esc(m.adv || "adversaire")}</span></div>` : ""}`;
     }
     return `<div class="am-match" data-am-carte="${i}">
-      <div class="am-match-tete"><b>${seul ? "Le match" : `Match ${i + 1}`}</b>${lieuBtns}
+      <div class="am-match-tete"><b>${seul ? "Le match" : `Match ${i + 1}`}${eqLib ? ` <span class="am-eqnum">· Pierrelatte ${esc(eqLib)}</span>` : ""}</b>${lieuBtns}
         ${seul ? "" : `<span class="am-ordre"><button type="button" class="btn contour petit" data-am-a="haut" data-i="${i}" ${i ? "" : "disabled"} aria-label="Monter">↑</button><button type="button" class="btn contour petit" data-am-a="bas" data-i="${i}" ${i < n - 1 ? "" : "disabled"} aria-label="Descendre">↓</button></span>`}
         <button type="button" class="btn contour petit" data-am-a="suppr" data-i="${i}" aria-label="Supprimer ce match">✕</button></div>
       <div class="am-champs">${corps}</div>
@@ -224,6 +284,7 @@
   }
   function panAffMatchs(){
     const e = E(), t = T(), l = L();
+    preparerClubs();
     if (!S.heberge) return `<div class="carte af-carte"><div class="af-tete"><h2>Affiches matchs</h2></div>
       <p class="quoi">Les affiches sont dessinées par le serveur du club : ouvre l'espace club depuis le site en ligne (asf-pierrelatte.fr).</p></div>`;
     const seul = t.fam === "seul", fs = feuilles(), F = FORMATS.find(f => f[0] === e.fmt) || FORMATS[1];
@@ -252,7 +313,7 @@
           if (a && a.samedi === SAM() && !a.modifie) return `<p class="am-source">✅ Matchs automatiques du week-end${a.source === "app" ? " (repris du calendrier de l'app)" : ", comme les affiches du lundi"}. Ajoute ou corrige ce qui manque : matchs, scores, plateaux…</p>`;
           if (a && a.modifie) return `<p class="am-source">✏️ Liste modifiée à la main. « ↺ Reprendre les matchs automatiques » pour revenir à celle du calendrier.</p>`;
           return ""; })()}
-        <div class="am-liste">${l.map((m, i) => carteMatch(m, i, l.length)).join("") || ((e.auto[e.type] || {}).charge ? "" : `<p class="quoi am-vide">Aucun match automatique pour ce week-end : ajoute-les à la main.</p>`)}</div>
+        <div class="am-liste">${(nums => l.map((m, i) => carteMatch(m, i, l.length, nums[i])).join(""))(numeroter(l, t)) || ((e.auto[e.type] || {}).charge ? "" : `<p class="quoi am-vide">Aucun match automatique pour ce week-end : ajoute-les à la main.</p>`)}</div>
         ${seul && l.length ? "" : l.length < MAX ? `<button type="button" class="btn bleu am-ajout" data-am-a="ajout">+ Ajouter un match</button>` : `<p class="quoi">${MAX} matchs au plus : fais deux affiches.</p>`}
         <div class="am-options">
           <label>Titre (facultatif)<input data-am-g="titre" maxlength="80" value="${esc(e.titre)}" placeholder="${esc(t.nom)}"></label>
@@ -368,7 +429,7 @@
       const saisies = new Set(tous.filter(m => !/^fal-/.test(String(m.id || ""))).map(cleCat));
       return tous.filter(m => !/^fal-/.test(String(m.id || "")) || !saisies.has(cleCat(m))).sort(tri).slice(0, MAX).map(m => {
         const adv = (m.adversaires && m.adversaires.length ? m.adversaires : (m.participants || []).map(q => q && q.nom)).filter(a => a && !nous(a));
-        return { dom: !!m.dom, equipe: catSimple(m.equipe), equipes: "1", numero: t.res ? numeroEquipe(m.equipe) : "", comp: /brassage/i.test(m.comp || "") ? "Brassage" : "Plateau",
+        return { dom: !!m.dom, equipe: catSimple(m.equipe), equipes: "1", numeros: numeroEquipe(m.equipe), comp: /brassage/i.test(m.comp || "") ? "Brassage" : "Plateau",
           adv: m.dom ? "" : String(m.adv || ""), date: m.date, heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""), bp: "", bc: "",
           adversaires: adv.join("\n"),
           resultats: (m.resultats || []).length ? m.resultats.map(r => ({ adv: String(r.adv || ""), bp: r.bp ?? "", bc: r.bc ?? "" })) : [{ adv: "", bp: "", bc: "" }] };
@@ -394,7 +455,7 @@
       adv: fam === "fal" && m.dom ? "" : String(m.adv || ""), date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""),
       bp: m.bp ?? "", bc: m.bc ?? "" };
     if (fam === "fal"){
-      o.equipes = "1"; o.numero = TYPES[t].res ? numeroEquipe(cat) : "";
+      o.equipes = "1"; o.numeros = numeroEquipe(cat);
       o.adversaires = (m.adversaires || []).filter(a => a && !nousMeme(a)).join("\n");
       o.resultats = (m.resultats || []).length ? m.resultats.map(r => ({ adv: String(r.adv || ""), bp: r.bp ?? "", bc: r.bc ?? "" })) : [{ adv: "", bp: "", bc: "" }];
       o.bp = o.bc = "";
@@ -416,6 +477,7 @@
       const g = vu.get(k);
       if (!g){ const c = { ...m, equipe: catSimple(m.equipe), equipes: "1" }; vu.set(k, c); out.push(c); continue; }
       g.equipes = String(Math.min(MAX_EQUIPES, (+g.equipes || 1) + 1));
+      g.numeros = g.numeros && m.numeros ? g.numeros + "," + m.numeros : "";
       g.adversaires = [...new Set([...lignes(g.adversaires), ...lignes(m.adversaires)])].join("\n");
     }
     return out;
@@ -543,15 +605,28 @@
       apresSaisie(); return;
     }
     const m = L()[+t.dataset.i]; if (!m) return;
+    if (t.tagName === "SELECT" && t.value === "__autre"){
+      const v = (prompt("Nom du club :") || "").trim();
+      if (v){ if (/^r-/.test(t.dataset.am)){ const r = (m.resultats || [])[+t.dataset.j]; if (r) r.adv = v; } else m[t.dataset.am] = v; marquer(); }
+      sauver(); rendrePanneau(); majMessage(); return;
+    }
     marquer();
     const k = t.dataset.am;
     if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; r[kk] = t.value; }
     else { if (m[k] === t.value) return; m[k] = t.value; }
+    if (T().fam === "fal" && (k === "equipes" || k === "equipe")){ m.numeros = ""; sauver(); rendrePanneau(); majMessage(); return; }
     apresSaisie();
   }
   ["input", "change"].forEach(ty => document.addEventListener(ty, ev => {
     const t = ev.target; if (!t.matches) return;
     if (t.matches("[data-am], [data-am-g]")){ saisie(t); return; }
+    if (t.matches("[data-am-add]") && ty === "change"){
+      const m = L()[+t.dataset.i]; if (!m || !t.value) return;
+      const v = t.value === "__autre" ? (prompt("Nom du club :") || "").trim() : t.value;
+      const l = lignes(m.adversaires);
+      if (v){ l.push(v); m.adversaires = l.join("\n"); marquer(); sauver(); majMessage(); }          // le même club deux fois : deux de ses équipes
+      rendrePanneau(); return;
+    }
     if (t.matches("[data-am-msg]") && ty === "input"){ const mm = E().msgs[E().type]; mm.msg = t.value; mm.libre = true; sauver(); const lb = document.getElementById("am-libre"); if (lb) lb.hidden = false; return; }
     if (t.matches("[data-am-pub]") && ty === "change"){
       E().pub[t.dataset.amPub] = t.checked;
@@ -585,6 +660,7 @@
       [l[i], l[j]] = [l[j], l[i]]; marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
     if (a === "dom"){ const m = l[i]; if (!m) return; m.dom = b.dataset.k === "1"; marquer(); sauver(); rendrePanneau(); majMessage(); return; }
+    if (a === "adv-suppr"){ const m = l[i]; if (!m) return; const x = lignes(m.adversaires); x.splice(+b.dataset.j, 1); m.adversaires = x.join("\n"); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
     if (a === "r-ajout"){ const m = l[i]; if (!m) return; (m.resultats = m.resultats || []).push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); return; }
     if (a === "r-suppr"){ const m = l[i]; if (!m) return; (m.resultats || []).splice(+b.dataset.j, 1); if (!m.resultats.length) m.resultats.push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
     if (a === "reprendre"){
@@ -632,6 +708,12 @@
 .am-score input[type=number]{width:64px;text-align:center;font-weight:800}
 .am-score input:not([type]){flex:1 1 160px;min-width:0}
 .am-score-match span{font-weight:700}
+.am-eqnum{font:700 14px var(--corps);color:var(--texte-doux)}
+.am-puces{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px}
+.am-puce{display:inline-flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;border-radius:999px;border:1px solid var(--ligne);background:rgba(28,99,196,.16);font:700 14px var(--corps)}
+.am-puce button{border:0;background:none;color:inherit;font:800 14px var(--corps);cursor:pointer;min-width:30px;min-height:30px;border-radius:999px}
+.am-puce button:hover{background:rgba(255,255,255,.12)}
+.am-score select{flex:1 1 160px;min-width:0}
 .am-manque{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:rgba(232,131,58,.14);font-size:14px}
 .am-manque[hidden]{display:none}
 .am-ajout{width:100%;margin-top:12px}
