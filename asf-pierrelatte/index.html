@@ -10879,19 +10879,23 @@ void main(){
   const couper = (s, n) => Array.from(String(s || "")).slice(0, n).join("");
   const RESEAUX = { fb: "Facebook", ig: "Instagram" };
   /* états renvoyés par publier.php pour un envoi → réseau par réseau, publié ou non */
+  /* publié seulement si la ligne du réseau dit exactement « Facebook : publié » (publier.php écrit sinon l'erreur après les deux-points) ;
+     un réseau sans ligne à lui reste inconnu : pas compté comme publié */
+  const PUBLIE = /^\s*(facebook|instagram)\s*:\s*publi(é|ée|és|ées)\s*\.?\s*$/i;
   function lireEtats(etats, x){
     const l = (etats || []).map(String);
     const res = {};
     for (const k of ["fb", "ig"]) if (x[k]){
-      const miens = l.filter(s => s.toLowerCase().startsWith(RESEAUX[k].toLowerCase()));
-      res[k] = miens.length ? miens.every(s => /publi/i.test(s)) : (l.length ? l.every(s => /publi/i.test(s)) : true);
+      const miens = l.filter(s => s.trim().toLowerCase().startsWith(RESEAUX[k].toLowerCase()));
+      res[k] = miens.length ? miens.every(s => PUBLIE.test(s)) : null;
     }
-    return { ok: Object.values(res).every(Boolean), res, texte: l.join(" · ") };
+    return { ok: Object.values(res).every(v => v === true), res, texte: l.join(" · ") };
   }
   /* série d'envois à publier.php, l'un après l'autre ; après un échec, les cases déjà parties sont décochées
      pour qu'un nouveau clic n'envoie que le reste. x.cle(k) donne la case de x pour le réseau k (fb_pub, ig_story…). */
   async function serieDePublication({ envois, pub, dire, preparer }){
-    const lignes = [];
+    const lignes = [], CASES = ["fb_pub", "ig_pub", "fb_story", "ig_story"];
+    if (!pub._choix) pub._choix = Object.fromEntries(CASES.filter(k => k in pub).map(k => [k, !!pub[k]]));   // les choix de départ, rendus à la fin
     let erreur = null, incomplet = false;
     for (const [i, x] of envois.entries()){
       const pre = `${i + 1}/${envois.length} · ${x.nom} : `;
@@ -10906,8 +10910,8 @@ void main(){
         fd.append("publication", x.pub ? "1" : "0"); fd.append("story", x.story ? "1" : "0");
         const r = await lancerPublication((window.ASFP_API || "/api") + "/publier.php", { method: "POST", body: fd }, m => dire(pre + m));
         const b = lireEtats(r, x);
-        lignes.push(`${b.ok ? "✅" : "⚠️"} ${x.nom} : ${b.texte || "publié"}`);
-        for (const k of ["fb", "ig"]) if (x[k] && b.res[k]) pub[x.cle(k)] = false;          // parti : décoché (recoché plus bas si tout est bon)
+        lignes.push(`${b.ok ? "✅" : "⚠️"} ${x.nom} : ${b.texte || "pas de réponse détaillée, regarde sur la page avant de republier"}`);
+        for (const k of ["fb", "ig"]) if (x[k] && b.res[k] === true) pub[x.cle(k)] = false;  // parti : décoché (recoché plus bas si tout est bon)
         if (!b.ok) incomplet = true;
       } catch(err){
         erreur = err; incomplet = true;
@@ -10917,7 +10921,11 @@ void main(){
         if (peutEtre){ for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = false; }
       }
     }
-    if (!incomplet) for (const x of envois) for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = true;   // tout est parti : on garde les choix
+    if (!incomplet){                                                     // tout est parti : on rend les choix du premier clic
+      for (const x of envois) for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = true;
+      if (pub._choix) Object.assign(pub, pub._choix);
+      delete pub._choix;
+    }
     const etat = (incomplet ? "⚠️ Publication incomplète. Les cases déjà publiées sont décochées : reclique sur « Publier maintenant » pour envoyer le reste.\n" : "✅ Publié.\n") + lignes.join("\n");
     return { toutBon: !incomplet, etat };
   }
@@ -10985,6 +10993,7 @@ void main(){
       if (TYPES[d.type]) E.type = d.type;
       if (FORMATS.some(f => f[0] === d.fmt)) E.fmt = d.fmt;
       if (d.pub && typeof d.pub === "object") for (const k of Object.keys(E.pub)) if (typeof d.pub[k] === "boolean") E.pub[k] = d.pub[k];
+      if (d.pub && d.pub._choix && typeof d.pub._choix === "object") E.pub._choix = { ...d.pub._choix };
       if (d.brouillons && typeof d.brouillons === "object") for (const t of Object.keys(TYPES)) if (d.brouillons[t]) E.brouillons[t] = { ...vierge(t), ...d.brouillons[t] };
     }
     for (const t of Object.keys(TYPES)) if (!E.brouillons[t]) E.brouillons[t] = vierge(t);
@@ -11150,9 +11159,9 @@ void main(){
     let o = p;
     for (const k of Object.keys(p)){
       const v = p[k];
-      if (v && Array.isArray(v.onglets) && v.onglets.includes("affiches") && AVEC_AFFICHES.some(x => !v.onglets.includes(x))){
+      if (v && Array.isArray(v.onglets) && v.onglets.includes("affiches") && v.ongletsAffiches !== true){
         if (o === p) o = { ...p };
-        o[k] = { ...v, onglets: [...new Set([...v.onglets, ...AVEC_AFFICHES])] };
+        o[k] = { ...v, onglets: [...new Set([...v.onglets, ...AVEC_AFFICHES])], ongletsAffiches: true };   // marqueur réécrit en base au prochain enregistrement
       }
     }
     return o;
@@ -11252,7 +11261,7 @@ void main(){
     etat(r.etat);
     toast(r.toutBon ? "Publié." : "Publication incomplète : regarde le détail sous le bouton.", !r.toutBon);
     if (r.toutBon){ const x = bouton(); if (x){ x.disabled = false; x.textContent = "📣 Publier maintenant"; } }
-    else rendrePanneau();                                              // cases décochées pour ce qui est déjà parti
+    else if (S.ui.onglet === "evenements") rendrePanneau();           // cases décochées pour ce qui est déjà parti
   }
 
   /* ---------- écouteurs (attributs data-ev*, à part de ceux de l'application) ---------- */
@@ -11410,16 +11419,18 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 
   /* ---------- types d'affiche ---------- */
   const TYPES = {
-    "rencontres":     { ico: "📅", nom: "Rencontres", sous: "du week-end", fam: "champ", res: false },
-    "resultats":      { ico: "📊", nom: "Résultats", sous: "du week-end", fam: "champ", res: true },
-    "fal-rencontres": { ico: "🧒", nom: "Foot animation", sous: "rencontres", fam: "fal", res: false },
-    "fal-resultats":  { ico: "🧒", nom: "Foot animation", sous: "résultats", fam: "fal", res: true },
-    "vet-rencontres": { ico: "🍺", nom: "Vétérans", sous: "rencontres", fam: "vet", res: false },
-    "vet-resultats":  { ico: "🍺", nom: "Vétérans", sous: "résultats", fam: "vet", res: true },
-    "match":          { ico: "⚽", nom: "Jour de match", sous: "un match", fam: "seul", res: false },
-    "score":          { ico: "🏁", nom: "Résultat", sous: "d'un match", fam: "seul", res: true },
+    "rencontres":     { ico: "📅", nom: "Rencontres", sous: "du week-end", titre: "Rencontres du week-end", fam: "champ", res: false },
+    "resultats":      { ico: "📊", nom: "Résultats", sous: "du week-end", titre: "Résultats du week-end", fam: "champ", res: true },
+    "fal-rencontres": { ico: "🧒", nom: "Foot animation", sous: "rencontres", titre: "Foot animation · rencontres", fam: "fal", res: false },
+    "fal-resultats":  { ico: "🧒", nom: "Foot animation", sous: "résultats", titre: "Foot animation · résultats", fam: "fal", res: true },
+    "vet-rencontres": { ico: "🍺", nom: "Vétérans", sous: "rencontres", titre: "Vétérans · rencontres", fam: "vet", res: false },
+    "vet-resultats":  { ico: "🍺", nom: "Vétérans", sous: "résultats", titre: "Vétérans · résultats", fam: "vet", res: true },
+    "match":          { ico: "⚽", nom: "Jour de match", sous: "un match", titre: "Jour de match", fam: "seul", res: false },
+    "score":          { ico: "🏁", nom: "Résultat", sous: "d'un match", titre: "Résultat d'un match", fam: "seul", res: true },
   };
-  const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Annonce", "1080 × 1350", "4/5"], ["fb", "Facebook", "1080 × 2160", "1/2"]];
+  const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Annonce", "1080 × 1350", "4/5"], ["fb", "Facebook · 2 feuilles", "1080 × 2160", "1/2"]];
+  // une feuille seule en 1080 × 2160 serait coupée dans le fil Facebook : ce format ne sert qu'aux deux feuilles côte à côte
+  const formatsPour = fs => fs.length > 1 ? FORMATS : FORMATS.filter(f => f[0] !== "fb");
   // foot animation : les catégories du club (le nombre d'équipes se choisit à part)
   const CATS_FAL = ["U6 · U7", "U8 · U9", "U10 · U11", "U13"];
   /* « U8 · U9 Promotion », « U10-U11 », « U13 · équipe 4 » → catégorie simple ; « équipe 4 » → numéro */
@@ -11460,7 +11471,12 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function det(m){
     if (!Array.isArray(m.equipesDet)){
       const ms = (m.resultats || []).filter(r => r && String(r.adv || "").trim()).map(r => ({ heure: "", adv: String(r.adv).trim(), bp: r.bp ?? "", bc: r.bc ?? "" }));
-      lignes(m.adversaires).forEach(a => { if (!ms.some(p => memeClub(p.adv, a))) ms.push({ heure: "", adv: a, bp: "", bc: "" }); });
+      const libres = ms.slice();                                       // un score couvre un seul adversaire : le même nom d'abord, sinon le même club
+      lignes(m.adversaires).forEach(a => {
+        let k = libres.findIndex(p => p && slug(p.adv) === slug(a));
+        if (k < 0) k = libres.findIndex(p => p && memeClub(p.adv, a));
+        if (k >= 0) libres[k] = null; else ms.push({ heure: "", adv: a, bp: "", bc: "" });
+      });
       m.equipesDet = [{ poule: "", matchs: ms.slice(0, MAX_RENC) }];
     }
     const n = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
@@ -11528,17 +11544,25 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function charger(){
     let d = null;
     try { d = JSON.parse(localStorage.getItem(CLE) || "null"); } catch(e){}
-    const E = { type: "rencontres", fmt: "carre", samedis: {}, auto: {}, titre: "", sponsors: true, listes: {}, msgs: {},
+    const E = { type: "rencontres", fmt: "carre", samedis: {}, samedisQuand: {}, auto: {}, titre: "", sponsors: true, listes: {}, msgs: {},
       pub: { fb_pub: true, ig_pub: true, fb_story: false, ig_story: false }, etat: "", enCours: "" };
     if (d && typeof d === "object"){
       if (TYPES[d.type]) E.type = d.type;
       if (FORMATS.some(f => f[0] === d.fmt)) E.fmt = d.fmt;
-      if (d.samedis && typeof d.samedis === "object") for (const t of Object.keys(TYPES)) if (typeof d.samedis[t] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.samedis[t])) E.samedis[t] = d.samedis[t];
-      if (d.auto && typeof d.auto === "object") for (const t of Object.keys(TYPES)) if (d.auto[t] && typeof d.auto[t].samedi === "string") E.auto[t] = { samedi: d.auto[t].samedi, modifie: !!d.auto[t].modifie, source: d.auto[t].source || "" };
+      // week-end choisi à la main : oublié quand il est passé (rencontres) ou choisi il y a plus d'une semaine (résultats)
+      const quand = d.samedisQuand && typeof d.samedisQuand === "object" ? d.samedisQuand : {};
+      if (d.samedis && typeof d.samedis === "object") for (const t of Object.keys(TYPES)){
+        const v = d.samedis[t], q = +quand[t] || 0;
+        if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || !q) continue;
+        if (TYPES[t].res ? Date.now() - q < 7 * 864e5 : v >= samediParDefaut(t)){ E.samedis[t] = v; E.samedisQuand[t] = q; }
+      }
+      // matchs automatiques : seule une liste modifiée à la main est gardée ; les autres sont redemandés (scores arrivés depuis…)
+      if (d.auto && typeof d.auto === "object") for (const t of Object.keys(TYPES)) if (d.auto[t] && typeof d.auto[t].samedi === "string" && d.auto[t].modifie) E.auto[t] = { samedi: d.auto[t].samedi, modifie: true, source: d.auto[t].source || "", quand: 0 };
       if (typeof d.titre === "string") E.titre = d.titre;
       if (typeof d.sponsors === "boolean") E.sponsors = d.sponsors;
       if (d.pub && typeof d.pub === "object") for (const k of Object.keys(E.pub)) if (typeof d.pub[k] === "boolean") E.pub[k] = d.pub[k];
-      if (d.listes && typeof d.listes === "object") for (const t of Object.keys(TYPES)) if (Array.isArray(d.listes[t])) E.listes[t] = d.listes[t].slice(0, MAX).filter(x => x && typeof x === "object");
+      if (d.pub && d.pub._choix && typeof d.pub._choix === "object") E.pub._choix = { ...d.pub._choix };
+      if (d.listes && typeof d.listes === "object") for (const t of Object.keys(TYPES)) if (Array.isArray(d.listes[t]) && E.auto[t]) E.listes[t] = d.listes[t].slice(0, MAX).filter(x => x && typeof x === "object");
       if (d.msgs && typeof d.msgs === "object") for (const t of Object.keys(TYPES)) if (d.msgs[t] && typeof d.msgs[t].msg === "string") E.msgs[t] = { msg: d.msgs[t].msg, libre: !!d.msgs[t].libre };
     }
     for (const t of Object.keys(TYPES)){ if (!E.listes[t]) E.listes[t] = []; if (!E.msgs[t]) E.msgs[t] = { msg: "", libre: false }; }
@@ -11561,7 +11585,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     clearTimeout(saveT);
     saveT = setTimeout(() => {
       const e = E();
-      try { localStorage.setItem(CLE, JSON.stringify({ type: e.type, fmt: e.fmt, samedis: e.samedis, auto: e.auto, titre: e.titre, sponsors: e.sponsors, pub: e.pub, listes: e.listes, msgs: e.msgs })); } catch(err){}
+      try { localStorage.setItem(CLE, JSON.stringify({ type: e.type, fmt: e.fmt, samedis: e.samedis, samedisQuand: e.samedisQuand, auto: e.auto, titre: e.titre, sponsors: e.sponsors, pub: e.pub, listes: e.listes, msgs: e.msgs })); } catch(err){}
     }, 300);
   }
 
@@ -11605,13 +11629,35 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const x = [];
     if (!m.date) x.push("la date");
     if (t.fam === "fal"){
-      if (!m.dom && !String(m.adv || "").trim() && !String(m.adresse || "").trim()) x.push("le club qui reçoit");
+      if (!m.dom && !net(m.adv)) x.push("le club qui reçoit");
       if (enPoules(m)){
         if (!pls(m).some(q => q.equipes.length)) x.push("les équipes des poules");
         else if (t.res && !pls(m).some(q => q.matchs.some(p => nombre(p.sa) !== null && nombre(p.sb) !== null))) x.push("au moins un score");
       }
       else if (t.res && !det(m).some(q => q.matchs.some(p => String(p.adv || "").trim() && nombre(p.bp) !== null && nombre(p.bc) !== null))) x.push("au moins un score");
-    } else if (!String(m.adv || "").trim()) x.push("l'adversaire");
+    } else {
+      if (t.fam !== "vet" && !net(m.equipe)) x.push("l'équipe");
+      if (!net(m.adv)) x.push("l'adversaire");
+      if (t.fam === "seul" && t.res && (nombre(m.bp) === null || nombre(m.bc) === null)) x.push("le score");
+    }
+    return x;
+  }
+  /* à savoir avant de publier, sans empêcher l'affiche : score pas encore connu, rencontre sans score, date hors du week-end */
+  function joursWeekend(sam){
+    let j = null; try { j = typeof plage === "function" ? plage(sam) : null; } catch(err){}
+    if (Array.isArray(j) && j.length) return j;
+    const d = jd(sam), v = new Date(d); v.setDate(d.getDate() - 1); const di = new Date(d); di.setDate(d.getDate() + 1);
+    return [iso(v), sam, iso(di)];
+  }
+  function avertir(m, t = T()){
+    const x = [];
+    if (m.date && !joursWeekend(SAM()).includes(m.date)) x.push(`ce match n'est pas le week-end choisi (${typeof dateLongue === "function" ? dateLongue(m.date) : m.date})`);
+    if ((t.fam === "champ" || t.fam === "vet") && t.res && net(m.adv) && (nombre(m.bp) === null || nombre(m.bc) === null)) x.push("pas encore de score : « NC » sur l'affiche");
+    if (t.fam === "fal" && t.res){
+      const sans = enPoules(m) ? pls(m).flatMap(q => q.matchs.filter(p => nombre(p.sa) === null || nombre(p.sb) === null)).length
+        : det(m).flatMap(q => q.matchs.filter(p => net(p.adv) && (nombre(p.bp) === null || nombre(p.bc) === null))).length;
+      if (sans) x.push(`${sans} rencontre${sans > 1 ? "s" : ""} sans score : pas sur l'affiche`);
+    }
     return x;
   }
   /* feuilles à dessiner : domicile et/ou extérieur (une seule pour un match seul) */
@@ -11623,8 +11669,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     return f.length ? f : ["dom"];
   }
   const api = () => (window.ASFP_API || "/api");
-  async function image(lieu, fmt, s){
-    const r = await fetch(api() + "/affiches.php?manuel=1&v=" + Date.now().toString(36), { method: "POST", credentials: "same-origin", cache: "no-store",
+  async function image(lieu, fmt, s, signal){
+    const r = await fetch(api() + "/affiches.php?manuel=1&v=" + Date.now().toString(36), { method: "POST", credentials: "same-origin", cache: "no-store", signal,
       headers: { "Content-Type": "application/json" }, body: JSON.stringify(donnees(lieu, fmt, s)) });
     const type = r.headers.get("Content-Type") || "";
     if (!r.ok || !type.startsWith("image/")) throw new Error(((await r.text().catch(() => "")) || `erreur ${r.status}`).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160));
@@ -11649,20 +11695,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       m.dom ? `Venez nombreux encourager nos ${eq} ! 💙🤍` : `Tous derrière nos ${eq} ! 💙🤍`, "#ASFPierrelatte"].filter(x => x !== "" || true).join("\n").replace(/\n{3,}/g, "\n\n");
   }
   let msgT, msgJeton = 0;
+  async function messageCalcule(t){                                     // null : pas de réponse, l'ancien message reste
+    if (TYPES[t].fam === "seul") return messageSeul();
+    try {
+      const r = await fetch(api() + "/affiches.php?manuel=1&message=1", { method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(donnees("", "carre")) });
+      return r.ok ? (await r.text()).trim() : null;
+    } catch(err){ return null; }
+  }
   function majMessage(tout){
     const e = E(), t = e.type, mm = e.msgs[t];
     if (mm.libre) return;
     clearTimeout(msgT);
     msgT = setTimeout(async () => {
       const j = ++msgJeton;
-      let txt = "";
-      if (TYPES[t].fam === "seul") txt = messageSeul();
-      else try {
-        const r = await fetch(api() + "/affiches.php?manuel=1&message=1", { method: "POST", credentials: "same-origin", cache: "no-store",
-          headers: { "Content-Type": "application/json" }, body: JSON.stringify(donnees("", "carre")) });
-        txt = r.ok ? (await r.text()).trim() : "";
-      } catch(err){}
-      if (j !== msgJeton || e.type !== t || mm.libre) return;
+      const txt = await messageCalcule(t);
+      if (txt === null || j !== msgJeton || e.type !== t || mm.libre) return;
       mm.msg = txt; sauver();
       const z = document.getElementById("am-msg");
       if (z && document.activeElement !== z) z.value = txt;
@@ -11693,7 +11741,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       placeholder="${esc(invite)}" maxlength="60" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"
       role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${id}">
       <button type="button" class="am-club-x" data-am-club-a="effacer" tabindex="-1" aria-label="Effacer" ${valeur ? "" : "hidden"}>✕</button>
-      ${ajout ? `<button type="button" class="btn petit am-club-ok" data-am-club-a="ajouter" hidden>Ajouter</button>` : ""}
+      ${ajout ? `<button type="button" class="btn contour petit am-club-ok" data-am-club-a="ajouter" hidden>Ajouter</button>` : ""}
       <span class="am-club-liste" id="${id}" role="listbox" aria-label="Clubs" hidden></span></span>`;
   }
   const cleClub = n => slug(String(n || "").replace(/\s+\d+$/, "")).replace(/-/g, "");
@@ -11704,7 +11752,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const mots = slug(tape).split("-").filter(w => w && w !== "x");
     const garde = n => { const k = slug(n).replace(/-/g, ""); return mots.every(w => k.includes(w)); };
     const deja = CLUBS.deja.filter(garde), tous = CLUBS.tous.filter(garde).slice(0, tape ? 80 : 400);
-    const exact = tape && [...CLUBS.deja, ...CLUBS.tous].find(n => cleClub(n) === cleClub(tape));
+    const plat = n => slug(n).replace(/-/g, "");                     // « C.O. Donzérois » = « CO DONZEROIS », mais « … 2 » reste différent
+    const exact = tape && [...deja, ...tous].find(n => plat(n) === plat(tape));
     const poule = ajout && inp.dataset.q !== undefined, mm = L()[+inp.dataset.i] || {};
     const deDans = !ajout ? [] : poule ? ((pls(mm)[+inp.dataset.q] || {}).equipes || []).map(e => e.nom) : ((det(mm)[+inp.dataset.k] || {}).matchs || []).map(p => p.adv);
     let k = 0;
@@ -11754,7 +11803,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       const e = { id: uidc(), nom: suffixe(m, libre || /[a-zà-ÿ]/.test(v) ? v : joli(v)) };
       q.matchs.push(...q.equipes.map(o => ({ heure: "", a: o.id, b: e.id, sa: "", sb: "" })));   // chacun contre chacun
       q.equipes.push(e);
-      inp.value = ""; fermerClubs(inp); inp.blur();
+      inp.value = ""; fermerClubs(inp); if (tactile()) inp.blur();
       marquer(); sauver(); majMessage(); rendrePanneau();
       return;
     }
@@ -11762,20 +11811,23 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       const q = det(m)[+inp.dataset.k]; if (!q) return;
       if (q.matchs.length >= MAX_RENC){ toast(`${MAX_RENC} matchs au plus par équipe`, true); return; }
       q.matchs.push({ heure: "", adv: v, bp: "", bc: "" });            // le même club deux fois : deux de ses équipes (Donzère 1, Donzère 2)
-      inp.value = ""; fermerClubs(inp); inp.blur();
+      inp.value = ""; fermerClubs(inp); if (tactile()) inp.blur();
       marquer(); sauver(); majMessage(); rendrePanneau();
       return;
     }
     fermerClubs(inp);
-    inp.value = v; saisie(inp); inp.value = joli(v); boutonsClub(inp);
-    if (tactile()) inp.blur();
+    const sel = selChamp(inp);
+    if (tactile()) inp.blur();                                        // avant l'enregistrement : un panneau redessiné ne rend pas le focus
+    inp.value = v; saisie(inp);
+    const c = inp.isConnected ? inp : document.querySelector("#panneau " + sel);   // le champ peut avoir été redessiné
+    if (c){ c.value = joli(v); boutonsClub(c); }
   }
   let focusRendu = false;                                               // focus remis par le panneau redessiné : la liste reste fermée
   document.addEventListener("focusin", ev => {
     const inp = ev.target; if (!inp.matches || !inp.matches("#panneau [data-am-club]") || focusRendu) return;
     listeClubs(inp, inp.dataset.amClub === "ajout" ? inp.value : "");
-    if (!tactile() && inp.dataset.amClub === "un") inp.select();
-    else if (tactile()) setTimeout(() => {                             // champ en bas de l'écran : on le remonte pour que la liste ne soit pas sous le clavier
+    if (inp.dataset.amClub === "un") setTimeout(() => { try { if (document.activeElement === inp) inp.setSelectionRange(0, inp.value.length); } catch(err){} }, 0);
+    if (tactile()) setTimeout(() => {                                  // champ en bas de l'écran : on le remonte pour que la liste ne soit pas sous le clavier
       if (document.activeElement !== inp) return;
       const h = (window.visualViewport && visualViewport.height) || innerHeight;
       if (inp.getBoundingClientRect().top > h * .45) inp.scrollIntoView({ block: "start" });
@@ -11814,10 +11866,15 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     ev.preventDefault();                                                // dans un <label> : pas de clic renvoyé au champ
     const inp = (o || b).closest(".am-club").querySelector("[data-am-club]"); if (!inp) return;
     if (o){ choisirClub(inp, o.dataset.v, o.classList.contains("am-club-libre")); return; }
-    if (b.dataset.amClubA === "ajouter"){ choisirClub(inp, inp.value, true); return; }
+    if (b.dataset.amClubA === "ajouter"){                                 // comme Entrée : le club surligné, sinon le texte tapé
+      const a = b.closest(".am-club").querySelector(".am-club-liste:not([hidden]) .am-club-opt.actif");
+      choisirClub(inp, a ? a.dataset.v : inp.value, a ? a.classList.contains("am-club-libre") : true); return;
+    }
+    const sel = selChamp(inp);
     inp.value = ""; boutonsClub(inp);
     inp.dispatchEvent(new Event("input", { bubbles: true }));
-    inp.focus();
+    const c = inp.isConnected ? inp : document.querySelector("#panneau " + sel);
+    if (c){ c.value = ""; boutonsClub(c); if (document.activeElement === c) listeClubs(c, ""); else c.focus(); }
   });
 
   /* ---------- le panneau ---------- */
@@ -11865,8 +11922,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const eqLib = fal && num && num.nums.length ? libelleEquipes(num) : "";
     const x = manque(m);
     const lieuBtns = `<div class="am-lieu" role="group" aria-label="Lieu">
-      <button type="button" class="as-fmt ${m.dom ? "on" : ""}" data-am-a="dom" data-i="${i}" data-k="1">🏠 À domicile</button>
-      <button type="button" class="as-fmt ${!m.dom ? "on" : ""}" data-am-a="dom" data-i="${i}" data-k="0">✈️ À l'extérieur</button></div>`;
+      <button type="button" class="as-fmt ${m.dom ? "on" : ""}" aria-pressed="${!!m.dom}" data-am-a="dom" data-i="${i}" data-k="1">🏠 À domicile</button>
+      <button type="button" class="as-fmt ${!m.dom ? "on" : ""}" aria-pressed="${!m.dom}" data-am-a="dom" data-i="${i}" data-k="0">✈️ À l'extérieur</button></div>`;
     let corps;
     if (fal){
       const cat = catSimple(m.equipe);
@@ -11875,10 +11932,10 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
           <button type="button" class="as-fmt ${po ? "" : "on"}" data-am-a="mode" data-i="${i}" data-k="">⚽ Plateau : nos matchs</button>
           <button type="button" class="as-fmt ${po ? "on" : ""}" data-am-a="mode" data-i="${i}" data-k="poules">🗂️ Poules</button></div>
         <label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
-        ${po ? "" : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${d.length === k + 1 ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
+        ${po ? "" : `<label>Équipes de Pierrelatte<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${d.length === k + 1 ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
         <label>Type<select data-am="comp" data-i="${i}">${["Plateau", "Brassage"].map(c => `<option ${c === m.comp ? "selected" : ""}>${c}</option>`).join("")}</select></label>
         ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", t.res ? "Heure" : "Heure du plateau", m.heure, "", "time")}
-        ${m.dom ? "" : `<label>Chez (club qui reçoit)${champClub(`data-am="adv" data-i="${i}"`, m.adv, "Rechercher ou taper un club…")}</label>`}
+        ${m.dom ? "" : `<label>Chez (club qui reçoit)${champClub(`data-am="adv" data-i="${i}" aria-label="Chez (club qui reçoit)"`, m.adv, "Rechercher ou taper un club…")}</label>`}
         ${m.dom ? "" : champ(i, "adresse", "Stade, ville", m.adresse, `maxlength="120" placeholder="Stade Marcel Pagnol, Donzère"`)}
         ${po ? `<div class="am-plein am-eqs"><p class="quoi am-aide">Chaque poule avec toutes ses équipes : Pierrelatte peut y être plusieurs fois (Pierrelatte B, Pierrelatte C…). Les matchs se créent tout seuls, chacun contre chacun${t.res ? " : mets les scores" : " : mets l'heure de chacun"}, retire ceux qui ne se jouent pas.</p>
             ${pl.map((q, iq) => blocPoule(m, i, iq, q, t, pl.length)).join("")}
@@ -11888,21 +11945,21 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     } else {
       corps = `${t.fam === "vet" ? "" : champ(i, "equipe", "Équipe", m.equipe, `maxlength="40" list="am-equipes" placeholder="Seniors 1"`)}
         ${champ(i, "comp", "Compétition", m.comp, `maxlength="40" placeholder="D1, Régional 2, Coupe de la Drôme…"`)}
-        <label>Adversaire${champClub(`data-am="adv" data-i="${i}"`, m.adv, "Rechercher ou taper un club…")}</label>
+        <label>Adversaire${champClub(`data-am="adv" data-i="${i}" aria-label="Adversaire"`, m.adv, "Rechercher ou taper un club…")}</label>
         ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", "Heure", m.heure, "", "time")}
         ${m.dom ? "" : champ(i, "adresse", "Stade, ville (facultatif)", m.adresse, `maxlength="120" placeholder="Stade municipal, Bourg-de-Péage"`)}
         ${t.res ? `<div class="am-plein am-score am-score-match"><span>Score : Pierrelatte</span>
-            <input type="number" min="0" max="99" inputmode="numeric" data-am="bp" data-i="${i}" value="${esc(m.bp)}" aria-label="Buts de Pierrelatte">
+            <span class="am-sc"><input type="number" min="0" max="99" inputmode="numeric" data-am="bp" data-i="${i}" value="${esc(m.bp)}" aria-label="Buts de Pierrelatte">
             <span>–</span>
-            <input type="number" min="0" max="99" inputmode="numeric" data-am="bc" data-i="${i}" value="${esc(m.bc)}" aria-label="Buts de l'adversaire">
-            <span>${esc(m.adv || "adversaire")}</span></div>` : ""}`;
+            <input type="number" min="0" max="99" inputmode="numeric" data-am="bc" data-i="${i}" value="${esc(m.bc)}" aria-label="Buts de l'adversaire"></span>
+            <span data-am-advlib="${i}">${esc(joli(m.adv) || "adversaire")}</span></div>` : ""}`;
     }
     return `<div class="am-match" data-am-carte="${i}">
-      <div class="am-match-tete"><b>${seul ? "Le match" : `Match ${i + 1}`}${eqLib ? ` <span class="am-eqnum">· Pierrelatte ${esc(eqLib)}</span>` : ""}</b>${lieuBtns}
-        ${seul ? "" : `<span class="am-ordre"><button type="button" class="btn contour petit" data-am-a="haut" data-i="${i}" ${i ? "" : "disabled"} aria-label="Monter">↑</button><button type="button" class="btn contour petit" data-am-a="bas" data-i="${i}" ${i < n - 1 ? "" : "disabled"} aria-label="Descendre">↓</button></span>`}
-        <button type="button" class="btn contour petit" data-am-a="suppr" data-i="${i}" aria-label="Supprimer ce match">✕</button></div>
+      <div class="am-match-tete"><b>${seul ? "Le match" : `${fal ? "Plateau" : "Match"} ${i + 1}`}${eqLib ? ` <span class="am-eqnum">· Pierrelatte ${esc(eqLib)}</span>` : ""}</b>${lieuBtns}
+        <button type="button" class="btn contour petit" data-am-a="suppr" data-i="${i}" aria-label="Supprimer ${fal ? "ce plateau" : "ce match"}">✕</button></div>
       <div class="am-champs">${corps}</div>
-      <p class="am-manque" data-am-manque="${i}" ${x.length ? "" : "hidden"}>⚠️ Il manque ${x.join(" et ")} : ce match ne sera pas sur l'affiche.</p>
+      <p class="am-manque" data-am-manque="${i}" ${x.length ? "" : "hidden"}>⚠️ Il manque ${x.join(" et ")} : ${fal ? "ce plateau" : "ce match"} ne sera pas sur l'affiche.</p>
+      ${(a => `<p class="am-avert" data-am-avert="${i}" ${a.length ? "" : "hidden"}>ℹ️ ${esc(a.join(" · "))}</p>`)(x.length ? [] : avertir(m))}
     </div>`;
   }
   function panAffMatchs(){
@@ -11910,7 +11967,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     preparerClubs();
     if (!S.heberge) return `<div class="carte af-carte"><div class="af-tete"><h2>Affiches matchs</h2></div>
       <p class="quoi">Les affiches sont dessinées par le serveur du club : ouvre l'espace club depuis le site en ligne (asf-pierrelatte.fr).</p></div>`;
-    const seul = t.fam === "seul", fs = feuilles(), F = FORMATS.find(f => f[0] === e.fmt) || FORMATS[1];
+    const seul = t.fam === "seul", fs = feuilles(), fmts = formatsPour(fs), F = fmts.find(f => f[0] === e.fmt) || fmts[1];
     const nomF = f => f === "dom" ? "À domicile" : f === "ext" ? "À l'extérieur" : "L'affiche";
     const opt = (k, lb, res) => `<label class="af-choix ${e.pub[k] ? "on" : ""}"><input type="checkbox" data-am-pub="${k}" aria-label="${lb} ${res}" ${e.pub[k] ? "checked" : ""}>${lb}</label>`;
     const equipes = (() => { let l = []; try { l = toutesEquipes(); } catch(err){}
@@ -11923,18 +11980,20 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     </div>
     <div class="ev-grille">
       <section class="carte af-carte ev-ecrire" aria-labelledby="am-h-ecrire">
-        <div class="af-tete"><h2 id="am-h-ecrire">✏️ ${seul ? "Le match" : "Les matchs de l'affiche"}</h2><small>${esc(t.nom + " · " + t.sous)}</small></div>
+        <div class="af-tete"><h2 id="am-h-ecrire">✏️ ${seul ? "Le match" : "Les matchs de l'affiche"}</h2><small>${esc(t.titre)}</small></div>
         <div class="am-haut">
           <label>Week-end du<input type="date" data-am-g="samedi" value="${esc(SAM())}"></label>
           <button type="button" class="btn contour" data-am-a="reprendre">↺ Reprendre les matchs automatiques</button>
         </div>
         ${(() => { const a = e.auto[e.type];
           if (a && a.charge) return `<p class="am-source">⏳ Chargement des matchs automatiques du week-end…</p>`;
+          if (a && a.erreur) return `<p class="am-source am-err">⚠️ ${esc(a.erreur)}</p>`;
           if (a && a.samedi === SAM() && !a.modifie) return `<p class="am-source">✅ Matchs automatiques du week-end${a.source === "app" ? " (repris du calendrier de l'app)" : ", comme les affiches du lundi"}. Ajoute ou corrige ce qui manque : matchs, scores, plateaux…</p>`;
           if (a && a.modifie) return `<p class="am-source">✏️ Liste modifiée à la main. « ↺ Reprendre les matchs automatiques » pour revenir à celle du calendrier.</p>`;
           return ""; })()}
+        ${seul && (e.auto[e.type] || {}).tous && e.auto[e.type].tous.length > 1 ? `<label class="am-quel">Quel match ?<select data-am-g="quel">${e.auto[e.type].tous.map((m, k) => `<option value="${k}" ${l[0] && l[0].date === m.date && l[0].heure === m.heure && net(l[0].adv) === net(m.adv) ? "selected" : ""}>${esc([m.equipe, joli(m.adv), m.date ? (typeof dateLongue === "function" ? dateLongue(m.date) : m.date) + (m.heure ? " " + hFr(m.heure) : "") : ""].filter(Boolean).join(" · "))}</option>`).join("")}</select></label>` : ""}
         <div class="am-liste">${(nums => l.map((m, i) => carteMatch(m, i, l.length, nums[i])).join(""))(numeroter(l, t)) || ((e.auto[e.type] || {}).charge ? "" : `<p class="quoi am-vide">Aucun match automatique pour ce week-end : ajoute-les à la main.</p>`)}</div>
-        ${seul && l.length ? "" : l.length < MAX ? `<button type="button" class="btn bleu am-ajout" data-am-a="ajout">+ Ajouter un match</button>` : `<p class="quoi">${MAX} matchs au plus : fais deux affiches.</p>`}
+        ${seul && l.length ? "" : l.length < MAX ? `<button type="button" class="btn bleu am-ajout" data-am-a="ajout">+ Ajouter ${t.fam === "fal" ? "un plateau" : "un match"}</button>` : `<p class="quoi">${MAX} ${t.fam === "fal" ? "plateaux" : "matchs"} au plus : fais deux affiches.</p>`}
         <div class="am-options">
           <label>Titre (facultatif)<input data-am-g="titre" maxlength="80" value="${esc(e.titre)}" placeholder="${esc(t.nom)}"></label>
           <label class="ev-case"><input type="checkbox" data-am-g="sponsors" ${e.sponsors ? "checked" : ""}> Bandeau des partenaires</label>
@@ -11943,9 +12002,9 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       </section>
       <section class="carte af-carte ev-apercu" aria-labelledby="am-h-apercu">
         <div class="af-tete"><h2 id="am-h-apercu">👀 ${fs.length > 1 ? "Les affiches" : "L'affiche"}</h2></div>
-        <div class="ev-formats" role="group" aria-label="Format de l'aperçu">${FORMATS.map(([k, lb, d]) => `<button type="button" class="as-fmt ${k === e.fmt ? "on" : ""}" aria-pressed="${k === e.fmt}" data-am-a="fmt" data-k="${k}" title="${d}">${lb}</button>`).join("")}</div>
-        <div class="am-apercus">${fs.map(f => `<figure class="am-fig"><div class="ev-cadre" style="${fs.length > 1 ? `aspect-ratio:${F[3]}` : styleCadre(F[3])}"><img data-am-img="${f || "seul"}" class="charge" alt="Aperçu : ${nomF(f)}"></div>${fs.length > 1 ? `<figcaption>${nomF(f)}</figcaption>` : ""}</figure>`).join("")}</div>
-        <p class="ev-erreur" id="am-erreur" hidden></p>
+        <div class="ev-formats" role="group" aria-label="Format de l'aperçu">${fmts.map(([k, lb, d]) => `<button type="button" class="as-fmt ${k === F[0] ? "on" : ""}" aria-pressed="${k === F[0]}" data-am-a="fmt" data-k="${k}" title="${d}">${lb}</button>`).join("")}</div>
+        <div class="am-apercus">${fs.map(f => `<figure class="am-fig"><div class="ev-cadre" style="${fs.length > 1 ? `aspect-ratio:${F[3]}` : styleCadre(F[3])}"><img data-am-img="${f || "seul"}" class="charge" alt="Aperçu : ${nomF(f)}"><span class="am-vide-ap">${seul ? "Ajoute le match pour voir l'affiche" : "Complète un match pour voir l'affiche"}</span></div>${fs.length > 1 ? `<figcaption>${nomF(f)}</figcaption>` : ""}</figure>`).join("")}</div>
+        <div class="ev-erreur" id="am-erreur" role="status" aria-live="polite" hidden></div>
         <p class="ev-taille" id="am-taille">${F[1]} · ${F[2]}</p>
       </section>
       <section class="carte af-carte ev-message" aria-labelledby="am-h-msg">
@@ -11959,30 +12018,32 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
         <div class="af-tete"><h2 id="am-h-pub">📣 Publier</h2><small>La bonne taille est choisie toute seule</small></div>
         <div class="ps-reseau" role="group" aria-label="Facebook"><span class="ps-reseau-nom">📘 Facebook</span><div class="af-choix-l">${opt("fb_pub", "Annonce", "Facebook")}${opt("fb_story", "Story", "Facebook")}</div></div>
         <div class="ps-reseau" role="group" aria-label="Instagram"><span class="ps-reseau-nom">📸 Instagram</span><div class="af-choix-l">${opt("ig_pub", "Annonce", "Instagram")}${opt("ig_story", "Story", "Instagram")}</div></div>
-        <p class="ev-note">Annonce : dans le fil de la page, avec le message, montrée en entier (domicile et extérieur ensemble) · Story : une par feuille, plein écran pendant 24 h, sans texte.</p>
+        <p class="ev-note">${fs.length > 1 ? "Annonce : dans le fil, avec le message · Facebook : les 2 feuilles côte à côte · Instagram : en carrousel · Story : une par feuille, plein écran 24 h, sans texte." : "Annonce : dans le fil, avec le message, affiche en entier · Story : plein écran pendant 24 h, sans texte."}</p>
         <button type="button" class="btn bleu af-go" data-am-a="publier" ${e.enCours ? "disabled" : ""}>${esc(e.enCours || "📣 Publier maintenant")}</button>
-        ${e.etat ? `<p class="af-etat" id="am-etat">${esc(e.etat)}</p>` : `<p class="af-etat" id="am-etat" hidden></p>`}
+        ${e.etat ? `<p class="af-etat" id="am-etat" role="status" aria-live="polite">${esc(e.etat)}</p>` : `<p class="af-etat" id="am-etat" role="status" aria-live="polite" hidden></p>`}
         <b class="ps-lab ev-lab">Ou les poster toi-même</b>
-        <div class="ev-dl">${fs.flatMap(f => FORMATS.map(([k, lb, d]) => `<button type="button" class="btn contour petit" data-am-a="dl" data-f="${f || ""}" data-k="${k}">⬇️ ${fs.length > 1 ? (f === "dom" ? "Domicile · " : "Extérieur · ") : ""}${lb} <small>${d}</small></button>`)).join("")}</div>
+        <div class="ev-dl">${fs.flatMap(f => fmts.map(([k, lb, d]) => `<button type="button" class="btn contour petit" data-am-a="dl" data-f="${f || ""}" data-k="${k}">⬇️ ${fs.length > 1 ? (f === "dom" ? "Domicile · " : "Extérieur · ") : ""}${lb} <small>${d}</small></button>`)).join("")}</div>
       </section>
     </div></div>`;
   }
 
   /* ---------- aperçus (dessinés par le serveur, une requête par feuille) ---------- */
-  let apT, apJeton = 0;
+  let apT, apJeton = 0, apCtl = null;                                   // un aperçu remplacé par une saisie plus récente est annulé
   const urls = {};
   function majApercus(tout){
     clearTimeout(apT);
     apT = setTimeout(async () => {
-      const j = ++apJeton, e = E(), fmt = e.fmt;
+      const j = ++apJeton, e = E(), fmt = formatsPour(feuilles()).some(f => f[0] === e.fmt) ? e.fmt : "carre";
+      if (apCtl) apCtl.abort();
+      const ctl = apCtl = typeof AbortController === "function" ? new AbortController() : null;
       const imgs = [...document.querySelectorAll("[data-am-img]")];
       const err = document.getElementById("am-erreur");
       imgs.forEach(i => i.classList.add("charge"));
       for (const i of imgs){
         const f = i.dataset.amImg === "seul" ? null : i.dataset.amImg;
-        if (T().fam === "seul" && !L().length){ i.removeAttribute("src"); i.classList.remove("charge"); continue; }
+        if (!L().some(m => !manque(m).length)){ i.removeAttribute("src"); i.classList.remove("charge"); continue; }   // rien de complet : le cadre dit quoi faire
         try {
-          const b = await image(f, fmt);
+          const b = await image(f, fmt, undefined, ctl ? ctl.signal : undefined);
           if (j !== apJeton) return;
           if (urls[i.dataset.amImg]) URL.revokeObjectURL(urls[i.dataset.amImg]);
           urls[i.dataset.amImg] = URL.createObjectURL(b);
@@ -11991,7 +12052,12 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
         } catch(x){
           if (j !== apJeton) return;
           i.classList.remove("charge");
-          if (err){ err.hidden = false; err.textContent = "Aperçu indisponible : " + x.message + (/403|coach|bureau/i.test(x.message) ? "" : " · vérifie que api/affiches.php est bien la dernière version."); }
+          console.warn("Aperçu Affiches matchs :", x.message);
+          if (err){
+            err.hidden = false;
+            err.innerHTML = `${/403|coach|bureau|connect/i.test(x.message) ? "Ta session a expiré : reconnecte-toi à l'espace club." : /trop de matchs/i.test(x.message) ? esc(x.message) : "L'aperçu n'a pas pu être dessiné. Vérifie ta connexion puis réessaie ; si ça continue, préviens le responsable du site."}
+              <button type="button" class="btn contour petit" data-am-a="reessayer">↻ Réessayer</button>`;
+          }
         }
       }
     }, tout ? 0 : 900);
@@ -11999,7 +12065,10 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function majManques(){
     L().forEach((m, i) => {
       const z = document.querySelector(`[data-am-manque="${i}"]`); if (!z) return;
-      const x = manque(m); z.hidden = !x.length; z.textContent = x.length ? `⚠️ Il manque ${x.join(" et ")} : ce match ne sera pas sur l'affiche.` : "";
+      const x = manque(m), lui = T().fam === "fal" ? "ce plateau" : "ce match";
+      z.hidden = !x.length; z.textContent = x.length ? `⚠️ Il manque ${x.join(" et ")} : ${lui} ne sera pas sur l'affiche.` : "";
+      const w = document.querySelector(`[data-am-avert="${i}"]`); if (!w) return;
+      const a = x.length ? [] : avertir(m); w.hidden = !a.length; w.textContent = a.length ? "ℹ️ " + a.join(" · ") : "";
     });
   }
   /* la liste des feuilles a changé (un match passe à l'extérieur…) : on redessine le panneau */
@@ -12015,19 +12084,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function memoFocus(){
     const a = document.activeElement;
     if (!a || !a.matches || !a.matches("#panneau [data-am], #panneau [data-am-g], #panneau [data-am-msg], #panneau [data-am-club]")) return null;
+    let d = null, f = null; try { d = a.selectionStart; f = a.selectionEnd; } catch(err){}
+    return { sel: selChamp(a), d, f, v: a.dataset.amClub ? a.value : null, ouverte: a.getAttribute("aria-expanded") === "true" };
+  }
+  function selChamp(a){
     const ajout = a.dataset.amClub === "ajout";
-    const sel = a.dataset.amMsg !== undefined ? "[data-am-msg]" : a.dataset.amG ? `[data-am-g="${a.dataset.amG}"]`
+    return a.dataset.amMsg !== undefined ? "[data-am-msg]" : a.dataset.amG ? `[data-am-g="${a.dataset.amG}"]`
       : ajout ? `[data-am-club="ajout"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.q !== undefined ? `[data-q="${a.dataset.q}"]` : ""}`
       : `[data-am="${a.dataset.am}"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.q !== undefined ? `[data-q="${a.dataset.q}"]` : ""}${a.dataset.j !== undefined ? `[data-j="${a.dataset.j}"]` : ""}`;
-    let d = null, f = null; try { d = a.selectionStart; f = a.selectionEnd; } catch(err){}
-    return { sel, d, f, v: ajout ? a.value : null };
   }
   function rendreFocus(m){
     if (!m) return;
     const a = document.querySelector("#panneau " + m.sel); if (!a) return;
-    if (m.v) a.value = m.v;
+    if (m.v !== null && m.v !== undefined) a.value = m.v;
     focusRendu = true; try { a.focus({ preventScroll: true }); } finally { focusRendu = false; }
     try { if (m.d !== null && m.d !== undefined) a.setSelectionRange(m.d, m.f); } catch(err){}
+    if (a.dataset.amClub){ boutonsClub(a); if (m.ouverte) listeClubs(a, a.value); }   // on tapait : la liste reste ouverte
   }
 
   /* ---------- reprendre les matchs connus de l'application pour ce week-end ---------- */
@@ -12106,23 +12178,36 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     }
     return out;
   }
-  let autoJeton = 0;
+  const jetons = {};                                                     // un jeton par type : changer de type n'abandonne pas un chargement en cours
   async function chargerAuto(demande){
-    const e = E(), t = e.type, sam = SAM(), j = ++autoJeton;
+    const e = E(), t = e.type, sam = SAM(), j = jetons[t] = (jetons[t] || 0) + 1;
     e.auto[t] = { samedi: sam, modifie: false, charge: true };
     if (S.ui.onglet === "affmatchs") rendrePanneau();
-    let l, source = "serveur";
+    let l, source = "serveur", refus = "";
     try {
       const r = await fetch(api() + "/affiches.php?plan=1&type=" + encodeURIComponent(t) + "&date=" + encodeURIComponent(sam), { credentials: "same-origin", cache: "no-store" });
-      const d = r.ok ? await r.json() : null;
-      if (!d || !Array.isArray(d.matchs)) throw new Error("réponse " + r.status);
-      l = d.matchs.map(m => versListe(m, t));
-    } catch(err){ source = "app"; l = depuisCalendrier(); }                 // serveur pas à jour ou hors ligne : données de l'app
-    if (j !== autoJeton) return;
+      const type = r.headers.get("Content-Type") || "";
+      if (r.status === 401 || r.status === 403) refus = "Ta session a expiré : reconnecte-toi à l'espace club pour reprendre les matchs automatiques.";
+      else if (r.status >= 500) refus = `Le serveur n'a pas pu donner les matchs du week-end (erreur ${r.status}) : réessaie dans un moment.`;
+      else if (r.ok && type.includes("json")){ const d = await r.json(); if (Array.isArray(d && d.matchs)) l = d.matchs.map(m => versListe(m, t)); }
+    } catch(err){}
+    if (!l && !refus){ source = "app"; l = depuisCalendrier(); }         // serveur d'avant cette route, ou hors ligne : le calendrier de l'app
+    if (j !== jetons[t]) return;
+    const au = e.auto[t] || {};
+    if (refus || (au.modifie && !demande)){                             // erreur, ou liste touchée pendant le chargement : on la garde
+      e.auto[t] = { samedi: sam, modifie: !!au.modifie, source: au.source || source, quand: Date.now(), erreur: refus };
+      sauver();
+      if (S.ui.onglet === "affmatchs" && e.type === t) rendrePanneau();
+      if (refus) toast(refus, true);
+      return;
+    }
+    const actif = document.activeElement;                              // la liste est remplacée : le champ en cours est quitté, sa frappe part avec l'ancienne liste
+    if (e.type === t && actif && actif.closest && actif.closest("#panneau .am-zone")) actif.blur();
+    const tous = TYPES[t].fam === "seul" ? l.slice(0, 30) : null;      // « Quel match ? » : tous les matchs du week-end
     if (TYPES[t].fam === "seul") l = choisirSeul(l, t);
     if (TYPES[t].fam === "fal") l = regrouper(l);
-    e.listes[t] = l.slice(0, MAX); e.auto[t] = { samedi: sam, modifie: false, source };
-    e.msgs[t] = { msg: "", libre: false };
+    e.listes[t] = l.slice(0, MAX); e.auto[t] = { samedi: sam, modifie: false, source, quand: Date.now(), ...(tous ? { tous } : {}) };
+    if (!e.msgs[t].libre) e.msgs[t] = { msg: "", libre: false };
     sauver();
     if (S.ui.onglet === "affmatchs" && e.type === t){ rendrePanneau(); majMessage(true); }
     if (demande) toast(l.length ? `${l.length} match${l.length > 1 ? "s" : ""} automatique${l.length > 1 ? "s" : ""} : ajoute ou corrige ce qui manque.` : "Aucun match automatique ce week-end : ajoute-les à la main.");
@@ -12133,8 +12218,14 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const e = E(), t = T(), c = e.pub;
     const z = document.getElementById("am-msg");
     if (z && z.value !== e.msgs[e.type].msg){ e.msgs[e.type].msg = z.value; e.msgs[e.type].libre = true; }
-    const texte = (z ? z.value : e.msgs[e.type].msg) || "";
     if (!L().some(m => !manque(m).length)){ toast("Ajoute au moins un match complet.", true); return; }
+    if (!e.msgs[e.type].libre && (c.fb_pub || c.ig_pub)){                 // le message suit les matchs : on le refait avec la dernière saisie
+      clearTimeout(msgT); msgJeton++;
+      const neuf = await messageCalcule(e.type);
+      if (neuf !== null){ e.msgs[e.type].msg = neuf; if (z) z.value = neuf; }
+    }
+    const texte = (z ? z.value : e.msgs[e.type].msg) || "";
+    if ((c.fb_pub || c.ig_pub) && !texte.trim() && !confirm("Le message de l'annonce est vide. Publier l'annonce sans texte ?")) return;
     if (!c.fb_pub && !c.ig_pub && !c.fb_story && !c.ig_story){ toast("Choisis où publier : annonce ou story, Facebook ou Instagram.", true); return; }
     const snap = instantane(), fs = feuilles(snap), deux = fs.length > 1;
     const envois = [], story = k => k + "_story", annonce = k => k + "_pub";
@@ -12145,7 +12236,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       if (c.ig_pub) envois.push({ fmts: fs.map(() => "carre"), nom: "Annonce Instagram", fb: false, ig: true, pub: true, story: false, texte, cle: annonce });
     }
     const quoi = deux ? "les affiches domicile et extérieur" : "l'affiche";
-    if (!confirm(`Publier maintenant ${quoi} « ${t.nom} ${t.sous} » ?\n\n${envois.map(x => "• " + x.nom + (x.story ? " (sans texte)" : " (avec le message)")).join("\n")}`)) return;
+    if (!confirm(`Publier maintenant ${quoi} « ${t.titre} » ?\n\n${envois.map(x => "• " + x.nom + (x.story ? " (sans texte)" : " (avec le message)")).join("\n")}`)) return;
     sauver();
     const bouton = () => document.querySelector('[data-am-a="publier"]');
     const dire = m => { e.enCours = m; const b = bouton(); if (b){ b.disabled = true; b.textContent = m; } };
@@ -12157,7 +12248,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     } });
     e.enCours = ""; e.etat = r.etat; sauver();
     toast(r.toutBon ? "Publié." : "Publication incomplète : regarde le détail sous le bouton.", !r.toutBon);
-    rendrePanneau();
+    if (S.ui.onglet === "affmatchs") rendrePanneau();
   }
   async function telecharger(btn){
     const f = btn.dataset.f || null, fmt = btn.dataset.k, avant = btn.innerHTML;
@@ -12187,18 +12278,28 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     S.ui.rubOuverte = null;
     rendreEspace(); window.scrollTo(0, 0);
   }
+  let redessin = false, focusGarde = null;
+  if (typeof window.rendreEspace === "function"){                       // rendreEspace remplace tout l'espace avant rendrePanneau : on note le champ en cours
+    const espaceAvant = window.rendreEspace;
+    window.rendreEspace = function(){
+      if (S.ui.onglet === "affmatchs") focusGarde = memoFocus();
+      try { return espaceAvant.apply(this, arguments); } finally { focusGarde = null; }
+    };
+  }
   const rendreAvant = window.rendrePanneau;
   window.rendrePanneau = function(){
     if (S.ui.onglet !== "affmatchs") return rendreAvant.apply(this, arguments);
     const p = document.getElementById("panneau"); if (!p) return;
-    const m = memoFocus(), y = window.scrollY;
+    const m = memoFocus() || focusGarde, y = window.scrollY; focusGarde = null;
     feuillesAvant = feuilles().join(",");
-    p.innerHTML = panAffMatchs();
+    redessin = true; try { p.innerHTML = panAffMatchs(); } finally { redessin = false; }   // les champs retirés envoient change/blur : ignorés
     try { const ec = typeof encartCle === "function" && encartCle(); if (ec) p.insertAdjacentHTML("afterbegin", ec); } catch(err){}
     requestAnimationFrame(() => window.scrollTo(0, y));
     rendreFocus(m);
     const e = E(), au = e.auto[e.type];
-    if (!(au && (au.charge || au.samedi === SAM())) && (!L().length || (au && !au.modifie))){ chargerAuto(false); return; }
+    const vieille = au && !au.modifie && !au.charge && !au.erreur && Date.now() - (au.quand || 0) > 5 * 60e3;
+    if (vieille || (!(au && (au.charge || au.samedi === SAM())) && (!L().length || (au && !au.modifie)))){ chargerAuto(false); return; }
+    if (au && au.charge) return;                                        // la fin du chargement redessine
     majApercus(true);
     if (!e.msgs[e.type].libre && !e.msgs[e.type].msg) majMessage(true);
   };
@@ -12218,41 +12319,46 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       const k = t.dataset.amG, v = t.type === "checkbox" ? t.checked : t.value;
       if (k === "samedi"){
         if (!v || v === SAM()) return;
-        e.samedis[e.type] = v; sauver();
+        e.samedis[e.type] = v; e.samedisQuand[e.type] = Date.now(); sauver();
         const a = e.auto[e.type];
         if (!L().length || !a || !a.modifie) chargerAuto(false);          // pas encore touchée : les matchs du nouveau week-end
         else { L().forEach(m => { if (!m.date) m.date = v; }); rendrePanneau(); }
         return;
+      }
+      if (k === "quel"){                                               // un autre match du week-end pour « Jour de match » / « Résultat »
+        const m = ((e.auto[e.type] || {}).tous || [])[+v]; if (!m) return;
+        e.listes[e.type] = [JSON.parse(JSON.stringify(m))]; marquer(); e.msgs[e.type] = { msg: "", libre: false };
+        sauver(); rendrePanneau(); majMessage(true); return;
       }
       if (e[k] === v) return;
       e[k] = v;
       apresSaisie(); return;
     }
     const m = L()[+t.dataset.i]; if (!m) return;
-    marquer();
     const k = t.dataset.am;
-    if (k === "seulNous"){ m.seulNous = t.checked; const l = t.closest(".af-choix"); if (l) l.classList.toggle("on", t.checked); apresSaisie(); return; }
+    if (k === "seulNous"){ if (m.seulNous === t.checked) return; marquer(); m.seulNous = t.checked; const l = t.closest(".af-choix"); if (l) l.classList.toggle("on", t.checked); apresSaisie(); return; }
     if (/^t-/.test(k)){
       const q = pls(m)[+t.dataset.q], p = q && q.matchs[+t.dataset.j]; if (!p) return; const kk = k.slice(2);
-      if (p[kk] === t.value) return; p[kk] = t.value;
+      if (p[kk] === t.value) return; marquer(); p[kk] = t.value;
       if (kk === "a" || kk === "b"){ sauver(); rendrePanneau(); majMessage(); return; }
     }
     else if (/^p-/.test(k)){
       const q = det(m)[+t.dataset.k]; if (!q) return; const kk = k.slice(2);
-      if (kk === "poule"){ if (q.poule === t.value) return; q.poule = t.value; }
-      else { const p = q.matchs[+t.dataset.j]; if (!p || p[kk] === t.value) return; p[kk] = t.value; }
+      const p = q.matchs[+t.dataset.j]; if (!p || p[kk] === t.value) return; marquer(); p[kk] = t.value;
     }
-    else if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; r[kk] = t.value; }
+    else if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; marquer(); r[kk] = t.value; }
     else {
       if (m[k] === t.value) return;
-      if (k === "equipes" && det(m).slice(+t.value).some(q => q.matchs.length || q.poule) && !confirm("Retirer les équipes en trop, avec leur poule et leurs matchs ?")){ t.value = String(det(m).length); return; }
-      m[k] = t.value;
+      if (k === "equipes" && det(m).slice(+t.value).some(q => q.matchs.length) && !confirm("Retirer les équipes en trop, avec leurs matchs ?")){ t.value = String(det(m).length); return; }
+      marquer(); m[k] = t.value;
+      if (k === "adv"){ const z = document.querySelector(`[data-am-advlib="${t.dataset.i}"]`); if (z) z.textContent = joli(m.adv) || "adversaire"; }
     }
     if (T().fam === "fal" && (k === "equipes" || k === "equipe")){ m.numeros = ""; sauver(); rendrePanneau(); majMessage(); return; }
     apresSaisie();
   }
   ["input", "change"].forEach(ty => document.addEventListener(ty, ev => {
-    const t = ev.target; if (!t.matches) return;
+    const t = ev.target; if (!t.matches || redessin) return;
+    if (ty === "change" && t.matches("[data-am-club]")) return;            // déjà enregistré à chaque lettre (input)
     if (t.matches("[data-am], [data-am-g]")){ saisie(t); return; }
     if (t.matches("[data-am-msg]") && ty === "input"){ const mm = E().msgs[E().type]; mm.msg = t.value; mm.libre = true; sauver(); const lb = document.getElementById("am-libre"); if (lb) lb.hidden = false; return; }
     if (t.matches("[data-am-pub]") && ty === "change"){
@@ -12268,6 +12374,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (e.enCours && !["fmt", "msg-copier", "dl"].includes(a)){ if (a !== "publier") toast("Publication en cours : attends la fin.", true); return; }
     if (a === "type"){ e.type = b.dataset.k; e.etat = ""; sauver(); rendrePanneau(); return; }
     if (a === "fmt"){ e.fmt = b.dataset.k; sauver(); rendrePanneau(); return; }
+    if (a === "reessayer"){ majApercus(true); return; }
     if (a === "ajout"){
       const der = l[l.length - 1];
       const m = nouveau(e.type, SAM()); marquer();
@@ -12326,6 +12433,19 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (a === "dl"){ await telecharger(b); return; }
     if (a === "publier"){ if (!e.enCours) await publier(); return; }
   });
+
+  /* ---------- aperçu en grand : toucher l'image l'ouvre en plein écran ---------- */
+  document.addEventListener("click", ev => {
+    const i = ev.target.closest && ev.target.closest("#panneau [data-am-img]");
+    const z = document.getElementById("am-zoom");
+    if (z && (ev.target === z || ev.target.closest("[data-am-zoom-x]"))){ z.remove(); return; }
+    if (!i || !i.getAttribute("src")) return;
+    const d = document.createElement("div");
+    d.id = "am-zoom"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", i.alt);
+    d.innerHTML = `<button type="button" class="btn bleu petit" data-am-zoom-x>✕ Fermer</button><img src="${i.src}" alt="${esc(i.alt)}">`;
+    document.body.appendChild(d); d.querySelector("button").focus();
+  });
+  document.addEventListener("keydown", ev => { const z = document.getElementById("am-zoom"); if (z && ev.key === "Escape") z.remove(); });
 
   /* ---------- styles ---------- */
   const css = document.createElement("style");
@@ -12398,7 +12518,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 .am-puce button:hover{background:rgba(255,255,255,.12)}
 .am-score .am-club{flex:1 1 160px;min-width:0}
 .am-club{position:relative;display:flex;align-items:center;gap:8px;min-width:0}
-.am-club input{flex:1 1 auto;min-width:0;padding-right:40px;scroll-margin-top:130px}
+.am-club input,body.sur-espace .am-club input{flex:1 1 auto;min-width:0;padding-right:40px;scroll-margin-top:130px}
 .am-club-x{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--texte-doux);font:800 15px var(--corps);min-width:34px;min-height:34px;border-radius:999px;cursor:pointer}
 .am-club-ajout .am-club-x{right:96px}
 .am-club-x:hover{background:rgba(143,168,240,.16)}
@@ -12409,11 +12529,26 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 .am-club-gr{display:block;padding:8px 12px 4px;font:800 11.5px var(--corps);letter-spacing:.08em;text-transform:uppercase;color:var(--texte-doux)}
 .am-club-opt{display:block;padding:10px 12px;font:600 15px var(--corps);cursor:pointer;min-height:22px}
 .am-club-opt small{display:block;font:600 12px var(--corps);color:var(--texte-doux)}
-.am-club-opt:hover,.am-club-opt.actif{background:rgba(28,99,196,.22)}
+.am-club-opt:hover{background:rgba(28,99,196,.10)}
+.am-club-opt.actif{background:rgba(28,99,196,.30);box-shadow:inset 3px 0 0 var(--bleu-clair,#8FA8F0)}
 .am-club-libre{border-bottom:1px solid var(--ligne)}
 .am-club-vide{display:block;padding:10px 12px;color:var(--texte-doux);font:600 14px var(--corps)}
 .am-manque{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:rgba(232,131,58,.14);font-size:14px}
-.am-manque[hidden]{display:none}
+.am-manque[hidden],.am-avert[hidden]{display:none}
+.am-lieu .as-fmt{min-height:44px;padding:10px 14px;font-size:15px}
+.am-score-match .am-sc{white-space:nowrap}
+.am-err{background:rgba(232,131,58,.16)}
+.am-quel{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+#panneau [data-am-img][src]{cursor:zoom-in}
+#panneau [data-am-img]:not([src]){visibility:hidden}
+.ev-cadre{position:relative}
+.am-vide-ap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;font:600 14px var(--corps);color:var(--texte-doux)}
+.ev-cadre:has(img[src]) .am-vide-ap,.ev-cadre:has(img.charge) .am-vide-ap{display:none}
+#am-zoom{position:fixed;inset:0;z-index:200;background:rgba(3,8,24,.92);display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;overflow:auto}
+#am-zoom img{max-width:min(100%,720px);height:auto;border-radius:8px}
+#am-zoom button{align-self:flex-end}
+@media (max-width:560px){ .am-apercus:has(.am-fig + .am-fig){grid-template-columns:minmax(0,1fr)} }
+.am-avert{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:rgba(143,168,240,.12);font-size:14px}
 .am-ajout{width:100%;margin-top:12px}
 .am-options{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin-top:16px;padding-top:14px;border-top:1px solid var(--ligne)}
 .am-options label:first-child{display:flex;flex-direction:column;gap:6px;flex:1 1 220px}

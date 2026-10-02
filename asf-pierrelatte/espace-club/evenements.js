@@ -18,19 +18,23 @@
   const couper = (s, n) => Array.from(String(s || "")).slice(0, n).join("");
   const RESEAUX = { fb: "Facebook", ig: "Instagram" };
   /* états renvoyés par publier.php pour un envoi → réseau par réseau, publié ou non */
+  /* publié seulement si la ligne du réseau dit exactement « Facebook : publié » (publier.php écrit sinon l'erreur après les deux-points) ;
+     un réseau sans ligne à lui reste inconnu : pas compté comme publié */
+  const PUBLIE = /^\s*(facebook|instagram)\s*:\s*publi(é|ée|és|ées)\s*\.?\s*$/i;
   function lireEtats(etats, x){
     const l = (etats || []).map(String);
     const res = {};
     for (const k of ["fb", "ig"]) if (x[k]){
-      const miens = l.filter(s => s.toLowerCase().startsWith(RESEAUX[k].toLowerCase()));
-      res[k] = miens.length ? miens.every(s => /publi/i.test(s)) : (l.length ? l.every(s => /publi/i.test(s)) : true);
+      const miens = l.filter(s => s.trim().toLowerCase().startsWith(RESEAUX[k].toLowerCase()));
+      res[k] = miens.length ? miens.every(s => PUBLIE.test(s)) : null;
     }
-    return { ok: Object.values(res).every(Boolean), res, texte: l.join(" · ") };
+    return { ok: Object.values(res).every(v => v === true), res, texte: l.join(" · ") };
   }
   /* série d'envois à publier.php, l'un après l'autre ; après un échec, les cases déjà parties sont décochées
      pour qu'un nouveau clic n'envoie que le reste. x.cle(k) donne la case de x pour le réseau k (fb_pub, ig_story…). */
   async function serieDePublication({ envois, pub, dire, preparer }){
-    const lignes = [];
+    const lignes = [], CASES = ["fb_pub", "ig_pub", "fb_story", "ig_story"];
+    if (!pub._choix) pub._choix = Object.fromEntries(CASES.filter(k => k in pub).map(k => [k, !!pub[k]]));   // les choix de départ, rendus à la fin
     let erreur = null, incomplet = false;
     for (const [i, x] of envois.entries()){
       const pre = `${i + 1}/${envois.length} · ${x.nom} : `;
@@ -45,8 +49,8 @@
         fd.append("publication", x.pub ? "1" : "0"); fd.append("story", x.story ? "1" : "0");
         const r = await lancerPublication((window.ASFP_API || "/api") + "/publier.php", { method: "POST", body: fd }, m => dire(pre + m));
         const b = lireEtats(r, x);
-        lignes.push(`${b.ok ? "✅" : "⚠️"} ${x.nom} : ${b.texte || "publié"}`);
-        for (const k of ["fb", "ig"]) if (x[k] && b.res[k]) pub[x.cle(k)] = false;          // parti : décoché (recoché plus bas si tout est bon)
+        lignes.push(`${b.ok ? "✅" : "⚠️"} ${x.nom} : ${b.texte || "pas de réponse détaillée, regarde sur la page avant de republier"}`);
+        for (const k of ["fb", "ig"]) if (x[k] && b.res[k] === true) pub[x.cle(k)] = false;  // parti : décoché (recoché plus bas si tout est bon)
         if (!b.ok) incomplet = true;
       } catch(err){
         erreur = err; incomplet = true;
@@ -56,7 +60,11 @@
         if (peutEtre){ for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = false; }
       }
     }
-    if (!incomplet) for (const x of envois) for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = true;   // tout est parti : on garde les choix
+    if (!incomplet){                                                     // tout est parti : on rend les choix du premier clic
+      for (const x of envois) for (const k of ["fb", "ig"]) if (x[k]) pub[x.cle(k)] = true;
+      if (pub._choix) Object.assign(pub, pub._choix);
+      delete pub._choix;
+    }
     const etat = (incomplet ? "⚠️ Publication incomplète. Les cases déjà publiées sont décochées : reclique sur « Publier maintenant » pour envoyer le reste.\n" : "✅ Publié.\n") + lignes.join("\n");
     return { toutBon: !incomplet, etat };
   }
@@ -124,6 +132,7 @@
       if (TYPES[d.type]) E.type = d.type;
       if (FORMATS.some(f => f[0] === d.fmt)) E.fmt = d.fmt;
       if (d.pub && typeof d.pub === "object") for (const k of Object.keys(E.pub)) if (typeof d.pub[k] === "boolean") E.pub[k] = d.pub[k];
+      if (d.pub && d.pub._choix && typeof d.pub._choix === "object") E.pub._choix = { ...d.pub._choix };
       if (d.brouillons && typeof d.brouillons === "object") for (const t of Object.keys(TYPES)) if (d.brouillons[t]) E.brouillons[t] = { ...vierge(t), ...d.brouillons[t] };
     }
     for (const t of Object.keys(TYPES)) if (!E.brouillons[t]) E.brouillons[t] = vierge(t);
@@ -289,9 +298,9 @@
     let o = p;
     for (const k of Object.keys(p)){
       const v = p[k];
-      if (v && Array.isArray(v.onglets) && v.onglets.includes("affiches") && AVEC_AFFICHES.some(x => !v.onglets.includes(x))){
+      if (v && Array.isArray(v.onglets) && v.onglets.includes("affiches") && v.ongletsAffiches !== true){
         if (o === p) o = { ...p };
-        o[k] = { ...v, onglets: [...new Set([...v.onglets, ...AVEC_AFFICHES])] };
+        o[k] = { ...v, onglets: [...new Set([...v.onglets, ...AVEC_AFFICHES])], ongletsAffiches: true };   // marqueur réécrit en base au prochain enregistrement
       }
     }
     return o;
@@ -391,7 +400,7 @@
     etat(r.etat);
     toast(r.toutBon ? "Publié." : "Publication incomplète : regarde le détail sous le bouton.", !r.toutBon);
     if (r.toutBon){ const x = bouton(); if (x){ x.disabled = false; x.textContent = "📣 Publier maintenant"; } }
-    else rendrePanneau();                                              // cases décochées pour ce qui est déjà parti
+    else if (S.ui.onglet === "evenements") rendrePanneau();           // cases décochées pour ce qui est déjà parti
   }
 
   /* ---------- écouteurs (attributs data-ev*, à part de ceux de l'application) ---------- */

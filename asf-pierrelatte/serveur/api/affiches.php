@@ -1625,9 +1625,13 @@ function afn_actif(?string $lieu = null): bool { return aff_polices_ok() && afn_
 function afn_bb(string $t, float $px, string $f): array { return @imagettfbbox($px * .75, 0, $f, $t) ?: [0, 0, 0, 0, 0, 0, 0, 0]; }
 /* avance (largeur typographique, comme dans le navigateur) ; $ls : espacement des lettres en pixels */
 function afn_larg(string $t, float $px, string $p, float $ls = 0): float {
+    static $memo = [];
     if ($t === '') return 0;
-    $f = afn_police($p); if ($f === '') return mb_strlen($t) * $px * .5;
-    return afn_bb($t . 'H', $px, $f)[2] - afn_bb('H', $px, $f)[2] + $ls * mb_strlen($t);
+    $k = "$p|$px|$ls|$t";
+    if (isset($memo[$k])) return $memo[$k];
+    if (count($memo) > 50000) $memo = [];
+    $f = afn_police($p); if ($f === '') return $memo[$k] = mb_strlen($t) * $px * .5;
+    return $memo[$k] = afn_bb($t . 'H', $px, $f)[2] - afn_bb('H', $px, $f)[2] + $ls * mb_strlen($t);
 }
 /* écrit sur la ligne de base $y ; $col : couleur déjà allouée ; renvoie la largeur */
 function afn_texte($im, string $t, float $x, float $y, float $px, string $p, int $col, string $align = 'left', float $ls = 0): float {
@@ -2385,7 +2389,7 @@ function afn_titres(array $A, string $sur, string $t1, string $t2, string $date,
         afn_texte_degrade($im, $t2, $x, $y + .875 * $s2, $s2, '900i', $A['metal'], $y, $y + .95 * $s2);
     }
     if ($date !== '') {
-        $fd = $F['t2'] * .36; $yd = $F['date'] + 1.024 * $fd;
+        $fd = afn_fit($date, $F['t2'] * .36, 's700', AFF_W - 2 * $x, .6); $yd = $F['date'] + 1.024 * $F['t2'] * .36;
         afn_ombre_texte($im, $date, $x, $yd, $fd, 's700', 2, 12, .9);
         afn_texte($im, $date, $x, $yd, $fd, 's700', aff_c($im, '#FFFFFF'));
     }
@@ -2401,6 +2405,7 @@ function afn_zone(array $A, array $blocs, float $zoomMax): void {
         if ($tot * $k <= $zh || $k <= .3) break;
         $k -= .01;
     }
+    if ($tot * $k > $zh + 2 || $k < .38) $GLOBALS['afn_deborde'] = true;          // illisible ou plus haut que la zone
     $gap = 12;
     if ($n > 1 && $zh - $tot * $k > 0) $gap = min(30, 12 + ($zh - $tot * $k) / $k / ($n - 1));
     $total = (array_sum($hs) + $gap * ($n - 1)) * $k;
@@ -2481,9 +2486,16 @@ function afn_cat(array $m, bool $fal): array {
 function afn_jour(string $d): string { return ucfirst(AFF_JOURS[(int) date('w', strtotime($d . ' 12:00'))]); }
 function afn_quand(string $d): string { $t = strtotime($d . ' 12:00'); $j = (int) date('j', $t); return ucfirst(AFF_JOURS[(int) date('w', $t)]) . ' ' . ($j === 1 ? '1er' : $j) . ' ' . AFF_MOIS[(int) date('n', $t) - 1]; }
 /* « Samedi 3 et dimanche 4 octobre », « Vendredi 2, samedi 3 et dimanche 4 octobre », « Samedi 31 octobre et dimanche 1er novembre » */
+function afn_plusieurs_weekends(array $dates): bool {
+    return $dates && (strtotime(max($dates) . ' 12:00') - strtotime(min($dates) . ' 12:00')) > 2.5 * 86400;
+}
 function afn_date_weekend(array $plan, string $samedi): string {
     $jours = array_column($plan, 'date');
     if (!$jours) $jours = array_slice(aff_weekend($samedi), 1);
+    if (afn_plusieurs_weekends($jours)) {                                          // matchs sur plusieurs week-ends : « Du 30 septembre au 10 octobre »
+        $d1 = strtotime(min($jours) . ' 12:00'); $d2 = strtotime(max($jours) . ' 12:00'); $j1 = (int) date('j', $d1); $j2 = (int) date('j', $d2);
+        return 'Du ' . ($j1 === 1 ? '1er' : $j1) . (date('n', $d1) !== date('n', $d2) ? ' ' . AFF_MOIS[(int) date('n', $d1) - 1] : '') . ' au ' . ($j2 === 1 ? '1er' : $j2) . ' ' . AFF_MOIS[(int) date('n', $d2) - 1];
+    }
     $mois = fn($d) => (int) date('n', strtotime($d . ' 12:00'));
     $parts = [];
     foreach ($jours as $i => $d) {
@@ -2502,10 +2514,11 @@ function afn_stade(array $m): string {
     return $t !== '' ? $t : aff_lieu($m);
 }
 function afn_blocs(array $liste, bool $resultats, bool $fal): array {
-    $out = [];
+    $out = []; $multi = afn_plusieurs_weekends(array_column($liste, 'date'));
+    $jour = fn($d) => $multi ? mb_substr(afn_jour($d), 0, 3) . '. ' . date('d/m', strtotime($d . ' 12:00')) : afn_jour($d);   // « Sam. 10/10 »
     foreach ($liste as $m) {
         [$cat, $niv] = afn_cat($m, $fal);
-        $b = ['cat' => $cat, 'niv' => $niv, 'dom' => !empty($m['dom']), 'adv' => (string) ($m['adv'] ?? ''), 'jour' => afn_jour($m['date']),
+        $b = ['cat' => $cat, 'niv' => $niv, 'dom' => !empty($m['dom']), 'adv' => (string) ($m['adv'] ?? ''), 'jour' => $jour($m['date']),
               'heure' => aff_hfr((string) ($m['heure'] ?? '')), 'quand' => afn_quand($m['date']), 'lieu' => afn_stade($m)];
         if ($fal) {
             $club = aff_nom_club((string) ($m['adv'] ?? ''));
@@ -2696,12 +2709,14 @@ function afn_manuel_lire(array $d): array {
     foreach (array_slice(is_array($d['matchs'] ?? null) ? $d['matchs'] : [], 0, AFN_MAX_MANUEL) as $i => $m) {
         if (!is_array($m)) continue;
         $date = (string) ($m['date'] ?? '');
-        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $dd) || !checkdate((int) $dd[2], (int) $dd[3], (int) $dd[1])) continue;
-        $heure = preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', (string) ($m['heure'] ?? '')) ? (string) $m['heure'] : '';
-        $x = ['id' => ($fal ? 'pl-man' : ($vet ? 'vet-man' : 'man-')) . $i, 'equipe' => $txt($m['equipe'] ?? '', 40), 'comp' => $txt($m['comp'] ?? '', 40),
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $date, $dd) || !checkdate((int) $dd[2], (int) $dd[3], (int) $dd[1])) continue;
+        $heure = is_scalar($m['heure'] ?? null) && preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/D', (string) $m['heure'], $hm) ? sprintf('%02d:%s', $hm[1], $hm[2]) : '';
+        // id « fff-man- » : un match de championnat saisi à la main n'est jamais pris pour du foot animation
+        $x = ['id' => ($fal ? 'pl-man' : ($vet ? 'vet-man' : 'fff-man-')) . $i, 'equipe' => $txt($m['equipe'] ?? '', 40), 'comp' => $txt($m['comp'] ?? '', 40),
               'adv' => $txt($m['adv'] ?? '', 60), 'dom' => !empty($m['dom']), 'date' => $date, 'heure' => $heure,
               'bp' => $but($m['bp'] ?? null), 'bc' => $but($m['bc'] ?? null), 'adresse' => $txt($m['adresse'] ?? '', 120), '_maj' => ''];
         if ($vet && $x['equipe'] === '') $x['equipe'] = 'Vétérans';
+        if (!$fal && !$vet && $x['equipe'] === '') continue;                            // une équipe sans nom n'est pas dessinée
         if ($fal) {
             // « U10-U11 », « u10/u11 espoir » → « U10 · U11 ESPOIR », comme les fiches du foot animation
             $x['equipe'] = preg_replace('/^(U\s?\d{1,2})\s*[-\/·]\s*(U\s?\d{1,2})/u', '$1 · $2', aff_maj($x['equipe']));
@@ -2721,7 +2736,7 @@ function afn_manuel_lire(array $d): array {
             $x['resultats'] = [];
             foreach (array_slice(is_array($m['resultats'] ?? null) ? $m['resultats'] : [], 0, 6) as $r)
                 if (is_array($r) && $txt($r['adv'] ?? '', 60) !== '') $x['resultats'][] = ['adv' => aff_maj($txt($r['adv'], 60)), 'bp' => $but($r['bp'] ?? null), 'bc' => $but($r['bc'] ?? null)];
-            $hhf = fn($v) => preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', (string) $v, $hm) ? sprintf('%02d:%s', $hm[1], $hm[2]) : '';
+            $hhf = fn($v) => is_scalar($v) && preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/D', (string) $v, $hm) ? sprintf('%02d:%s', $hm[1], $hm[2]) : '';
             $parHeure = fn($a, $b) => (($a['heure'] === '') <=> ($b['heure'] === '')) ?: strcmp($a['heure'], $b['heure']);
             // plateau : les matchs de chacune de nos équipes (heure, adversaire, score), triés par heure
             $nosEq = [];
@@ -2772,12 +2787,13 @@ function afn_manuel_lire(array $d): array {
                 if ($x['heure'] === '' && $hs) $x['heure'] = min($hs);
             }
             $x['bp'] = $x['bc'] = null;
-            if (!$x['dom'] && $x['adv'] === '' && $x['adresse'] === '') continue;          // plateau à l'extérieur : il faut savoir où
+            if (!$x['dom'] && $x['adv'] === '') continue;                                 // plateau à l'extérieur : il faut le club qui reçoit
             if ($x['equipe'] === '') continue;
         } elseif ($x['adv'] === '') continue;                                         // un match sans adversaire n'est pas dessiné
         $out[] = $x;
     }
-    $ref = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($d['samedi'] ?? '')) ? (string) $d['samedi'] : ($out ? min(array_column($out, 'date')) : date('Y-m-d'));
+    $sa = is_scalar($d['samedi'] ?? null) ? (string) $d['samedi'] : '';
+    $ref = preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $sa, $sd) && checkdate((int) $sd[2], (int) $sd[3], (int) $sd[1]) ? $sa : ($out ? min(array_column($out, 'date')) : date('Y-m-d'));
     $t = strtotime($ref . ' 12:00'); $w = (int) date('w', $t);
     return [$type, $out, date('Y-m-d', $t + (($w === 0 ? -1 : 6 - $w) * 86400))];
 }
@@ -2820,10 +2836,11 @@ function afn_manuel_route(): void {
         exit;
     }
     aff_format(in_array($d['format'] ?? '', ['carre', 'post', 'fb'], true) ? $d['format'] : 'story');
-    $opts = ['titre' => mb_substr(trim(afn_sans_emoji((string) ($d['titre'] ?? ''))), 0, 80), 'sponsors' => ($d['sponsors'] ?? true) !== false];
+    $opts = ['titre' => mb_substr(trim(afn_sans_emoji(is_scalar($d['titre'] ?? null) ? (string) $d['titre'] : '')), 0, 80), 'sponsors' => ($d['sponsors'] ?? true) !== false];
     ob_start();                                                                // un avertissement PHP ne doit jamais casser l'image
     if ($type === 'match' || $type === 'score') {
         if (!$matchs) { http_response_code(422); header('Content-Type: text/plain; charset=utf-8'); echo 'Ajoute le match : date et adversaire.'; exit; }
+        if ($type === 'score' && !aff_joue($matchs[0])) { http_response_code(422); header('Content-Type: text/plain; charset=utf-8'); echo 'Ajoute le score du match.'; exit; }
         $im = aff_match($matchs[0], $opts + ['score' => $type === 'score']);
     } else {
         $GLOBALS['aff_fal'] = $fal; $GLOBALS['aff_vet'] = $vet;
@@ -2832,6 +2849,7 @@ function afn_manuel_route(): void {
     }
     ob_end_clean();
     if (!$im) $refus(500, "L'affiche n'a pas pu être dessinée.");
+    if (!empty($GLOBALS['afn_deborde'])) $refus(422, 'Trop de matchs pour une seule affiche : fais-en deux (par exemple une à domicile et une à l\'extérieur, ou en deux parties).');
     header('Content-Type: image/jpeg'); header('Cache-Control: no-store');
     if (!empty($_GET['telecharger'])) header('Content-Disposition: attachment; filename="asf-pierrelatte-' . $type . ($lieu ? "-$lieu" : '') . "-$samedi.jpg\"");
     imagejpeg($im, null, 92);
@@ -3100,7 +3118,8 @@ function aff_message_resultats(array $matchs, string $samedi, ?string $lieu = nu
     }
     $total = count($v) + count($n) + count($d);
     if (!$total && !$nc) return '';
-    if ($total && count($v) === $total) $intro = "🔥 Carton plein ce week-end pour l'ASF Pierrelatte ! Toutes nos équipes se sont imposées 💙";
+    if ($nc) $intro = "⚽ Voici les résultats du week-end de l'ASF Pierrelatte !";
+    elseif ($total && count($v) === $total) $intro = "🔥 Carton plein ce week-end pour l'ASF Pierrelatte ! Toutes nos équipes se sont imposées 💙";
     elseif (count($v) > count($d)) $intro = "⚽ Beau week-end pour l'ASF Pierrelatte ! Voici les résultats de nos équipes 💙";
     elseif (count($v) === count($d) && $total) $intro = "⚽ Voici les résultats du week-end de l'ASF Pierrelatte !";
     else $intro = "⚽ Week-end compliqué pour nos équipes, mais on se relève ensemble dès la semaine prochaine 💪";
@@ -3170,7 +3189,9 @@ function aff_message_veterans(array $matchs, string $samedi, bool $resultats): s
     $GLOBALS['aff_vet'] = false;
     if (trim($t) === '') return '';
     $t = preg_replace("/^[^\n]*\n/u", '', $t, 1);                        // on remplace la phrase d'introduction générale
-    return ($resultats ? "⚽ Vétérans : le résultat du week-end\n" : "⚽ Vétérans : le match du week-end\n") . $t;
+    $GLOBALS['aff_vet'] = true; $nb = array_sum(array_map(fn($j) => count($j['matchs']), aff_plan_weekend($matchs, $samedi, $resultats))); $GLOBALS['aff_vet'] = false;
+    return ($resultats ? ($nb > 1 ? "⚽ Vétérans : les résultats du week-end\n" : "⚽ Vétérans : le résultat du week-end\n")
+        : ($nb > 1 ? "⚽ Vétérans : les matchs du week-end\n" : "⚽ Vétérans : le match du week-end\n")) . $t;
 }
 function aff_message_rencontres(array $matchs, string $samedi, ?string $lieu = null): string {
     $plan = aff_plan_weekend($matchs, $samedi, false, $lieu);
