@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Affiche de la semaine · ASF Pierrelatte</title>
+<!--
+  AFFICHES DE LA SEMAINE · ASF PIERRELATTE
+  Une seule page qui dessine une affiche à partir de ses données.
+
+  Utilisation :
+    affiche.html?d=resultats-dom            charge donnees/resultats-dom.js (fichier d'exemple) et dessine l'affiche
+    affiche.html?d=resultats-dom&f=insta    même affiche au format Instagram (fb = Facebook 1080x2160, insta = 1080x1350, story = 1080x1920)
+    affiche.html                            liste des exemples
+  Depuis un autre script : dessinerAffiche({ ...données... }) (voir LISEZ-MOI.md pour le format des données).
+  La page ajoute body[data-pret] quand l'affiche est terminée (utile pour faire une capture automatique).
+-->
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,600;1,700;1,800;1,900&family=Source+Sans+3:wght@400;600;700;800&family=Kaushan+Script&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--or:#E3B64C;--or-clair:#F7DC92;--or-metal:linear-gradient(180deg,#FFF3C4 0%,#F2CD6C 40%,#C99A2E 66%,#F0CF7A 100%);
+  --ar-metal:linear-gradient(180deg,#FFFFFF 0%,#DCE8FB 38%,#9DB9E6 66%,#E8F0FC 100%);--club:#1C4FC4;--nuit:#040A1E;--ciel:#C9D4F2}
+.dom{--acc:#E3B64C;--acc-clair:#F7DC92;--metal:var(--or-metal)}
+.ext{--acc:#A9C4EE;--acc-clair:#E1EBFB;--metal:var(--ar-metal)}
+html,body{background:#1b1f2a;font-family:"Source Sans 3",sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+.affiche{position:relative;overflow:hidden;width:var(--W);height:var(--H);background:#030817}
+.fond{position:absolute;inset:0;background-size:var(--W) var(--H);background-repeat:no-repeat}
+.voile{position:absolute;inset:0}
+.a{position:absolute;z-index:2}
+.cond{font-family:"Barlow Condensed",sans-serif}
+.metal{background:var(--metal);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* barre du haut */
+.barre{left:0;right:0;top:0;height:var(--barre);display:flex;align-items:center;justify-content:space-between;padding:0 34px;background:#050B1F;
+  box-shadow:inset 0 -3px 0 var(--acc);font:800 calc(var(--barre)*.36) "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#fff}
+.barre span{color:var(--acc-clair);font-size:.82em;letter-spacing:.18em}
+/* en-tête façon page d'accueil du site : blason + 1923 */
+.tete{left:46px;top:var(--tete);display:flex;align-items:center;gap:18px}
+.tete img{width:var(--bl);height:var(--bl);object-fit:contain;filter:drop-shadow(0 8px 20px rgba(0,0,0,.6))}
+.an{font:900 italic var(--an)/.8 "Barlow Condensed",sans-serif;color:transparent;-webkit-text-stroke:2px rgba(247,220,146,.85);letter-spacing:-.01em}
+.ext .an{-webkit-text-stroke-color:rgba(225,235,251,.85)}
+.puce{right:46px;top:calc(var(--tete) + var(--bl)*.5 - 26px);display:flex;align-items:center;gap:10px;height:52px;padding:0 22px 0 16px;border-radius:999px;background:var(--metal);
+  color:#0B1633;font:900 26px "Barlow Condensed",sans-serif;letter-spacing:.07em;text-transform:uppercase;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.puce svg{width:28px;height:28px;fill:#0B1633}
+/* grand titre */
+.titre{left:46px;top:var(--titre);max-width:640px}
+.sur{display:flex;align-items:center;gap:14px;font:800 calc(var(--t2)*.26) "Source Sans 3",sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--acc-clair);margin-bottom:12px;white-space:nowrap}
+.sur i{width:40px;height:3px;background:var(--metal);flex:none}
+.t1{display:block;font:900 italic var(--t1)/.86 "Barlow Condensed",sans-serif;text-transform:uppercase;white-space:nowrap;text-shadow:0 6px 30px rgba(0,0,0,.55);max-width:640px}
+.t2{display:block;font:900 italic var(--t2)/.95 "Barlow Condensed",sans-serif;text-transform:uppercase;white-space:nowrap;margin-top:4px;filter:drop-shadow(0 4px 18px rgba(0,0,0,.5));max-width:640px}
+.date{left:46px;top:var(--date);font:700 calc(var(--t2)*.36) "Source Sans 3",sans-serif;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.9)}
+/* la liste */
+.zone{left:30px;right:30px;display:flex;flex-direction:column;justify-content:center}
+.lignes{display:flex;flex-direction:column;gap:12px;transform-origin:top center}
+.ligne{position:relative;display:grid;align-items:stretch;min-height:92px;border-radius:14px;overflow:hidden;
+  background:linear-gradient(90deg,rgba(9,20,54,.95),rgba(5,12,34,.93));box-shadow:0 12px 30px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08)}
+.cat{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:8px 10px;position:relative;
+  background:repeating-linear-gradient(-55deg,rgba(255,255,255,.07) 0 6px,transparent 6px 16px),linear-gradient(160deg,#2457CF,#132F7E);box-shadow:inset -3px 0 0 var(--acc)}
+.cat b{display:block;max-width:100%;font:900 34px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.cat small{display:block;max-width:100%;margin-top:4px;font:800 14px/1.1 "Source Sans 3",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--acc-clair);white-space:nowrap;overflow:hidden}
+.eq{display:flex;align-items:center;gap:14px;min-width:0;padding:0 14px}
+.eq.g{justify-content:flex-end}
+.nom{font:800 30px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0}
+.nom.deux{white-space:normal;line-height:.95;overflow-wrap:anywhere}
+.eq.g .nom{text-align:right}
+.nom.eux{color:#D3DDF4;font-weight:700}
+.bl{display:grid;place-items:center;flex:none;width:var(--d);height:var(--d);border-radius:50%;background:#fff;overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.25),0 6px 14px rgba(0,0,0,.45)}
+.bl img{width:86%;height:86%;object-fit:contain}
+.bl.ini{background:radial-gradient(circle at 35% 30%,#4A5784,#1B2340 70%);box-shadow:0 0 0 2px rgba(255,255,255,.35),0 6px 14px rgba(0,0,0,.45)}
+.bl.ini b{font:900 calc(var(--d)*.42) "Barlow Condensed",sans-serif;color:#fff}
+.score{display:flex;align-items:center;justify-content:center;gap:5px;padding:0 4px}
+.score b{display:grid;place-items:center;width:56px;height:62px;border-radius:9px;font:900 44px "Barlow Condensed",sans-serif;color:#fff}
+.V .score b,.score.V b{background:linear-gradient(180deg,#2BB566,#16773F)}.D .score b,.score.D b{background:linear-gradient(180deg,#D9534B,#9C2A24)}.N .score b,.score.N b{background:linear-gradient(180deg,#6F7C9C,#465170)}
+.score b.nous{box-shadow:inset 0 0 0 3px var(--acc-clair)}
+.heure{display:flex;flex-direction:column;align-items:center;justify-content:center;margin:12px 4px;border-radius:10px;background:var(--metal);color:#0B1633}
+.heure small{font:800 14px/1 "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase}
+.heure b{font:900 italic 40px/1 "Barlow Condensed",sans-serif}
+.lieu{display:flex;align-items:center;gap:7px;font:700 17px "Source Sans 3",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--acc-clair);white-space:nowrap;overflow:hidden}
+.lieu svg{width:17px;height:17px;fill:var(--acc);flex:none}
+.contre{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:8px}
+.contre em{font:italic 700 18px "Source Sans 3",sans-serif;color:var(--ciel)}
+.adv{display:inline-flex;align-items:center;gap:8px;font:800 24px/1 "Barlow Condensed",sans-serif;text-transform:uppercase;color:#E6ECFA;white-space:nowrap}
+.sous{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;margin-top:8px}
+.sous .score b{width:42px;height:44px;font-size:32px;border-radius:7px}
+.sous .nom{font-size:24px}
+.duo{border-radius:22px;overflow:hidden;background:linear-gradient(180deg,rgba(9,20,54,.94),rgba(5,12,34,.94));box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1)}
+.duo-tete{display:flex;justify-content:center;align-items:center;gap:14px;padding:16px;font:900 26px "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;
+  background:repeating-linear-gradient(-55deg,rgba(255,255,255,.07) 0 6px,transparent 6px 16px),linear-gradient(160deg,#2457CF,#132F7E);box-shadow:inset 0 -3px 0 var(--acc)}
+.duo-tete span{color:var(--acc-clair)}
+.duo-corps{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;padding:34px 26px 26px}
+.duo-eq{display:flex;flex-direction:column;align-items:center;gap:18px;min-width:0;text-align:center}
+.duo-eq .nom{font-size:44px;max-width:100%}
+.duo .score b{width:104px;height:120px;font-size:96px;border-radius:14px}
+.duo .heure{margin:0;padding:12px 22px}.duo .heure small{font-size:22px}.duo .heure b{font-size:78px}
+.duo-pied{display:flex;justify-content:center;align-items:center;gap:22px;padding:16px 20px 22px;border-top:1px solid rgba(255,255,255,.1);font:800 30px "Barlow Condensed",sans-serif;text-transform:uppercase}
+.duo-pied .lieu{font-size:20px}
+.vide{text-align:center;padding:46px 30px;border-radius:18px;background:linear-gradient(180deg,rgba(9,20,54,.92),rgba(5,12,34,.92));box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.vide b{display:block;font:900 italic 54px/1 "Barlow Condensed",sans-serif;text-transform:uppercase}
+.vide span{display:block;margin-top:12px;font:700 22px "Source Sans 3",sans-serif;color:var(--ciel)}
+/* signature du club */
+.sig{left:0;right:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.sig .valeurs{font:800 calc(var(--sigh)*.15) "Source Sans 3",sans-serif;letter-spacing:.32em;text-transform:uppercase;color:var(--acc-clair)}
+.sig .script{font:400 calc(var(--sigh)*.42)/1.05 "Kaushan Script",cursive;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.7)}
+.insta .sig{flex-direction:row;gap:26px}.insta .sig .valeurs{font-size:13px}.insta .sig .script{font-size:30px}
+/* partenaires */
+.part{left:0;right:0;bottom:0;top:var(--part);z-index:3;background:#fff;box-shadow:0 -5px 0 var(--acc);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px 20px}
+.part h4{display:flex;align-items:center;gap:12px;font:900 18px "Barlow Condensed",sans-serif;letter-spacing:.24em;text-transform:uppercase;color:#0B1633}
+.part h4 i{width:46px;height:2px;background:#0B1633;opacity:.35}
+.logos{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 22px}
+.logos img{height:var(--logo);max-width:calc(var(--logo)*2.4);object-fit:contain;display:block}
+.insta .part h4{font-size:14px}
+/* page de choix des exemples (pas dans l'affiche) */
+.menu{max-width:760px;margin:40px auto;padding:0 20px;font:16px/1.5 "Source Sans 3",sans-serif;color:#E6ECFA}
+.menu h1{font:900 italic 44px "Barlow Condensed",sans-serif;text-transform:uppercase}
+.menu a{color:#F7DC92}
+.menu li{margin:4px 0}
+</style>
+<script src="donnees/logos.js"></script>
+</head>
+<body>
+<div id="affiche"></div>
+<script>
+"use strict";
+/* ---------- réglages par format (positions en pixels) ---------- */
+const FORMATS = {
+  fb:    { W: 1080, H: 2160, barre: 58, tete: 96, bl: 120, an: 118, titre: 300, t1: 150, t2: 84, date: 630, zone: [792, 1812], sig: [1822, 1940], part: 1950, logo: 58 },
+  story: { W: 1080, H: 1920, barre: 58, tete: 96, bl: 112, an: 110, titre: 290, t1: 140, t2: 78, date: 596, zone: [740, 1590], sig: [1598, 1706], part: 1714, logo: 54 },
+  insta: { W: 1080, H: 1350, barre: 46, tete: 66, bl: 84, an: 84, titre: 176, t1: 104, t2: 58, date: 402, zone: [462, 1102], sig: [1106, 1150], part: 1160, logo: 40 },
+};
+/* titres par type d'affiche (modifiables avec titre / sousTitre / surTitre dans les données) */
+const TITRES = {
+  "resultats":            { sur: "Atom'Sports Football Pierrelatte", t1: "Résultats", t2: "du week-end" },
+  "rencontres":           { sur: "Atom'Sports Football Pierrelatte", t1: "Rencontres", t2: "du week-end" },
+  "animation-rencontres": { sur: "École de foot", t1: "Foot animation", t2: "Rencontres du week-end" },
+  "animation-resultats":  { sur: "École de foot", t1: "Foot animation", t2: "Résultats du week-end" },
+  "veterans-rencontres":  { sur: "Championnat vétérans", t1: "Vétérans", t2: "Rencontres du week-end" },
+  "veterans-resultats":   { sur: "Championnat vétérans", t1: "Vétérans", t2: "Résultats du week-end" },
+};
+const BLASON = "logos/blason.png";
+const ICONE = {
+  maison: '<svg viewBox="0 0 24 24"><path d="M3 11.2 12 4l9 7.2V21h-6.2v-6.1H9.2V21H3z"/></svg>',
+  avion: '<svg viewBox="0 0 24 24"><path d="M21.5 15.8v-1.9l-8.1-5.1V3.6a1.4 1.4 0 0 0-2.8 0v5.2l-8.1 5.1v1.9l8.1-2.5v5.4l-2.2 1.6V22l3.6-1 3.6 1v-1.7l-2.2-1.6v-5.4z"/></svg>',
+  lieu: '<svg viewBox="0 0 24 24"><path d="M12 22s-7-6.4-7-12a7 7 0 0 1 14 0c0 5.6-7 12-7 12zm0-9.3a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4z"/></svg>',
+};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------- blasons ---------- */
+// logo : chemin d'image, ou clé d'un logo adverse connu (voir donnees/logos.js) ; sans logo : initiales du club
+function logoDe(l){ if (!l) return null; const a = (window.LOGOS && LOGOS.adversaires) || {}; return a[l] || l; }
+function blason(nom, logo, club, d = 54){
+  if (club) return `<span class="bl" style="--d:${d}px"><img src="${BLASON}" alt=""></span>`;
+  const src = logoDe(logo);
+  if (src) return `<span class="bl" style="--d:${d}px"><img src="${esc(src)}" alt="" style="transform:scale(1.42)"></span>`;
+  const vides = ["fc","us","u","s","as","es","o","et","de","du","d","la","le","f","co","sc","r","st"];
+  const mots = (String(nom).match(/[A-Za-zÀ-ÿ]+/g) || []).filter(w => !vides.includes(w.toLowerCase()));
+  const ini = (mots.map(w => w[0]).join("").slice(0, 2) || String(nom).slice(0, 2)).toUpperCase();
+  return `<span class="bl ini" style="--d:${d}px"><b>${esc(ini)}</b></span>`;
+}
+const issue = (bp, bc) => bp > bc ? "V" : bp < bc ? "D" : "N";
+const cat = m => `<div class="cat"><b data-fit=".6">${esc(m.cat)}</b><small data-fit=".7">${esc(m.niveau || "")}</small></div>`;
+const nous = (cote, d) => cote === "g"
+  ? `<span class="nom nous" data-fit=".7">Pierrelatte</span>${blason("", null, true, d)}`
+  : `${blason("", null, true, d)}<span class="nom nous" data-fit=".7">Pierrelatte</span>`;
+const eux = (m, cote, d) => cote === "g"
+  ? `<span class="nom eux" data-fit=".72">${esc(m.adv)}</span>${blason(m.adv, m.logo, false, d)}`
+  : `${blason(m.adv, m.logo, false, d)}<span class="nom eux" data-fit=".72">${esc(m.adv)}</span>`;
+
+/* ---------- les lignes ---------- */
+// à domicile Pierrelatte est à gauche, à l'extérieur à droite (le club qui reçoit est toujours à gauche)
+function ligneResultat(m, lieu){
+  const i = issue(m.bp, m.bc), dom = lieu === "dom";
+  const g = dom ? nous("g") : eux(m, "g"), d = dom ? eux(m, "d") : nous("d");
+  const sc = dom ? `<b class="nous">${m.bp}</b><b>${m.bc}</b>` : `<b>${m.bc}</b><b class="nous">${m.bp}</b>`;
+  return `<div class="ligne ${i}" style="grid-template-columns:150px minmax(0,1fr) 128px minmax(0,1fr)">${cat(m)}
+    <div class="eq g">${g}</div><div class="score">${sc}</div><div class="eq">${d}</div></div>`;
+}
+function ligneRencontre(m, lieu){
+  const dom = lieu === "dom";
+  const g = dom ? nous("g") : eux(m, "g"), d = dom ? eux(m, "d") : nous("d");
+  return `<div class="ligne" style="grid-template-columns:150px minmax(0,1fr) 128px minmax(0,1fr)">${cat(m)}
+    <div class="eq g">${g}</div><div class="heure"><small>${esc(m.jour)}</small><b>${esc(m.heure)}</b></div><div class="eq">${d}</div></div>`;
+}
+function lignePlateau(m){
+  const advs = (m.adversaires || []).map(a => `<span class="adv">${blason(a.nom, a.logo, false, 34)}${esc(a.nom)}</span>`).join("");
+  return `<div class="ligne" style="grid-template-columns:150px minmax(0,1fr) 128px">${cat(m)}
+    <div style="padding:12px 18px;min-width:0"><div class="lieu">${ICONE.lieu}<span data-fit=".7">${esc(m.lieu)}</span></div>
+      <div class="contre"><em>contre</em>${advs}</div></div>
+    <div class="heure" style="margin-right:12px"><small>${esc(m.jour)}</small><b>${esc(m.heure)}</b></div></div>`;
+}
+function lignePlateauResultats(m){
+  const lignes = (m.resultats || []).map(r => `<div class="sous ${issue(r.bp, r.bc)}">
+      <div class="eq g" style="padding:0"><span class="nom nous">Pierrelatte</span>${blason("", null, true, 40)}</div>
+      <div class="score"><b class="nous">${r.bp}</b><b>${r.bc}</b></div>
+      <div class="eq" style="padding:0">${blason(r.adv, r.logo, false, 40)}<span class="nom eux" data-fit=".66">${esc(r.adv)}</span></div></div>`).join("");
+  return `<div class="ligne" style="grid-template-columns:150px minmax(0,1fr)">${cat(m)}
+    <div style="padding:12px 18px 14px;min-width:0"><div class="lieu">${ICONE.lieu}<span data-fit=".7">${esc(m.lieu)}</span></div>${lignes}</div></div>`;
+}
+// un seul match : grande carte
+function grandeCarte(m, lieu, resultat){
+  const dom = lieu === "dom";
+  const n = `<div class="duo-eq">${blason("", null, true, 190)}<span class="nom nous" data-fit=".6">Pierrelatte</span></div>`;
+  const e = `<div class="duo-eq">${blason(m.adv, m.logo, false, 190)}<span class="nom eux" data-fit=".6">${esc(m.adv)}</span></div>`;
+  let milieu, cls = "";
+  if (resultat){
+    cls = issue(m.bp, m.bc);
+    milieu = `<div class="score ${cls}" style="display:flex">${dom ? `<b class="nous">${m.bp}</b><b>${m.bc}</b>` : `<b>${m.bc}</b><b class="nous">${m.bp}</b>`}</div>`;
+  } else milieu = `<div class="heure"><small>${esc(m.jour)}</small><b>${esc(m.heure)}</b></div>`;
+  return `<div class="duo ${cls}"><div class="duo-tete">${esc(m.cat)} <span>· ${esc(m.niveau || "")}</span></div>
+    <div class="duo-corps">${dom ? n + milieu + e : e + milieu + n}</div>
+    <div class="duo-pied">${esc(m.quand || "")}<span class="lieu">${ICONE.lieu}${esc(m.lieu || "")}</span></div></div>`;
+}
+
+/* ---------- l'affiche ---------- */
+function dessinerAffiche(a){
+  const F = FORMATS[a.format] || FORMATS.fb, fmt = FORMATS[a.format] ? a.format : "fb";
+  const lieu = a.lieu === "ext" ? "ext" : "dom";
+  const T = Object.assign({}, TITRES[a.type] || TITRES.resultats);
+  if (a.surTitre) T.sur = a.surTitre; if (a.titre) T.t1 = a.titre; if (a.sousTitre) T.t2 = a.sousTitre;
+  const matchs = a.matchs || [];
+  const resultat = /resultats/.test(a.type || "");
+  let contenu, zoomMax;
+  if (!matchs.length){
+    contenu = `<div class="vide"><b>${esc(a.texteVide || (resultat ? "Aucun résultat ce week-end" : "Aucun match programmé ce week-end"))}</b><span>Rendez-vous le week-end prochain !</span></div>`;
+    zoomMax = 1.1;
+  } else if (matchs.length === 1 && !/^animation/.test(a.type || "")){
+    contenu = grandeCarte(matchs[0], lieu, resultat); zoomMax = 1.15;
+  } else {
+    const f = a.type === "animation-rencontres" ? lignePlateau : a.type === "animation-resultats" ? lignePlateauResultats
+            : resultat ? (m => ligneResultat(m, lieu)) : (m => ligneRencontre(m, lieu));
+    contenu = matchs.map(f).join("");
+    zoomMax = ({ 1: 1.4, 2: 1.4, 3: 1.28, 4: 1.18 })[matchs.length] || 1.12;
+  }
+  const parts = a.partenaires || (window.LOGOS ? (lieu === "dom" ? LOGOS.partenaires.slice(0, 15) : LOGOS.partenaires.slice(15, 30)) : []);
+  const [z0, z1] = F.zone, [s0, s1] = F.sig;
+  const voile = `linear-gradient(180deg,rgba(3,8,23,.9) 0,rgba(3,8,23,.35) ${F.tete + F.bl + 20}px,rgba(3,8,23,.1) ${F.titre + 60}px,` +
+    `transparent ${z0 - 160}px,rgba(3,8,23,.72) ${z0 - 10}px,rgba(3,8,23,.86) ${z0 + 160}px,rgba(3,8,23,.9) 100%),` +
+    `linear-gradient(90deg,rgba(3,8,23,.78) 0,rgba(3,8,23,.4) 44%,transparent 64%)`;
+  const racine = document.getElementById("affiche");
+  racine.innerHTML = `<div class="affiche ${lieu} ${fmt}" style="--W:${F.W}px;--H:${F.H}px;--barre:${F.barre}px;--tete:${F.tete}px;--bl:${F.bl}px;--an:${F.an}px;--titre:${F.titre}px;--t1:${F.t1}px;--t2:${F.t2}px;--date:${F.date}px;--part:${F.part}px;--logo:${F.logo}px;--sigh:${s1 - s0}px">
+    <div class="fond" style="background-image:url(fonds/${fmt}-${lieu}.jpg)"></div>
+    <div class="voile" style="background:${voile}"></div>
+    <div class="a barre"><span>${esc(a.saison || "Saison 2026-2027")}</span>asf-pierrelatte.fr<span>@asfp.officiel</span></div>
+    <div class="a tete"><img src="${BLASON}" alt=""><div class="an">1923</div></div>
+    <div class="a puce">${lieu === "dom" ? ICONE.maison + "À domicile" : ICONE.avion + "À l'extérieur"}</div>
+    <div class="a titre"><div class="sur"><i></i>${esc(T.sur)}</div><span class="t1" data-fit=".55">${esc(T.t1)}</span><span class="t2 metal" data-fit=".55">${esc(T.t2)}</span></div>
+    <div class="a date">${esc(a.date || "")}</div>
+    <div class="a zone" style="top:${z0}px;height:${z1 - z0}px"><div class="lignes" data-max="${zoomMax}">${contenu}</div></div>
+    <div class="a sig" style="top:${s0}px;height:${s1 - s0}px"><div class="valeurs">Plaisir · Respect · Effort · Progrès</div><div class="script">Atom'Sports Football Pierrelatte</div></div>
+    <div class="a part"><h4><i></i>Nos partenaires<i></i></h4><div class="logos">${parts.map(p => `<img src="${esc(p)}" alt="">`).join("")}</div></div>
+  </div>`;
+  delete document.body.dataset.pret; delete document.body.dataset.trop;
+  return Promise.all([document.fonts.ready, ...[...racine.querySelectorAll("img")].map(i => i.decode().catch(() => {}))]).then(ajuster);
+}
+
+/* ---------- ajustements : la liste occupe la place sans déborder, les noms ne sont jamais coupés ---------- */
+function ajuster(){
+  const z = document.querySelector(".zone"), l = document.querySelector(".lignes");
+  if (z && l){
+    let k = Math.min(+l.dataset.max || 1.12, 1.6);
+    const h = () => l.getBoundingClientRect().height;
+    l.style.zoom = k;
+    while (h() > z.clientHeight && k > .5){ k -= .01; l.style.zoom = k; }
+    if (h() > z.clientHeight) document.body.dataset.trop = 1;          // trop de matchs : faire deux affiches
+    const n = l.children.length, reste = z.clientHeight - h();
+    if (n > 1 && reste > 0) l.style.gap = Math.min(30, 12 + reste / k / (n - 1)) + "px";
+  }
+  document.querySelectorAll("[data-fit]").forEach(e => {
+    const s0 = parseFloat(getComputedStyle(e).fontSize);
+    let s = s0; const min = s0 * (+e.dataset.fit || .6);
+    while (e.scrollWidth > e.clientWidth + 1 && s > min){ s -= 1; e.style.fontSize = s + "px"; }
+    if (e.scrollWidth > e.clientWidth + 1 && e.classList.contains("nom")){ e.classList.add("deux"); e.style.fontSize = Math.round(s0 * .78) + "px"; }
+  });
+  document.body.dataset.pret = 1;
+}
+
+/* ---------- démarrage : ?d=nom-d-exemple&f=format ---------- */
+const EXEMPLES = ["resultats-dom", "resultats-ext", "rencontres-dom", "rencontres-ext", "animation-rencontres-dom", "animation-rencontres-ext",
+  "animation-resultats-dom", "animation-resultats-ext", "veterans-rencontres-dom", "veterans-rencontres-ext", "veterans-resultats-dom",
+  "veterans-resultats-ext", "gros-week-end", "aucun-match"];
+const q = new URLSearchParams(location.search);
+if (q.get("d")){
+  const s = document.createElement("script");
+  s.src = "donnees/" + q.get("d").replace(/[^a-z0-9-]/gi, "") + ".js";
+  s.onload = () => { const a = Object.assign({}, window.AFFICHE); if (q.get("f")) a.format = q.get("f"); dessinerAffiche(a); };
+  s.onerror = () => { document.body.textContent = "Données introuvables : " + s.src; };
+  document.head.appendChild(s);
+} else {
+  document.getElementById("affiche").innerHTML = `<div class="menu"><h1>Affiches de la semaine</h1>
+    <p>Choisis un exemple (format Facebook) ; ajoute <code>&f=insta</code> ou <code>&f=story</code> à l'adresse pour les autres formats.</p>
+    <ul>${EXEMPLES.map(e => `<li><a href="?d=${e}">${e}</a> · <a href="?d=${e}&f=insta">Instagram</a> · <a href="?d=${e}&f=story">Story</a></li>`).join("")}</ul></div>`;
+}
+</script>
+</body>
+</html>
