@@ -70,11 +70,7 @@ node capturer.mjs resultats-dom insta # une seule
 
 ## Brancher sur le site du club
 
-Sur le site en ligne, les affiches de la semaine sont fabriquées par le serveur (`affiches.php`, chez o2switch), qui ne peut pas
-ouvrir de page web pour en faire une image. Deux façons de brancher ce kit :
-
-1. **Porter la mise en page dans `affiches.php`** (dessin avec GD ou Imagick, en reprenant les positions de `FORMATS` dans `affiche.html`
-   et les fonds de `fonds/`) : les affiches restent publiées toutes seules chaque lundi sur Facebook et Instagram.
-2. **Dessiner l'affiche dans l'espace club** (dans le navigateur de la personne qui publie), puis l'envoyer au serveur pour la publication.
-
-Les deux demandent le fichier `affiches.php` actuel pour reprendre la récupération des matchs et la publication.
+Sur le site en ligne, les affiches sont fabriquées par le serveur (`api/affiches.php`, chez o2switch), qui ne peut pas
+ouvrir de page web pour en faire une image. La mise en page de ce kit y a donc été recopiée en PHP (dessin avec GD) :
+tout est dans le dossier **`asf-pierrelatte/serveur/`**, avec son propre mode d'emploi (`serveur/LISEZ-MOI.md`).
+Les affiches restent publiées toutes seules chaque lundi sur Facebook et Instagram.

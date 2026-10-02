@@ -1,0 +1,3083 @@
+<?php
+// Affiches dessinées par le serveur, et publication sur la page Facebook du club.
+//  - depuis la V33 : affiches « stade de nuit » (décors dans img/affiches-nuit, voir la section du même nom) aux formats
+//    story 1080 x 1920, publication 1080 x 1350 et Facebook 1080 x 2160 ; sans ces décors, les anciennes feuilles
+//    (1080 x 1620 sur img/fond-domicile.jpg et img/fond-exterieur.jpg) sont dessinées comme avant.
+//  - chaque lundi à 9 h : résultats du week-end passé + rencontres du week-end à venir (2 stories + 1 publication avec texte)
+//  - le jour d'un match à 9 h : l'affiche de chaque équipe qui joue (story seule)
+// Appelé par sync.php (cron horaire). Aperçu pour le bureau : /api/affiches.php?apercu=programme|resultats|match
+require_once __DIR__ . '/session.php';
+date_default_timezone_set('Europe/Paris');
+
+const AFF_W = 1080, AFF_H = 1920;
+$GLOBALS['aff_h'] = AFF_H;
+function aff_h(): int { return (int) $GLOBALS['aff_h']; }
+function aff_format(string $f): void { $GLOBALS['aff_h'] = ['post' => 1350, 'carre' => 1350, 'fb' => 2160][$f] ?? AFF_H; }
+const AFF_SPONSORS_DEFAUT = ['06852d18568369ed3d2a25699b8ba89d', 'd04f5c2d1ae691508adef2afe070bc96', '7667336e5765293f6f3a1514dff12885', '73a52a180481cf087155c4b55d8b8113', 'fd88bb270c793e1b42ef3af2516d8e71', '56e1810bc0e96a0ee5dccdc84d407ea4', '1ab83d9a3dd4b419aab98a7026c2efba', 'b8f1e7a2a8e500fa961768edb816cea2', '2a31d7dc22f171c9dc2e33edc6bd759c', 'f9b791f61c2ba06cc52abba681d374f7', '1cd0bfa977a6adc2e52a591619fc7ea9', 'f3e760daba1e33a9a9a4fbb05927f6e9', '8e4fa34c8c791a460cbfaa5639a9352c', 'bf43b5b9890b0ff1a66b4fc114a81fa0', 'e287a40273d3139775553377548d0dd5', 'da93b7831cadb555d110e842820794f2', 'a720cdaebb6d49f5d52fb328d4d4d9e8', '151e845c78cc61883b3c233149af8cbc', 'd0d12cf8c82b94ebb44ffb88feb8bc51', '3a7fcee0a65c05f3deb0206f154e611c'];
+const AFF_JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const AFF_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const FB_VERSION = 'v21.0';
+if (!function_exists('str_starts_with')) { function str_starts_with(string $h, string $n): bool { return strncmp($h, $n, strlen($n)) === 0; } }
+if (!function_exists('str_ends_with')) { function str_ends_with(string $h, string $n): bool { return $n === '' || substr($h, -strlen($n)) === $n; } }
+
+/* ---------- réglages privés (jamais renvoyés par l'API de données) ---------- */
+function reglage(string $cle, ?string $defaut = null): ?string {
+    base()->exec("CREATE TABLE IF NOT EXISTS reglages (cle VARCHAR(120) PRIMARY KEY, valeur MEDIUMTEXT NOT NULL) DEFAULT CHARSET=utf8mb4");
+    $st = base()->prepare('SELECT valeur FROM reglages WHERE cle = ?');
+    $st->execute([$cle]);
+    $v = $st->fetchColumn();
+    return $v === false ? $defaut : $v;
+}
+function reglage_ecrire(string $cle, ?string $valeur): void {
+    base()->exec("CREATE TABLE IF NOT EXISTS reglages (cle VARCHAR(120) PRIMARY KEY, valeur MEDIUMTEXT NOT NULL) DEFAULT CHARSET=utf8mb4");
+    if ($valeur === null) { base()->prepare('DELETE FROM reglages WHERE cle = ?')->execute([$cle]); return; }
+    base()->prepare('INSERT INTO reglages (cle, valeur) VALUES (?, ?) ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)')->execute([$cle, $valeur]);
+}
+
+const AFF_CLUBS_DISTRICT = [
+    'R.C. SAVASSON' => 538001,
+    'A. S. BERG HELVIE' => 581498,
+    'A. S. DU DOLON' => 526432,
+    'A. S. VEORE MONTOISON' => 580604,
+    'A.OM.C. ST REMEZE' => 531589,
+    'A.S. ALBOUSSIERE' => 528354,
+    'A.S. CANCOISE VILLEVOCANCE' => 530368,
+    'A.S. CHAVANAY' => 519727,
+    'A.S. CORNAS' => 536261,
+    'A.S. LA SANNE ST ROMAIN DE SURIE' => 528571,
+    'A.S. ROUSSAS GRANGES GONTARDES' => 532967,
+    'A.S. ST BARTHELEMY DE VALS' => 520419,
+    'A.S. ST MARCELLOISE' => 526341,
+    'A.S. VALENSOLLES' => 521003,
+    'ALLEX CHABRILLAN EURRE FOOTBALL CLUB' => 560137,
+    'AM.S. DONATIENNE' => 504316,
+    'ATHLETIC FOOT CEVEN' => 561202,
+    "ATOM'SPORTS FOOTBALL PIERRELATTE" => 504261,
+    'AV. S. SUD ARDECHE FOOTBALL' => 550020,
+    'AV.S. ROIFFIEUX' => 530927,
+    'C.O. CHATEAUNEUF DU RHONE' => 525624,
+    'C.O. DONZEROIS' => 504332,
+    'C.OM. CHATEAUNEVOIS' => 532822,
+    'C.S. CHATEAUNEUF DE GALAURE' => 517555,
+    'CERC.S. DE MALATAVERNE' => 533767,
+    'DIOIS F.C.' => 548847,
+    'E.S. BOULIEU LES ANNONAY' => 504545,
+    'EN AVANT MONTVENDRE' => 552265,
+    'ENT. S. NORD DROME' => 580873,
+    'ENT. SARRAS SPORTS ST VALLIER' => 541513,
+    'ENT.S. CHOMERACOISE' => 529711,
+    'ENT.S. TREFLE F.' => 549007,
+    'ENTENTE CREST AOUSTE' => 551477,
+    'ENTENTE SPORTIVE BEAUMONTELEGER' => 582281,
+    'ESP. HOSTUNOISE' => 519000,
+    'ESPOIR VALENTINOIS' => 552755,
+    'ET.S. MALISSARDOISE' => 523342,
+    'F. AVENIR LE TEIL MELAS' => 515526,
+    'F. C. CLERIEUX-ST/BARDOUX-GRANGES/LES/BEAUMONT' => 553842,
+    'F. C. DES JEUNES DE VINEZAC' => 553208,
+    'F. C. RAMBERTOIS' => 554458,
+    'F. C. RHONE VALLEES' => 551476,
+    'F. C. ROCHEGUDIEN' => 563906,
+    'F.C. ALIXAN' => 525306,
+    'F.C. ANNONAY' => 504343,
+    'F.C. BOURG LES VALENCE' => 504375,
+    'F.C. BOURGUISAN' => 524469,
+    'F.C. BREN' => 536241,
+    'F.C. CHABEUILLOIS' => 519780,
+    'F.C. CHEYLAROIS' => 504310,
+    'F.C. COLOMBIER ST BARTHELEMY' => 549369,
+    "F.C. DE LA VALDAINE CLEON D'ANDR" => 540857,
+    'F.C. DU CHATELET' => 581391,
+    'F.C. DU PLATEAU ARDECHOIS' => 519782,
+    'F.C. EYRIEUX EMBROYE' => 546292,
+    'F.C. FELINES ST CYR PEAUGRES' => 520730,
+    'F.C. GOUBETOIS' => 520265,
+    'F.C. HAUTERIVE U.S. GRAND SERRE' => 546999,
+    'F.C. LARNAGE SERVES' => 550007,
+    'F.C. MUZOLAIS' => 532844,
+    'F.C. PEAGEOIS' => 504390,
+    'F.C. PORTOIS' => 509606,
+    'F.C. SAUZET' => 519783,
+    'F.C. TRICASTIN' => 504293,
+    "F.C. VALLON PONT D'ARC" => 544907,
+    'FOOTBALL CLUB BAUME BOUCHET MONTSEGUR' => 524479,
+    'FOOTBALL CLUB HERMITAGE' => 551563,
+    'FOOTBALL CLUB MONTELIMAR' => 528941,
+    'FOOTBALL EN MONT PILAT' => 552125,
+    'FOY.RUR ALLAN' => 517028,
+    'IN.C.F. BARB. BESAV.ROCH.SAMSON' => 523208,
+    'JOYEUSE S. ST PAUL' => 518765,
+    'O. CENTRE ARDECHE' => 504370,
+    'O. DE VALENCE' => 549145,
+    "O. S. VALLEE DE L'OUVEZE" => 553425,
+    'O. SALAISE RHODIA' => 504465,
+    'O. ST MONTANAIS' => 548044,
+    'PERSEVERANTE S. ROMANAISE' => 504462,
+    'R.C. MALVINOIS MAUVES' => 535236,
+    'R.C. TOURNON TAIN' => 504437,
+    'RHONE CRUSSOL FOOT 07' => 551992,
+    'S.C. BOURGUESAN' => 504307,
+    'SPORTING CLUB BASSE ARDECHE' => 548045,
+    'U. MONTILIENNE S.' => 500355,
+    'U. S. CHANAS SABLONS SERRIERES' => 504422,
+    "U. S. DU VAL D'AY" => 550632,
+    'U. S. MONTMEYRAN' => 552154,
+    'U. S. PORTES HAUTES CEVENNES' => 581869,
+    'U. S. VALLEE-JABRON' => 590379,
+    'U.S. ANCONE' => 520597,
+    'U.S. DAVEZIEUX VIDALON' => 509197,
+    'U.S. DE PONT LA ROCHE' => 518181,
+    'U.S. MONTELIER' => 521473,
+    'U.S. MOURSOISE' => 522881,
+    'U.S. PEYRINOISE' => 518770,
+    'U.S. ROCHEMAURE' => 527007,
+    'U.S. ST JUST ST MARCEL' => 545636,
+    'U.S. VALS LES BAINS' => 504247,
+    'UNION SPORTIVE 2 VALLONS' => 529284,
+    'UNION SPORTIVE BAS VIVARAIS' => 560190,
+    'UNION SPORTIVE BEAUFORT-AOUSTE' => 524598,
+];
+
+function aff_club_numero(string $nom): ?int {
+    static $idx = null, $mots = null;
+    if ($idx === null) {
+        $idx = []; $mots = [];
+        $tous = AFF_CLUBS_DISTRICT;
+        foreach ((aff_doc('site/clubs-district')['clubs'] ?? []) as $n => $c) if ((int) $c > 0 && !isset($tous[$n])) $tous[$n] = (int) $c;   // liste FFF complète
+        foreach ($tous as $n => $c) {
+            $idx[cle_club($n)] = $c; $idx[aff_simplifie($n)] = $c;
+            $mots[$c] = array_filter(explode('-', aff_simplifie($n)), fn($m) => strlen($m) > 1);
+        }
+    }
+    if (isset($idx[cle_club($nom)])) return $idx[cle_club($nom)];
+    if (isset($idx[aff_simplifie($nom)])) return $idx[aff_simplifie($nom)];
+    // nom court (« Malataverne », « Centre Ardèche ») : le club dont le nom contient tous ces mots
+    $cherche = array_filter(explode('-', aff_simplifie($nom)), fn($m) => strlen($m) > 1);
+    if (!$cherche) return null;
+    $trouves = [];
+    foreach ($mots as $c => $m) if (!array_diff($cherche, $m)) $trouves[] = $c;
+    return count($trouves) === 1 ? $trouves[0] : null;
+}
+/* logo d'un club du district : téléchargé une fois depuis le CDN de la FFF, puis gardé dans /logos */
+function aff_logo_district(string $nom) {
+    $n = aff_club_numero($nom); if (!$n) return null;
+    $dossier = dirname(__DIR__) . '/logos'; if (!is_dir($dossier)) @mkdir($dossier, 0755, true);
+    $f = "$dossier/fff-$n.jpg";
+    if (!is_file($f) || filesize($f) < 300) {
+        $ch = curl_init("https://cdn-transverse.azureedge.net/phlogos/BC$n.jpg");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_FOLLOWLOCATION => true, CURLOPT_USERAGENT => 'Mozilla/5.0']);
+        $b = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        if ($code !== 200 || !$b || strlen($b) < 300) return null;
+        @file_put_contents($f, $b);
+    }
+    static $cache = [];
+    if (!array_key_exists($f, $cache)) { $src = aff_image($f); $cache[$f] = $src ? aff_logo_net($src) : null; }
+    return $cache[$f];
+}
+/* plateaux et brassages saisis à la main dans api/plateaux.txt — une ligne par rendez-vous, morceaux séparés par | :
+     26/09 | U6-U7 | 9h30 | chez U. Montilienne S. | Stade de l'Hippodrome, 26200 Montélimar
+     26/09 | U13 équipe 4 | 14h | domicile | contre Malataverne 3-1, Centre Ardèche 2-2
+   L'ordre des morceaux n'a pas d'importance : chacun est reconnu à sa forme. */
+function aff_plateaux_fichier(): array {
+    $f = __DIR__ . '/plateaux.txt'; if (!is_file($f)) return [];
+    $out = [];
+    $moisDebut = 8;                                                   // la saison commence en août
+    foreach (file($f, FILE_IGNORE_NEW_LINES) ?: [] as $ligne) {
+        $ligne = trim((string) $ligne); if ($ligne === '' || $ligne[0] === '#') continue;
+        $date = $heure = $equipe = $adresse = ''; $lieu = null; $dom = false; $adv = []; $res = [];
+        foreach (array_filter(array_map('trim', explode('|', $ligne)), 'strlen') as $bout) {
+            if (!$date && preg_match('#^(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?$#', $bout, $d)) {
+                $mois = (int) $d[2]; $jour = (int) $d[1];
+                if (!empty($d[3])) $an = strlen($d[3]) === 2 ? 2000 + (int) $d[3] : (int) $d[3];
+                else { $a = (int) date('Y'); $saison = (int) date('n') >= $moisDebut ? $a : $a - 1; $an = $mois >= $moisDebut ? $saison : $saison + 1; }
+                $date = sprintf('%04d-%02d-%02d', $an, $mois, $jour);
+            } elseif (!$equipe && preg_match('/^U\s?\d{1,2}/i', $bout)) {
+                $equipe = aff_maj(preg_replace('/\s*[-\/]\s*/', ' · ', preg_replace('/\s+/', ' ', $bout)));
+                $equipe = preg_replace('/U\s?13\s*(?:·\s*)?(?:ÉQUIPE|EQUIPE|EQ\.?)?\s*(\d+)$/u', 'U13 · ÉQUIPE $1', $equipe);
+            } elseif (!$heure && preg_match('/^(\d{1,2})\s*[h:]\s*(\d{2})?$/i', $bout, $h)) {
+                $heure = sprintf('%02d:%s', (int) $h[1], $h[2] ?? '00');
+            } elseif (preg_match('/^(à\s+)?domicile$/iu', $bout)) {
+                $dom = true; $lieu = '';
+            } elseif (preg_match('/^(?:chez|à|a)\s+(.+)$/iu', $bout, $x)) {
+                $lieu = trim($x[1]);
+            } elseif (preg_match('/^contre\s+(.+)$/iu', $bout, $x)) {
+                foreach (preg_split('/\s*[,;]\s*|\s+et\s+/iu', $x[1]) as $a) {
+                    if (!preg_match('/^(.*?)(?:\s+(\d+)\s*-\s*(\d+))?$/u', trim($a), $y) || trim($y[1]) === '') continue;
+                    $adv[] = trim($y[1]);
+                    if (isset($y[2]) && $y[2] !== '') $res[] = ['adv' => trim($y[1]), 'bp' => (int) $y[2], 'bc' => (int) $y[3]];
+                }
+            } else {
+                $adresse = $bout;                                   // tout le reste : l'adresse du stade
+            }
+        }
+        if (!$date || !$equipe) continue;
+        if ($lieu === null) $dom = true;                              // rien d'indiqué : à domicile
+        $out[] = ['id' => 'pl-' . substr(md5($date . '|' . $equipe . '|' . ($lieu ?? '')), 0, 12), 'equipe' => $equipe,
+            'comp' => preg_match('/U\s?13/i', $equipe) ? 'Brassage' : 'Plateau', 'adv' => $dom ? '' : aff_maj((string) $lieu), 'dom' => $dom,
+            'date' => $date, 'heure' => $heure ?: '10:00', 'adresse' => $dom ? '' : $adresse, 'adversaires' => array_map('aff_maj', $adv),
+            'resultats' => array_map(fn($r) => ['adv' => aff_maj($r['adv']), 'bp' => $r['bp'], 'bc' => $r['bc']], $res), 'bp' => null, 'bc' => null];
+    }
+    return $out;
+}
+
+/* ---------- données ---------- */
+function aff_doc(string $chemin): array {
+    $st = base()->prepare('SELECT data FROM documents WHERE path = ?');
+    $st->execute([$chemin]);
+    return json_decode((string) $st->fetchColumn(), true) ?: [];
+}
+function aff_matchs(): array {
+    $l = [];
+    foreach (base()->query("SELECT path, data, maj FROM documents WHERE path LIKE 'matchs/%'") as $r) {
+        $m = json_decode($r['data'], true) ?: [];
+        $m['id'] = substr($r['path'], 7); $m['_maj'] = (string) ($r['maj'] ?? '');
+        if (str_starts_with($m['id'], 'fal-')) continue;             // anciens envois du favori : remplacés par api/plateaux.txt
+        $l[] = $m;
+    }
+    return array_merge($l, aff_plateaux_fichier());
+}
+function aff_joue(array $m): bool { return is_numeric($m['bp'] ?? null) && is_numeric($m['bc'] ?? null); }
+function aff_issue(array $m): string { return $m['bp'] > $m['bc'] ? 'V' : ($m['bp'] < $m['bc'] ? 'D' : 'N'); }
+function aff_hfr(?string $h): string { return str_replace(':', 'h', (string) $h); }
+function aff_date_longue(string $d): string {
+    $t = strtotime($d . ' 12:00');
+    return AFF_JOURS[(int) date('w', $t)] . ' ' . (int) date('j', $t) . ' ' . AFF_MOIS[(int) date('n', $t) - 1];
+}
+function aff_maj(string $s): string { return mb_strtoupper($s, 'UTF-8'); }
+function aff_club(): array {
+    $c = aff_doc('site/club');
+    return ['nomCourt' => $c['nomCourt'] ?? 'Pierrelatte', 'stade' => $c['stade'] ?? 'Stade Gustave Jaume',
+            'adresse' => 'Stade Gustave Jaume, avenue Pierre de Coubertin, 26700 Pierrelatte'];
+}
+function aff_lieu(array $m): string {
+    if (!empty($m['dom'])) return aff_club()['adresse'];
+    if (!empty($m['adresse'])) return $m['adresse'];
+    return 'Stade de ' . preg_replace('/\s+\d+$/', '', (string) $m['adv']);
+}
+/* vendredi, samedi et dimanche du week-end qui contient (ou suit) la date donnée */
+function aff_weekend(string $samedi): array {
+    $t = strtotime($samedi . ' 12:00');
+    return [date('Y-m-d', $t - 86400), date('Y-m-d', $t), date('Y-m-d', $t + 86400)];
+}
+/* Niveau court à partir de la compétition : « Régional 2 » → R2, « D1 Unique » → D1, « Brassage » → BR, coupes → COUPE */
+function aff_niveau(string $comp): string {
+    $c = mb_strtolower($comp);
+    if (preg_match('/r[ée]gional\s*(\d)/u', $c, $x)) return 'R' . $x[1];
+    if (preg_match('/\bd\s*(\d)\b|district\s*(\d)|division\s*(\d)/u', $c, $x)) return 'D' . ($x[1] ?: ($x[2] ?? '') ?: ($x[3] ?? ''));
+    if (str_contains($c, 'brassage')) return 'BR';
+    if (str_contains($c, 'coupe') || str_contains($c, 'gambardella')) return 'COUPE';
+    if (preg_match('/poule\s*([a-z0-9])/u', $c, $x)) return 'P' . mb_strtoupper($x[1]);
+    return '2';
+}
+/* « R2 · POULE C », « BRASSAGE · POULE K », « D1 », « COUPE » : ce qui distingue deux équipes d'une même catégorie */
+function aff_sous_etiquette(string $comp): string {
+    $n = aff_niveau($comp); $parts = [];
+    if ($n === 'BR') $parts[] = 'BRASSAGE'; elseif ($n !== '2' && !str_starts_with($n, 'P')) $parts[] = $n;
+    if (preg_match('/poule\s*([a-z0-9]+)/iu', $comp, $x)) $parts[] = 'POULE ' . mb_strtoupper($x[1]);
+    return implode(' · ', $parts);
+}
+/* matchs du foot animation (plateaux U6 à U11, brassage U13) : ils ont leurs propres affiches */
+const AFF_EQUIPES_FAL = ['U6 · U7', 'U8 · U9', 'U8 · U9 PROMOTION', 'U8 · U9 ESPOIR', 'U8 · U9 BOURGEON', 'U10 · U11 AVENIR', 'U10 · U11 ESPOIR', 'U10 · U11 BOURGEONS', 'U13 · ÉQUIPE 3', 'U13 · ÉQUIPE 4'];
+function aff_fal_valide(array $m): bool { return in_array(mb_strtoupper(trim((string) ($m['equipe'] ?? ''))), AFF_EQUIPES_FAL, true); }
+/* matchs des vétérans (onglet Vétérans de l'espace club) */
+function aff_vet(array $m): bool {
+    return str_starts_with((string) ($m['id'] ?? ''), 'vet-') || (bool) preg_match('/v[ée]t[ée]ran/iu', (string) ($m['equipe'] ?? ''));
+}
+function aff_fal(array $m): bool {
+    $id = (string) ($m['id'] ?? '');
+    if (str_starts_with($id, 'pl-')) return true;                     // saisi dans api/plateaux.txt
+    if (str_starts_with($id, 'fff-')) return false;                   // championnats FFF (U15 et U17 en brassage compris)
+    // saisi à la main : seulement l'école de foot et les U13
+    return (bool) preg_match('/plateau|brassage|animation|rentr[ée]e du foot/i', (string) ($m['comp'] ?? ''))
+        && (bool) preg_match('/\bu\s?(6|7|8|9|10|11|13)\b|u6 à u11/i', (string) ($m['equipe'] ?? '') . ' ' . (string) ($m['comp'] ?? ''));
+}
+function aff_plan_weekend(array $matchs, string $samedi, bool $resultats, ?string $lieu = null): array {
+    $fal = !empty($GLOBALS['aff_fal']);
+    $matchs = array_values(array_filter($matchs, fn($m) => aff_fal($m) === $fal));
+    if ($fal) $matchs = array_values(array_filter($matchs, 'aff_fal_valide'));   // pas de doublon avec une ancienne fiche « U10 · U11 »
+    $vet = !empty($GLOBALS['aff_vet']);                                          // vétérans : annonces à part
+    $matchs = array_values(array_filter($matchs, fn($m) => aff_vet($m) === $vet));
+    if ($vet && $resultats) $matchs = array_values(array_filter($matchs, 'aff_joue'));  // résultats vétérans : seulement avec un score
+    // foot animation : pas de résultats pour l'école de foot (U6 à U11) ; seuls les brassages U13 avec leurs scores
+    if ($fal && $resultats) $matchs = array_values(array_filter($matchs, fn($m) => aff_scores_brassage($m)));
+    $jours = aff_weekend($samedi);
+    if ($lieu === 'dom') $matchs = array_filter($matchs, fn($m) => !empty($m['dom']));
+    if ($lieu === 'ext') $matchs = array_filter($matchs, fn($m) => empty($m['dom']));
+    // résultats : TOUS les matchs du week-end, même ceux pas encore joués (sans score : « NC ») : l'aperçu d'un week-end
+    // en cours montre déjà la liste complète ; le lundi, tout est joué. Rencontres : les matchs pas encore joués.
+    $sel = array_filter($matchs, fn($m) => in_array($m['date'] ?? '', $jours, true) && ($resultats ? true : !aff_joue($m)));
+    // vrais doublons (même match remonté deux fois, nom d'adversaire écrit un peu différemment) : on n'en garde qu'un
+    $uniques = [];
+    foreach ($sel as $m) {
+        $k = $m['date'] . '|' . cle_club((string) ($m['equipeDetail'] ?? $m['equipe'])) . '|' . aff_simplifie((string) $m['adv']);
+        if (!isset($uniques[$k]) || (aff_joue($m) && !aff_joue($uniques[$k])) || (empty($uniques[$k]['heure']) && !empty($m['heure']))) $uniques[$k] = $m;
+    }
+    // même équipe, même compétition, même adversaire deux fois dans le week-end (match reporté dont l'ancienne date
+    // est restée) : un seul sur l'affiche, celui qui a un score, sinon le plus récemment mis à jour par la FFF
+    $parWeekend = [];
+    foreach ($uniques as $m) {
+        $k = cle_club((string) ($m['equipeDetail'] ?? $m['equipe'])) . '|' . aff_sous_etiquette((string) ($m['comp'] ?? '')) . '|' . aff_simplifie((string) $m['adv']) . '|' . (empty($m['dom']) ? 'e' : 'd');
+        $garde = $parWeekend[$k] ?? null;
+        if (!$garde || [aff_joue($m), $m['_maj'] ?? ''] > [aff_joue($garde), $garde['_maj'] ?? '']) $parWeekend[$k] = $m;
+    }
+    $sel = array_values($parWeekend);
+    // match impossible : une équipe ne joue qu'un match de championnat par week-end dans une compétition.
+    // Si elle en a deux contre des adversaires différents, on garde celui dont l'adversaire est vraiment dans sa poule
+    // (classements FFF de la poule) : l'autre est une erreur du calendrier FFF.
+    $groupes = [];
+    foreach ($sel as $i => $m) {
+        if (aff_fal($m)) continue;                                   // plateaux : plusieurs rendez-vous possibles, rien à vérifier
+        $groupes[cle_club((string) ($m['equipeDetail'] ?? $m['equipe'])) . '|' . mb_strtolower(trim((string) ($m['comp'] ?? '')))][] = $i;
+    }
+    $retires = [];
+    foreach ($groupes as $ids) {
+        if (count($ids) < 2) continue;
+        $avecScore = array_filter($ids, fn($i) => aff_joue($sel[$i]));
+        if ($avecScore && count($avecScore) < count($ids)) {        // même équipe, même compétition : le match sans score est l'erreur
+            foreach (array_diff($ids, $avecScore) as $i) $retires[$i] = true;
+            $ids = array_values($avecScore);
+            if (count($ids) < 2) continue;
+        }
+        $comp = mb_strtolower(trim((string) ($sel[$ids[0]]['comp'] ?? '')));
+        $poule = aff_equipes_poule($comp);
+        if (!$poule) continue;                                   // pas de classement pour vérifier : on ne touche à rien
+        $dansPoule = array_filter($ids, fn($i) => isset($poule[aff_simplifie((string) $sel[$i]['adv'])]));
+        if ($dansPoule && count($dansPoule) < count($ids)) foreach (array_diff($ids, $dansPoule) as $i) $retires[$i] = true;
+    }
+    if ($retires) $sel = array_values(array_diff_key($sel, $retires));
+    // niveau et poule notés pour chaque match : deux équipes d'une même catégorie sont toujours différenciées
+    foreach ($sel as &$m) {
+        $m['sous'] = aff_sous_etiquette((string) ($m['comp'] ?? ''));
+        $m['etiquette'] = $m['equipe'] . ($m['sous'] !== '' ? ' (' . mb_convert_case(mb_strtolower($m['sous']), MB_CASE_TITLE) . ')' : '');
+    }
+    unset($m);
+    $out = [];
+    foreach ($jours as $d) {
+        $l = array_values(array_filter($sel, fn($m) => $m['date'] === $d));
+        usort($l, fn($a, $b) => strcmp((string) ($a['heure'] ?? ''), (string) ($b['heure'] ?? '')));
+        if ($l) $out[] = ['date' => $d, 'matchs' => $l];
+    }
+    return $out;
+}
+
+/* ---------- dessin : outils ---------- */
+const AFF_FICHIERS_POLICES = ['900' => 'BarlowCondensed-Black.ttf', '800' => 'BarlowCondensed-ExtraBold.ttf', '700' => 'BarlowCondensed-Bold.ttf', '600' => 'BarlowCondensed-SemiBold.ttf'];
+/* On cherche les polices à plusieurs endroits, au cas où le dossier aurait été déposé ailleurs ; à défaut, une autre graisse. */
+function aff_police(string $poids): string {
+    static $cache = [];
+    if (isset($cache[$poids])) return $cache[$poids];
+    $dossiers = [__DIR__ . '/polices', dirname(__DIR__) . '/polices', dirname(__DIR__) . '/api/polices', __DIR__, dirname(__DIR__) . '/Barlow_Condensed', __DIR__ . '/polices/Barlow_Condensed'];
+    $voulu = AFF_FICHIERS_POLICES[$poids] ?? 'BarlowCondensed-Bold.ttf';
+    foreach (array_merge([$voulu], array_values(AFF_FICHIERS_POLICES)) as $f) foreach ($dossiers as $d) {
+        if (is_file("$d/$f") && is_readable("$d/$f")) return $cache[$poids] = "$d/$f";
+    }
+    return $cache[$poids] = '';
+}
+function aff_polices_ok(): bool { return aff_police('800') !== '' && function_exists('imagettftext'); }
+function aff_c($im, string $hex, float $opacite = 1.0): int {
+    $hex = ltrim($hex, '#');
+    $a = (int) round(127 * (1 - max(0, min(1, $opacite))));
+    return imagecolorallocatealpha($im, hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2)), $a);
+}
+function aff_larg(string $t, float $px, string $poids): float {
+    $f = aff_police($poids);
+    if ($f === '' || !function_exists('imagettfbbox')) return strlen($t) * $px * .5;
+    $b = @imagettfbbox($px * 0.75, 0, $f, $t);
+    return $b ? abs($b[2] - $b[0]) : strlen($t) * $px * .5;
+}
+function aff_fit(string $t, float $px, string $poids, float $max): float {
+    $s = $px;
+    while ($s > 20 && aff_larg($t, $s, $poids) > $max) $s -= 2;
+    return $s;
+}
+/* texte posé sur sa ligne de base, comme sur le site ; renvoie la taille réellement utilisée */
+function aff_texte($im, string $t, float $x, float $y, float $px, string $poids, string $hex, float $max = 0, string $align = 'left', float $opacite = 1.0): float {
+    $s = $max > 0 ? aff_fit($t, $px, $poids, $max) : $px;
+    if ($max > 0 && aff_larg($t, $s, $poids) > $max) {           // toujours trop long à la taille minimale : on coupe proprement « … »
+        while (mb_strlen($t) > 2 && aff_larg($t . '…', $s, $poids) > $max) $t = rtrim(mb_substr($t, 0, -1), " .·-");
+        $t .= '…';
+    }
+    $w = aff_larg($t, $s, $poids);
+    if ($align === 'right') $x -= $w; elseif ($align === 'center') $x -= $w / 2;
+    if (aff_police($poids) !== '') imagettftext($im, $s * 0.75, 0, (int) round($x), (int) round($y), aff_c($im, $hex, $opacite), aff_police($poids), $t);
+    return $s;
+}
+/* polygone plein, compatible avec toutes les versions de PHP 7 et 8 */
+function aff_poly($im, array $p, int $col): void {
+    $p = array_map(fn($v) => (int) round($v), $p);
+    if (PHP_VERSION_ID >= 80000) imagefilledpolygon($im, $p, $col); else imagefilledpolygon($im, $p, intdiv(count($p), 2), $col);
+}
+/* rectangle à coins arrondis, tracé d'un seul polygone (pas de surimpression avec la transparence) */
+function aff_coin($im, float $x, float $y, float $w, float $h, float $r, int $col): void {
+    $r = max(1, min($r, $w / 2, $h / 2));
+    $p = [];
+    foreach ([[$x + $w - $r, $y + $r, 270], [$x + $w - $r, $y + $h - $r, 0], [$x + $r, $y + $h - $r, 90], [$x + $r, $y + $r, 180]] as [$cx, $cy, $a0]) {
+        for ($i = 0; $i <= 6; $i++) { $a = deg2rad($a0 + $i * 15); $p[] = (int) round($cx + $r * cos($a)); $p[] = (int) round($cy + $r * sin($a)); }
+    }
+    aff_poly($im, $p, $col);
+}
+function aff_rect($im, float $x, float $y, float $w, float $h, int $col): void {
+    imagefilledrectangle($im, (int) round($x), (int) round($y), (int) round($x + $w) - 1, (int) round($y + $h) - 1, $col);
+}
+function aff_image(string $chemin) {
+    if (!is_file($chemin)) return null;
+    $d = @file_get_contents($chemin);
+    $i = $d ? @imagecreatefromstring($d) : false;
+    if (!$i) return null;
+    imagealphablending($i, true);
+    return $i;
+}
+function aff_contenir($im, $src, float $cx, float $cy, float $bw, float $bh, float $kmax = 99): void {
+    $k = min($bw / imagesx($src), $bh / imagesy($src), $kmax);
+    $w = imagesx($src) * $k; $h = imagesy($src) * $k;
+    imagecopyresampled($im, $src, (int) round($cx - $w / 2), (int) round($cy - $h / 2), 0, 0, (int) round($w), (int) round($h), imagesx($src), imagesy($src));
+}
+function aff_degrade_vertical($im, float $y0, float $y1, array $arrets): void {
+    // $arrets : [[position 0..1, '#hex', opacité], ...]
+    $h = max(1, $y1 - $y0);
+    for ($y = (int) $y0; $y < (int) $y1; $y++) {
+        $t = ($y - $y0) / $h;
+        for ($i = 0; $i < count($arrets) - 1 && $t > $arrets[$i + 1][0]; $i++);
+        [$p0, $c0, $o0] = $arrets[$i]; [$p1, $c1, $o1] = $arrets[min($i + 1, count($arrets) - 1)];
+        $k = $p1 > $p0 ? ($t - $p0) / ($p1 - $p0) : 0;
+        $a = sscanf(ltrim($c0, '#'), '%02x%02x%02x'); $b = sscanf(ltrim($c1, '#'), '%02x%02x%02x');
+        $rgb = sprintf('#%02x%02x%02x', $a[0] + ($b[0] - $a[0]) * $k, $a[1] + ($b[1] - $a[1]) * $k, $a[2] + ($b[2] - $a[2]) * $k);
+        imageline($im, 0, $y, AFF_W - 1, $y, aff_c($im, $rgb, $o0 + ($o1 - $o0) * $k));
+    }
+}
+/* texte évidé : seul le contour est visible (calque transparent, trait par copies décalées, intérieur effacé) */
+function aff_texte_evide($im, string $t, float $x, float $y, float $px, string $hex, float $max, int $trait = 4): void {
+    $s = $max > 0 ? aff_fit($t, $px, '900', $max) : $px;
+    $cal = imagecreatetruecolor(AFF_W, aff_h());
+    imagealphablending($cal, false);
+    imagefilledrectangle($cal, 0, 0, AFF_W, aff_h(), imagecolorallocatealpha($cal, 0, 0, 0, 127));
+    imagealphablending($cal, true);
+    $c = aff_c($cal, $hex); $f = aff_police('900');
+    for ($i = 0; $i < 24; $i++) {
+        $a = 2 * M_PI * $i / 24;
+        imagettftext($cal, $s * .75, 0, (int) round($x + $trait * cos($a)), (int) round($y + $trait * sin($a)), $c, $f, $t);
+    }
+    imagealphablending($cal, false);
+    imagettftext($cal, $s * .75, 0, (int) round($x), (int) round($y), imagecolorallocatealpha($cal, 0, 0, 0, 127), $f, $t);
+    imagealphablending($cal, true);
+    imagecopyresampled($im, $cal, 0, 0, 0, 0, AFF_W, aff_h(), AFF_W, aff_h());
+    imagedestroy($cal);
+}
+/* trame de points façon impression, qui grossit vers la droite ($sens 1) ou vers le bas ($sens 2) */
+function aff_trame($im, float $x0, float $y0, float $x1, float $y1, int $pas, string $hex, float $opacite, int $sens): void {
+    $c = aff_c($im, $hex, $opacite);
+    for ($y = (int) $y0; $y < $y1; $y += $pas) for ($x = (int) $x0; $x < $x1; $x += $pas) {
+        $k = $sens === 1 ? ($x - $x0) / max(1, $x1 - $x0) : ($y - $y0) / max(1, $y1 - $y0);
+        $d = (int) round($pas * .84 * $k);
+        if ($d >= 2) imagefilledellipse($im, $x, $y, $d, $d, $c);
+    }
+}
+/* léger grain, comme une photo imprimée */
+function aff_grain($im): void {
+    mt_srand(7);
+    $n = (int) (AFF_W * aff_h() * .09);
+    for ($i = 0; $i < $n; $i++) {
+        $x = mt_rand(0, AFF_W - 1); $y = mt_rand(0, aff_h() - 1);
+        $rgb = imagecolorat($im, $x, $y); $v = mt_rand(-18, 18);
+        $r = max(0, min(255, (($rgb >> 16) & 255) + $v)); $g = max(0, min(255, (($rgb >> 8) & 255) + $v)); $b = max(0, min(255, ($rgb & 255) + $v));
+        imagesetpixel($im, $x, $y, ($r << 16) | ($g << 8) | $b);
+    }
+}
+function aff_ombre_coin($im, float $x, float $y, float $w, float $h, float $r, float $dx = 8, float $dy = 10): void {
+    foreach ([.10, .08, .06] as $i => $o) aff_coin($im, $x + $dx - $i * 2, $y + $dy - $i * 2, $w + $i * 4, $h + $i * 4, $r + $i * 2, aff_c($im, '#000000', $o));
+}
+function aff_hsl(float $h, float $s, float $l): string {
+    $c = (1 - abs(2 * $l - 1)) * $s; $x = $c * (1 - abs(fmod($h / 60, 2) - 1)); $m = $l - $c / 2;
+    [$r, $g, $b] = $h < 60 ? [$c, $x, 0] : ($h < 120 ? [$x, $c, 0] : ($h < 180 ? [0, $c, $x] : ($h < 240 ? [0, $x, $c] : ($h < 300 ? [$x, 0, $c] : [$c, 0, $x]))));
+    return sprintf('#%02x%02x%02x', ($r + $m) * 255, ($g + $m) * 255, ($b + $m) * 255);
+}
+
+/* ---------- blasons ---------- */
+/* noms (simplifiés) des équipes des poules FFF d'une compétition, lus dans les classements enregistrés par la synchronisation */
+function aff_equipes_poule(string $comp): array {
+    static $classements = null;
+    if ($classements === null) {
+        $classements = [];
+        try { foreach (base()->query("SELECT data FROM documents WHERE path LIKE 'classements/%'") as $r) $classements[] = json_decode($r['data'], true) ?: []; }
+        catch (Throwable $e) {}
+    }
+    $noms = [];
+    if ($comp === '') return $noms;
+    foreach ($classements as $c) {
+        if (!str_starts_with(mb_strtolower(trim((string) ($c['titre'] ?? ''))), $comp)) continue;
+        foreach ($c['equipes'] ?? [] as $e) $noms[aff_simplifie((string) ($e['nom'] ?? ''))] = true;
+    }
+    return $noms;
+}
+function aff_simplifie(string $s): string {
+    $s = cle_club($s);
+    $s = preg_replace('/\b(fc|as|us|es|o|ol|ent|sc|ac|cs|co|am|et|f|s|de|du|des|la|le|les|d|l|club|football|foot|sportif|sportive|olympique|association|union|entente|etoile|stade)\b/', '', $s);
+    $s = preg_replace('/-\d+$/', '', $s);
+    return trim(preg_replace('/-+/', '-', $s), '-');
+}
+function aff_table_logos(): array {
+    static $t = null;
+    if ($t !== null) return $t;
+    $t = []; $taille = []; $racine = dirname(__DIR__);
+    $sources = [];
+    foreach (glob($racine . '/img/adversaires/*') ?: [] as $f) $sources[] = [pathinfo($f, PATHINFO_FILENAME), $f];
+    foreach (aff_doc('site/adversaires') as $k => $v) {
+        $f = $racine . '/' . ltrim(preg_replace('/\?.*$/', '', (string) $v), '/');
+        if (is_file($f)) $sources[] = [$k, $f];
+    }
+    foreach ($sources as [$k, $f]) {
+        $dim = @getimagesize($f); $px = $dim ? $dim[0] * $dim[1] : 0;
+        foreach (array_unique([cle_club($k), aff_simplifie($k)]) as $cle) {
+            if ($cle === '') continue;
+            if (!isset($t[$cle]) || $px > $taille[$cle]) { $t[$cle] = $f; $taille[$cle] = $px; }
+        }
+    }
+    // les logos choisis à la main passent toujours en priorité
+    foreach (glob($racine . '/img/adversaires/choisis/*') ?: [] as $f) {
+        $k = pathinfo($f, PATHINFO_FILENAME);
+        $t[$k] = $f; $s = aff_simplifie($k); if ($s !== '') $t[$s] = $f;
+    }
+    return $t;
+}
+/* Logo nettoyé : fond blanc ou gris clair relié aux bords effacé, marges vides coupées. */
+function aff_logo_net($src) {
+    $w = imagesx($src); $h = imagesy($src);
+    $im = imagecreatetruecolor($w, $h);
+    imagealphablending($im, false); imagesavealpha($im, true);
+    imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocatealpha($im, 0, 0, 0, 127));
+    imagealphablending($im, true); imagecopy($im, $src, 0, 0, 0, 0, $w, $h); imagealphablending($im, false);
+    $fond = function (int $c): bool {
+        if ((($c >> 24) & 127) > 100) return true;
+        $r = ($c >> 16) & 255; $g = ($c >> 8) & 255; $b = $c & 255;
+        return min($r, $g, $b) > 200 && max($r, $g, $b) - min($r, $g, $b) < 22;
+    };
+    $coins = 0;
+    foreach ([[0, 0], [$w - 1, 0], [0, $h - 1], [$w - 1, $h - 1]] as [$x, $y]) if ($fond(imagecolorat($im, $x, $y))) $coins++;
+    if ($coins >= 3) {
+        $vide = imagecolorallocatealpha($im, 255, 255, 255, 127);
+        $vu = []; $pile = [];
+        for ($x = 0; $x < $w; $x++) { $pile[] = [$x, 0]; $pile[] = [$x, $h - 1]; }
+        for ($y = 0; $y < $h; $y++) { $pile[] = [0, $y]; $pile[] = [$w - 1, $y]; }
+        while ($pile) {
+            [$x, $y] = array_pop($pile); $k = $y * $w + $x;
+            if (isset($vu[$k])) continue;
+            $vu[$k] = true;
+            if (!$fond(imagecolorat($im, $x, $y))) continue;
+            imagesetpixel($im, $x, $y, $vide);
+            if ($x + 1 < $w) $pile[] = [$x + 1, $y]; if ($x > 0) $pile[] = [$x - 1, $y];
+            if ($y + 1 < $h) $pile[] = [$x, $y + 1]; if ($y > 0) $pile[] = [$x, $y - 1];
+        }
+    }
+    // recadrage sur la partie visible
+    $x0 = $w; $y0 = $h; $x1 = -1; $y1 = -1;
+    for ($y = 0; $y < $h; $y++) for ($x = 0; $x < $w; $x++) {
+        if (((imagecolorat($im, $x, $y) >> 24) & 127) < 80) { if ($x < $x0) $x0 = $x; if ($x > $x1) $x1 = $x; if ($y < $y0) $y0 = $y; if ($y > $y1) $y1 = $y; }
+    }
+    if ($x1 < 0) return $im;
+    $cw = $x1 - $x0 + 1; $ch = $y1 - $y0 + 1;
+    $out = imagecreatetruecolor($cw, $ch);
+    imagealphablending($out, false); imagesavealpha($out, true);
+    imagecopy($out, $im, 0, 0, $x0, $y0, $cw, $ch);
+    imagedestroy($im);
+    imagealphablending($out, true);
+    return $out;
+}
+function aff_logo_adv(string $nom) {
+    $t = aff_table_logos();
+    $f = $t[cle_club($nom)] ?? $t[aff_simplifie($nom)] ?? null;
+    if (!$f) {
+        $s = aff_simplifie($nom);
+        if (strlen($s) >= 4) foreach ($t as $k => $v) if (strlen($k) >= 4 && (str_starts_with($k, $s) || str_starts_with($s, $k))) { $f = $v; break; }
+    }
+    if (!$f) return null;
+    static $cache = [];
+    if (!array_key_exists($f, $cache)) { $src = aff_image($f); $cache[$f] = $src ? aff_logo_net($src) : null; }
+    return $cache[$f];
+}
+/* Écusson aux initiales, quand aucun logo n'existe pour le club */
+function aff_ecusson_initiales($im, string $nom, float $cx, float $cy, float $d): void {
+    $h = 0; foreach (mb_str_split($nom) as $ch) $h = ($h * 31 + mb_ord($ch)) % 360;
+    $w = $d * .86; $x = $cx - $w / 2; $y = $cy - $d / 2;
+    $forme = fn($m) => [$x + $m, $y + $d * .06 + $m, $cx, $y + $m, $x + $w - $m, $y + $d * .06 + $m, $x + $w - $m, $y + $d * .52,
+                        $cx + $w * .28, $y + $d * .86 - $m * .6, $cx, $y + $d - $m, $cx - $w * .28, $y + $d * .86 - $m * .6, $x + $m, $y + $d * .52];
+    aff_poly($im, $forme(0), aff_c($im, '#FFFFFF'));
+    aff_poly($im, $forme(max(3, $d * .05)), aff_c($im, aff_hsl($h, .50, .36)));
+    aff_texte($im, aff_initiales($nom), $cx, $cy + $d * .12, $d * .38, '900', '#FFFFFF', $w * .8, 'center');
+}
+function aff_initiales(string $nom): string {
+    $mots = array_values(array_filter(preg_split('/\s+/', preg_replace('/[^0-9A-Za-zÀ-ÿ ]/u', ' ', $nom))));
+    $forts = array_values(array_filter($mots, fn($m) => !preg_match('/^(fc|as|us|es|o|ol|ent|sc|ac|cs|co|am|et|f|s|de|du|des|la|le|les|d|l)$/i', $m)));
+    $src = $forts ?: $mots;
+    $i = implode('', array_map(fn($m) => mb_substr($m, 0, 1), array_slice($src, 0, 2)));
+    return aff_maj($i !== '' ? $i : mb_substr($nom, 0, 2));
+}
+function aff_blason_adv($im, string $nom, float $x, float $y, float $d): void {
+    $cx = $x + $d / 2; $cy = $y + $d / 2;
+    $logo = aff_logo_adv($nom);
+    if ($logo) {
+        imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d), (int) round($d), aff_c($im, '#FFFFFF'));
+        aff_contenir($im, $logo, $cx, $cy, $d * .74, $d * .74);
+        return;
+    }
+    $h = 0; foreach (mb_str_split($nom) as $ch) $h = ($h * 31 + mb_ord($ch)) % 360;
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d), (int) round($d), aff_c($im, '#FFFFFF', .5));
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d - max(4, $d * .08)), (int) round($d - max(4, $d * .08)), aff_c($im, aff_hsl($h, .52, .38)));
+    aff_texte($im, aff_initiales($nom), $cx, $cy + $d * .15, $d * .42, '800', '#FFFFFF', 0, 'center');
+}
+function aff_blason_club($im, float $x, float $y, float $d): void {
+    static $b = false;
+    if ($b === false) $b = aff_image(dirname(__DIR__) . '/img/blason.png');
+    if ($b) aff_contenir($im, $b, $x + $d / 2, $y + $d / 2, $d, $d);
+}
+
+/* ---------- fond et bandeau partenaires ---------- */
+/* Lumière douce : formes dessinées en niveaux de gris sur un petit calque noir, floutées,
+   transformées en transparence puis agrandies sur l'affiche (halos, faisceaux, brume). */
+function aff_lueur($im, array $formes, float $flou, string $couleur, float $force = 1.0): void {
+    $W = AFF_W; $H = aff_h();
+    $k = max(2, (int) round($flou / 3.5)); $w = (int) ceil($W / $k); $h = (int) ceil($H / $k);
+    $c = imagecreatetruecolor($w, $h);
+    imagefilledrectangle($c, 0, 0, $w, $h, imagecolorallocate($c, 0, 0, 0));
+    foreach ($formes as $f) $f($c, $k);
+    $n = max(1, (int) round(2 * ($flou / $k) ** 2));
+    for ($i = 0; $i < min($n, 40); $i++) imagefilter($c, IMG_FILTER_GAUSSIAN_BLUR);
+    [$r, $g, $b] = sscanf(ltrim($couleur, '#'), '%02x%02x%02x');
+    $l = imagecreatetruecolor($w, $h); imagealphablending($l, false); imagesavealpha($l, true);
+    for ($y = 0; $y < $h; $y++) for ($x = 0; $x < $w; $x++) {
+        $v = (imagecolorat($c, $x, $y) >> 16) & 255;
+        $a = 127 - (int) min(127, $v / 255 * 127 * $force);
+        imagesetpixel($l, $x, $y, imagecolorallocatealpha($l, $r, $g, $b, $a));
+    }
+    imagedestroy($c);
+    imagecopyresampled($im, $l, 0, 0, 0, 0, $W, $H, $w, $h);
+    imagedestroy($l);
+}
+function aff_gris($c, int $v): int { return imagecolorallocate($c, $v, $v, $v); }
+
+function aff_photo_fond(): ?string {
+    foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) if (is_file($p = dirname(__DIR__) . "/img/fond-affiche.$ext")) return $p;
+    return null;
+}
+/* Décor : stade de nuit (projecteurs, tribunes aux couleurs du club, pelouse en perspective). */
+function aff_fond($im, float $H2): void {
+    $W = AFF_W; $H = aff_h(); mt_srand(4);
+    // une image de fond choisie par le club (img/fond-affiche.jpg) remplace le décor dessiné
+    foreach (array_filter([aff_photo_fond()]) as $p) {
+        if (!($src = aff_image($p))) continue;
+        $iw = imagesx($src); $ih = imagesy($src);
+        // 1) arrière-plan : la même image, agrandie, floutée et assombrie (remplit les côtés sans bandes noires)
+        $k = max($W / $iw, $H / $ih); $sw = $W / $k; $sh = $H / $k;
+        $pw = (int) ceil($W / 12); $ph = (int) ceil($H / 12);
+        $petit = imagecreatetruecolor($pw, $ph);
+        imagecopyresampled($petit, $src, 0, 0, (int) (($iw - $sw) / 2), (int) (($ih - $sh) / 2), $pw, $ph, (int) $sw, (int) $sh);
+        for ($i = 0; $i < 12; $i++) imagefilter($petit, IMG_FILTER_GAUSSIAN_BLUR);
+        imagecopyresampled($im, $petit, 0, 0, 0, 0, $W, $H, $pw, $ph);
+        imagedestroy($petit);
+        aff_rect($im, 0, 0, $W, $H, aff_c($im, '#050B1F', .45));
+        // 2) l'image, à la taille réglée par le club : 0 % = entière (petite), 100 % = remplit tout (bords coupés)
+        $zoom = max(0, min(100, (int) reglage('fond_zoom', '60'))) / 100;
+        $kIn = min($W / $iw, $H2 / $ih); $kOut = max($W / $iw, $H2 / $ih);
+        $k = $kIn + ($kOut - $kIn) * $zoom; $dw = $iw * $k; $dh = $ih * $k;
+        imagecopyresampled($im, $src, (int) round(($W - $dw) / 2), (int) round(($H2 - $dh) / 2), 0, 0, (int) round($dw), (int) round($dh), $iw, $ih);
+        imagedestroy($src);
+        // 3) léger voile bleu pour la lisibilité des textes (plus léger qu'avant : l'image reste bien visible)
+        for ($y = 0; $y < $H; $y++) { $t = $y / $H; imageline($im, 0, $y, $W - 1, $y, aff_c($im, '#081234', .18 + .30 * $t)); }
+        aff_lueur($im, [function ($c, $k) use ($W, $H) {
+            imagefilledrectangle($c, 0, 0, (int) ($W / $k), (int) ($H / $k), aff_gris($c, 170));
+            imagefilledellipse($c, (int) ($W / 2 / $k), (int) ($H / 2 / $k), (int) ($W * .84 / $k), (int) ($H * .90 / $k), aff_gris($c, 0));
+        }], 120, '#000000');
+        return;
+    }
+    $hz = $H2 * .47; $tb = $hz - $H2 * .20; $py = $tb - $H2 * .10;
+    // ciel de nuit
+    aff_degrade_vertical($im, 0, $hz + 1, [[0, '#04091A', 1], [1, '#0C1F4C', 1]]);
+    // toit et tribunes
+    aff_poly($im, [0, $tb - 30, $W, $tb - 50, $W, $tb, 0, $tb + 14], aff_c($im, '#060A18'));
+    aff_rect($im, 0, $tb, $W, $hz - $tb, aff_c($im, '#0C142C'));
+    $cBleu = aff_c($im, '#1C63C4', .9); $cBlanc = aff_c($im, '#E6ECFA', .86); $cOr = aff_c($im, '#C9A227', .78); $cOmbre = aff_c($im, '#263256');
+    $sep = aff_c($im, '#060A18', .63);
+    for ($r = 0, $y = (int) $tb + 8; $y < $hz - 4; $y += 11, $r++) {     // le public, rangée par rangée
+        for ($x = mt_rand(0, 6); $x < $W; $x += 6 + mt_rand(0, 3)) {
+            $v = mt_rand(0, 99);
+            $col = $v < 28 ? $cBleu : ($v < 45 ? $cBlanc : ($v < 48 ? $cOr : $cOmbre));
+            imagefilledellipse($im, $x + 2, $y + 3, 5, 6, $col);
+        }
+        if ($r % 4 === 3) aff_rect($im, 0, $y + 8, $W, 2, $sep);
+    }
+    // pelouse en perspective : bandes de tonte de plus en plus hautes vers le bas
+    for ($y = $hz, $h = 14, $i = 0; $y < $H; $y += $h, $h *= 1.28, $i++) aff_rect($im, 0, $y, $W, $h + 1, aff_c($im, $i % 2 ? '#1F6C38' : '#257A40'));
+    $L = aff_c($im, '#FFFFFF', .59);
+    aff_rect($im, 0, $hz + 8, $W, 4, $L);
+    aff_poly($im, [$W / 2 - 2, $hz + 10, $W / 2 + 2, $hz + 10, $W / 2 + 10, $H, $W / 2 - 10, $H], $L);
+    $cy = $hz + ($H - $hz) * .30;
+    for ($t = 0; $t < 5; $t++) imageellipse($im, (int) ($W / 2), (int) $cy, 660 - $t, 140 - $t, $L);
+    imagefilledellipse($im, (int) ($W / 2), (int) $cy, 14, 6, $L);
+    // pylônes et rampes de projecteurs
+    foreach ([$W * .12, $W * .88] as $px) {
+        aff_rect($im, $px - 4, $py, 8, $tb - $py, aff_c($im, '#141A2C'));
+        aff_rect($im, $px - 46, $py - 30, 92, 38, aff_c($im, '#1E2438'));
+        for ($gx = 0; $gx < 4; $gx++) for ($gy = 0; $gy < 2; $gy++) aff_rect($im, $px - 40 + $gx * 21, $py - 25 + $gy * 16, 14, 11, aff_c($im, '#FFFAE1'));
+    }
+    // faisceaux, halos, éclat des projecteurs, brume au-dessus de la pelouse
+    $pieds = $hz + ($H - $hz) * .5;
+    aff_lueur($im, array_map(fn($px) => function ($c, $k) use ($px, $py, $pieds, $W) {
+        $fx = $W * .5 + ($px - $W * .5) * .15;
+        aff_poly($c, [($px - 30) / $k, $py / $k, ($px + 30) / $k, $py / $k, ($fx + 230) / $k, $pieds / $k, ($fx - 230) / $k, $pieds / $k], aff_gris($c, 70));
+    }, [$W * .12, $W * .88]), 22, '#D7E6FF');
+    aff_lueur($im, array_merge(
+        array_map(fn($px) => function ($c, $k) use ($px, $py) { imagefilledellipse($c, (int) ($px / $k), (int) (($py - 20) / $k), (int) (300 / $k), (int) (300 / $k), aff_gris($c, 255)); }, [$W * .12, $W * .88]),
+        [function ($c, $k) use ($hz, $W) { imagefilledrectangle($c, 0, (int) (($hz - 60) / $k), (int) ($W / $k), (int) (($hz + 60) / $k), aff_gris($c, 90)); }]
+    ), 50, '#DCE6FF');
+    aff_lueur($im, array_map(fn($px) => function ($c, $k) use ($px, $py) { imagefilledellipse($c, (int) ($px / $k), (int) (($py - 15) / $k), (int) max(2, 120 / $k), (int) max(2, 80 / $k), aff_gris($c, 255)); }, [$W * .12, $W * .88]), 14, '#FFFFFA');
+    // voile bleu du club vers le bas, et vignette : les textes restent lisibles
+    for ($y = 0; $y < $H; $y++) { $t = $y / $H; $o = (60 + 110 * max(0, $t - .35)) / 255; imageline($im, 0, $y, $W - 1, $y, aff_c($im, '#081234', $o)); }
+    aff_lueur($im, [function ($c, $k) use ($W, $H) {
+        imagefilledrectangle($c, 0, 0, (int) ($W / $k), (int) ($H / $k), aff_gris($c, 170));
+        imagefilledellipse($c, (int) ($W / 2 / $k), (int) ($H / 2 / $k), (int) ($W * .84 / $k), (int) ($H * .90 / $k), aff_gris($c, 0));
+    }], 120, '#000000');
+}
+function aff_sponsors(): array {
+    $d = aff_doc('site/sponsors');
+    // les 30 partenaires du club : img/partenaires/p01 à p30 (jpg ou png), dans cet ordre ; sinon l'ancienne liste du site
+    $fixes = [];
+    for ($i = 1; $i <= 30; $i++) {
+        $id = sprintf('p%02d', $i);
+        foreach (['jpg', 'png', 'webp'] as $ext) if (is_file(dirname(__DIR__) . "/img/partenaires/$id.$ext")) { $fixes[] = $id; break; }
+    }
+    $ids = $fixes ?: array_slice(!empty($d['ids']) ? $d['ids'] : AFF_SPONSORS_DEFAUT, 0, 30);
+    // deux feuilles par annonce : la 1re moitié des partenaires sur la feuille domicile, la 2de sur la feuille extérieur
+    $partie = $GLOBALS['aff_sp_partie'] ?? null;
+    if ($partie === 1 || $partie === 2) { $moitie = (int) ceil(count($ids) / 2); $ids = $partie === 1 ? array_slice($ids, 0, $moitie) : array_slice($ids, $moitie); }
+    return $ids;
+}
+function aff_grille(int $n): array {
+    if (aff_compact()) {   // publication ou feuille : bandeau plus bas, logos sur deux lignes
+        $cols = $n <= 5 ? max($n, 1) : (int) ceil($n / ceil($n / 8));   // 15 logos : 2 lignes de 8 et 7
+        return ['cols' => $cols, 'lignes' => (int) ceil(max($n, 1) / $cols), 'ch' => aff_h() < 1200 ? 40 : 48, 'gap' => 6, 'entete' => aff_h() < 1200 ? 44 : 50];
+    }
+    $cols = $n <= 4 ? max($n, 1) : ($n <= 12 ? 4 : 5);
+    return ['cols' => $cols, 'lignes' => (int) ceil(max($n, 1) / $cols), 'ch' => $n > 12 ? 66 : 82, 'gap' => 10, 'entete' => 64];
+}
+function aff_hauteur_sponsors(): int {
+    $n = count(aff_sponsors());
+    if (!$n) return 118;
+    $g = aff_grille($n);
+    return $g['entete'] + $g['lignes'] * ($g['ch'] + $g['gap']) + 16;
+}
+function aff_fond_logo($src): string {
+    $w = imagesx($src) - 1; $h = imagesy($src) - 1; $somme = [0, 0, 0]; $n = 0;
+    foreach ([[0, 0], [$w, 0], [0, $h], [$w, $h]] as [$x, $y]) {
+        $c = imagecolorsforindex($src, imagecolorat($src, $x, $y));
+        if ($c['alpha'] < 30) { $somme[0] += $c['red']; $somme[1] += $c['green']; $somme[2] += $c['blue']; $n++; }
+    }
+    if (!$n) return '#F2F4FA';
+    [$r, $g, $b] = array_map(fn($v) => (int) round($v / $n), $somme);
+    return ($r * .299 + $g * .587 + $b * .114) < 110 ? sprintf('#%02x%02x%02x', $r, $g, $b) : '#F2F4FA';
+}
+function aff_bandeau_sponsors($im, float $y, float $h): void {
+    $ids = aff_sponsors(); $g = aff_grille(count($ids));
+    aff_rect($im, 0, $y, AFF_W, $h, aff_c($im, '#FFFFFF'));
+    aff_rect($im, 0, $y, AFF_W, 8, aff_c($im, '#1C63C4'));
+    aff_rect($im, 0, $y + 8, AFF_W, 4, aff_c($im, '#C9A227'));
+    aff_texte($im, 'NOS PARTENAIRES', AFF_W / 2, $y + (aff_compact() ? 42 : 54), aff_compact() ? 30 : 38, '800', '#0B1633', 0, 'center');
+    $cw = (AFF_W - 56) / $g['cols'];
+    $ch = min(130, max($g['ch'], ($h - $g['entete'] - 16) / max(1, $g['lignes']) - $g['gap']));   // story : logos plus grands
+    $y0 = $y + $g['entete'] + max(0, ($h - $g['entete'] - 16 - $g['lignes'] * ($ch + $g['gap'])) / 2);
+    foreach ($ids as $i => $id) {
+        $c = $i % $g['cols']; $r = intdiv($i, $g['cols']);
+        $x = 28 + $c * $cw; $yy = $y0 + $r * ($ch + $g['gap']);
+        $f = null;
+        foreach (['jpg', 'png', 'webp'] as $ext) if (is_file($p = dirname(__DIR__) . "/img/partenaires/$id.$ext")) { $f = $p; break; }
+        $src = $f ? aff_image($f) : null;
+        $m = aff_compact() ? 3 : 5; $pad = aff_compact() ? 14 : 36;
+        aff_coin($im, $x + $m, $yy, $cw - 2 * $m, $ch, 9, aff_c($im, $src ? aff_fond_logo($src) : '#F2F4FA'));
+        if ($src) aff_contenir($im, $src, $x + $cw / 2, $yy + $ch / 2, $cw - $pad, $ch - 14);
+    }
+}
+function aff_nouvelle() {
+    $im = imagecreatetruecolor(AFF_W, aff_h());
+    imagealphablending($im, true);
+    return $im;
+}
+
+/* ---------- affiche : rencontres ou résultats du week-end ---------- */
+const AFF_MOIS_C = ['JANV.', 'FÉV.', 'MARS', 'AVRIL', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+function aff_jour_court(string $d): string {
+    $t = strtotime($d . ' 12:00');
+    return aff_maj(AFF_JOURS[(int) date('w', $t)]) . ' ' . (int) date('j', $t) . ' ' . AFF_MOIS_C[(int) date('n', $t) - 1];
+}
+function aff_logo_rond($im, string $nom, float $cx, float $cy, float $d): void {
+    $logo = aff_logo_adv($nom);
+    if ($logo) {
+        imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d * 1.08), (int) round($d * 1.08), aff_c($im, '#FFFFFF', .92));
+        aff_contenir($im, $logo, $cx, $cy, $d * .86, $d * .86, 3); return;
+    }
+    aff_ecusson_initiales($im, $nom, $cx, $cy, $d);
+}
+function aff_liste(array $matchs, string $samedi, bool $resultats, array $opts = []) {
+    if (($nuit = afn_liste($matchs, $samedi, $resultats, $opts)) !== null) return $nuit;     // affiches « stade de nuit »
+    if ($fond = aff_fond_lieu($opts['lieu'] ?? null)) {
+        $GLOBALS['aff_sp_partie'] = in_array($opts['partie'] ?? null, [1, 2], true) ? $opts['partie'] : null;
+        $r = aff_liste_photo($matchs, $samedi, $resultats, $opts, $fond);
+        $GLOBALS['aff_sp_partie'] = null;
+        return $r;
+    }
+    $im = aff_nouvelle(); $W = AFF_W; $H = aff_h();
+    $lieu = in_array($opts['lieu'] ?? '', ['dom', 'ext'], true) ? $opts['lieu'] : null;
+    $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
+    $sp = $opts['sponsors'] ?? true;
+    $hSp = $sp ? aff_hauteur_sponsors() : 0; $H2 = $H - $hSp;
+    aff_fond($im, $H2);
+    $kh = aff_h() < 1200 ? .58 : (aff_h() < 1500 ? .8 : 1);
+    $cx = $W / 2; $photo = aff_photo_fond() !== null;
+    $dy = 0;
+    if (!$photo) { aff_blason_club($im, $cx - 70 * $kh, 18 * $kh, 140 * $kh); $dy = 130 * $kh; }   // l'image du club porte déjà son logo
+    $t1 = 'WEEK-END'; $s1 = aff_fit($t1, 150 * $kh, '900', $W - 120);
+    aff_texte_evide($im, $t1, $cx - aff_larg($t1, $s1, '900') / 2, 165 * $kh + $dy, $s1, '#FFFFFF', 0);
+    aff_texte($im, aff_maj(($opts['titre'] ?? '') !== '' ? $opts['titre'] : ($resultats ? 'Les résultats' : 'Les rencontres')), $cx, 265 * $kh + $dy, 92 * $kh, '900', '#FFFFFF', $W - 120, 'center');
+    if ($lieu) {           // plus de dates : seulement domicile ou extérieur
+        $lib = $lieu === 'dom' ? 'À DOMICILE' : "À L'EXTÉRIEUR"; $pl = 34 * $kh; $wp = aff_larg($lib, $pl, '800') + 60;
+        $y0 = 292 * $kh + $dy;
+        aff_poly($im, [$cx - $wp / 2 + 16, $y0, $cx + $wp / 2, $y0, $cx + $wp / 2 - 16, $y0 + 50 * $kh, $cx - $wp / 2, $y0 + 50 * $kh], aff_c($im, '#C9A227'));
+        aff_texte($im, $lib, $cx, $y0 + 38 * $kh, $pl, '800', '#0B1633', 0, 'center');
+    }
+    $HE = 390 * $kh + $dy; $dispo = $H2 - $HE - ($kh < 1 ? 16 : 30);
+    $nbM = array_sum(array_map(fn($j) => count($j['matchs']), $plan)); $nbJ = count($plan);
+    if (!$nbM) aff_texte($im, $resultats ? 'Aucun résultat ce week-end' : 'Aucun match programmé ce week-end', 48, $HE + 120, 52, '800', '#C9D4F2', $W - 96);
+    $besoin = max(1, $nbJ * 74 + $nbM * 128);
+    // les lignes grandissent jusqu'à 1,5 fois, puis tout l'espace restant est réparti : la liste va jusqu'en bas
+    $f = max(.3, min(1.5, $dispo / $besoin)); $z = min($f, 1.3); $zl = min($f, 1.6); $fj = min($f, 1.3);
+    $HJ = 74 * $fj; $HL = 128 * $f;
+    $aere = $nbM + $nbJ ? max(0, ($dispo - $nbJ * $HJ - $nbM * $HL) / ($nbM + $nbJ)) : 0;
+    $y = $HE;
+    foreach ($plan as $j) {
+        $y += $aere / 2;
+        $lib = aff_jour_court($j['date']); $pj = 46 * $fj;
+        aff_texte($im, $lib, 48, $y + $HJ * .72, $pj, '900', '#FFFFFF');
+        $wj = aff_larg($lib, $pj, '900');
+        aff_rect($im, 48 + $wj + 18, $y + $HJ * .72 - 16 * $fj, $W - 96 - $wj - 18, 4, aff_c($im, '#C9A227'));
+        $y += $HJ + $aere / 2;
+        foreach ($j['matchs'] as $m) {
+            $top = $y + 6; $hb = $HL - 12; $cy = $top + $hb / 2; $dom = !empty($m['dom']);
+            aff_coin($im, 34, $top - 2, $W - 68, $hb + 4, 13, aff_c($im, '#FFFFFF', .22));   // liseré
+            aff_coin($im, 36, $top, $W - 72, $hb, 12, aff_c($im, '#061030', .50));           // verre foncé : l'image de fond se voit
+            // catégorie : colonne à gauche de la carte (les logos ne passent jamais dessus)
+            $wt = 150; $ct = aff_c($im, $dom ? '#1C63C4' : '#33476E', .82);
+            aff_coin($im, 36, $top, 40, $hb, 12, $ct);
+            aff_poly($im, [56, $top, 36 + $wt + 16, $top, 36 + $wt, $top + $hb, 56, $top + $hb], $ct);
+            if (($m['sous'] ?? '') !== '') {     // catégorie en grand, niveau et poule en dessous
+                aff_texte($im, aff_maj((string) $m['equipe']), 36 + $wt / 2 + 2, $cy - $hb * .02, min($hb * .28, 32), '900', '#FFFFFF', $wt - 26, 'center');
+                aff_texte($im, $m['sous'], 36 + $wt / 2 + 2, $cy + $hb * .24, min($hb * .16, 19), '800', '#CFE0FF', $wt - 30, 'center');
+            } else aff_texte($im, aff_maj((string) $m['equipe']), 36 + $wt / 2 + 2, $cy + $hb * .11, min($hb * .30, 34), '900', '#FFFFFF', $wt - 26, 'center');
+            // tailles calculées à partir de la hauteur de la ligne : le plus grand possible
+            $ta = min($hb * .78, 96); $fn = min($hb * .40, 46); $ft = min($hb * .44, 52); $wc = min($hb * 1.6, 190);
+            $xc = 36 + $wt + ($W - 72 - $wt) / 2 + 6; $xg = 36 + $wt + 22; $xd = $W - 36 - 16;
+            $zone = $xc - $wc / 2 - 14 - ($xg + $ta + 12);
+            $nous = ['nom' => 'PIERRELATTE', 'club' => true]; $eux = ['nom' => aff_maj((string) $m['adv']), 'brut' => (string) $m['adv'], 'club' => false];
+            [$gauche, $droite] = $dom ? [$nous, $eux] : [$eux, $nous];
+            foreach ([[$gauche, 'g'], [$droite, 'd']] as [$e, $cote]) {
+                $cx = $cote === 'g' ? $xg + $ta / 2 : $xd - $ta / 2;
+                if ($e['club']) aff_blason_club($im, $cx - $ta * .52, $cy - $ta * .52, $ta * 1.04);
+                else aff_logo_rond($im, $e['brut'], $cx, $cy, $ta);
+                $col = $e['club'] ? '#8FC2FF' : '#FFFFFF';
+                if ($cote === 'g') aff_texte($im, $e['nom'], $xg + $ta + 12, $cy + $fn * .36, $fn, '900', $col, $zone);
+                else aff_texte($im, $e['nom'], $xd - $ta - 12, $cy + $fn * .36, $fn, '900', $col, $zone, 'right');
+            }
+            // au centre : l'heure, ou le score (domicile - extérieur) coloré selon le résultat de Pierrelatte
+            if ($resultats && aff_joue($m)) {
+                $col = ['V' => '#16A34A', 'N' => '#6B7280', 'D' => '#DC2626'][aff_issue($m)];
+                $lib = ($dom ? $m['bp'] : $m['bc']) . ' - ' . ($dom ? $m['bc'] : $m['bp']);
+            } elseif ($resultats) { $col = '#9CA3AF'; $lib = 'NC'; }
+            else { $col = '#C9A227'; $lib = aff_maj(aff_hfr($m['heure'] ?? '')); }
+            $hh = $hb * .62;
+            aff_poly($im, [$xc - $wc / 2 + 12, $cy - $hh / 2, $xc + $wc / 2, $cy - $hh / 2, $xc + $wc / 2 - 12, $cy + $hh / 2, $xc - $wc / 2, $cy + $hh / 2], aff_c($im, $col));
+            aff_texte($im, $lib, $xc, $cy + $ft * .36, $ft, '900', $resultats ? '#FFFFFF' : '#0B1633', $wc - 30, 'center');
+            $y += $HL + $aere;
+        }
+    }
+    if ($hSp) aff_bandeau_sponsors($im, $H2, $hSp);
+    aff_grain($im);
+    return $im;
+}
+
+/* ================= Feuilles « week-end » sur les images du club =================
+   img/fond-domicile.jpg (le stade) pour les matchs à domicile, img/fond-exterieur.jpg (l'avion) pour l'extérieur.
+   L'image est affichée entière (1080 x 1620). Les partenaires s'ajoutent SOUS l'image : rien n'est caché.
+   En story (1080 x 1920), la feuille est centrée sur un fond flouté tiré de l'image. */
+const AFF_HF = 1620;
+function aff_fond_lieu(?string $lieu): ?string {
+    $noms = $lieu === 'ext' ? ['fond-exterieur', 'fond-domicile'] : ['fond-domicile', 'fond-exterieur'];
+    foreach ($noms as $n) foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext)
+        if (is_file($p = dirname(__DIR__) . "/img/$n.$ext")) return $p;
+    return null;
+}
+function aff_compact(): bool { return aff_h() < 1500 || !empty($GLOBALS['aff_feuille']); }
+/* l'image du club, entière, sur toute la largeur (recadrée au centre si elle n'est pas au format 2:3) */
+function aff_poser_fond($im, string $fichier): void {
+    $src = aff_image($fichier);
+    if (!$src) { aff_rect($im, 0, 0, AFF_W, AFF_HF, aff_c($im, '#0B1633')); return; }
+    $iw = imagesx($src); $ih = imagesy($src);
+    $k = max(AFF_W / $iw, AFF_HF / $ih); $sw = AFF_W / $k; $sh = AFF_HF / $k;
+    imagecopyresampled($im, $src, 0, 0, (int) (($iw - $sw) / 2), (int) (($ih - $sh) / 2), AFF_W, AFF_HF, (int) $sw, (int) $sh);
+    imagedestroy($src);
+}
+/* barre d'un match : dégradé bleu nuit → bleu club → bleu nuit, coins arrondis, fin contour blanc */
+function aff_barre($im, float $x0, float $y0, float $w, float $h, float $r): void {
+    $w = (int) round($w); $h = (int) round($h); $r = (int) round(min($r, $h / 2));
+    $b = imagecreatetruecolor($w, $h);
+    imagealphablending($b, false); imagesavealpha($b, true);
+    for ($x = 0; $x < $w; $x++) {
+        $k = (1 - abs($x / max(1, $w - 1) - .5) * 2) * .55;
+        imageline($b, $x, 0, $x, $h - 1, imagecolorallocatealpha($b, (int) (11 + 17 * $k), (int) (22 + 77 * $k), (int) (51 + 145 * $k), 15));
+    }
+    $vide = imagecolorallocatealpha($b, 0, 0, 0, 127); $bord = imagecolorallocatealpha($b, 255, 255, 255, 96);
+    foreach ([[$r, $r], [$w - 1 - $r, $r], [$r, $h - 1 - $r], [$w - 1 - $r, $h - 1 - $r]] as [$cx, $cy]) {
+        $xa = $cx <= $r ? 0 : $cx; $ya = $cy <= $r ? 0 : $cy;
+        for ($y = $ya; $y <= $ya + $r; $y++) for ($x = $xa; $x <= $xa + $r; $x++) {
+            $d = sqrt(($x - $cx) ** 2 + ($y - $cy) ** 2);
+            if ($d > $r) imagesetpixel($b, $x, $y, $vide);
+            elseif ($d > $r - 2) imagesetpixel($b, $x, $y, $bord);
+        }
+    }
+    imagefilledrectangle($b, $r, 0, $w - 1 - $r, 1, $bord); imagefilledrectangle($b, $r, $h - 2, $w - 1 - $r, $h - 1, $bord);
+    imagefilledrectangle($b, 0, $r, 1, $h - 1 - $r, $bord); imagefilledrectangle($b, $w - 2, $r, $w - 1, $h - 1 - $r, $bord);
+    imagecopy($im, $b, (int) round($x0), (int) round($y0), 0, 0, $w, $h);
+    imagedestroy($b);
+}
+/* cadre du résultat : fond de couleur transparent (on voit l'image derrière), bords bien pleins */
+const AFF_COUL_ISSUE = ['V' => '#16A34A', 'N' => '#8A8F98', 'D' => '#DC2626'];
+function aff_cadre_resultat($im, float $x, float $y, float $w, float $h, float $r, string $hex, float $ep = 5): void {
+    $w = (int) round($w); $h = (int) round($h);
+    [$cr, $cg, $cb] = sscanf(ltrim($hex, '#'), '%02x%02x%02x');
+    $l = imagecreatetruecolor($w, $h); imagealphablending($l, false); imagesavealpha($l, true);
+    $vide = imagecolorallocatealpha($l, 0, 0, 0, 127);
+    $fond = imagecolorallocatealpha($l, $cr, $cg, $cb, 72);        // environ 45 % d'opacité
+    $bord = imagecolorallocatealpha($l, $cr, $cg, $cb, 0);
+    $hw = $w / 2; $hh = $h / 2;
+    for ($j = 0; $j < $h; $j++) for ($i = 0; $i < $w; $i++) {
+        $dx = abs($i + .5 - $hw) - ($hw - $r); $dy = abs($j + .5 - $hh) - ($hh - $r);
+        $d = sqrt(max($dx, 0) ** 2 + max($dy, 0) ** 2) + min(max($dx, $dy), 0) - $r;
+        imagesetpixel($l, $i, $j, $d > 0 ? $vide : ($d > -$ep ? $bord : $fond));
+    }
+    imagecopy($im, $l, (int) round($x), (int) round($y), 0, 0, $w, $h);
+    imagedestroy($l);
+}
+
+/* logo d'une équipe : rond blanc cerclé d'or, logo au centre (blason du club, logo adverse, ou écusson aux initiales) */
+function aff_logo_or($im, string $nom, bool $club, float $cx, float $cy, float $d): void {
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d + 7), (int) round($d + 7), aff_c($im, '#C9A227'));
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d), (int) round($d), aff_c($im, '#FFFFFF'));
+    if ($club) { aff_blason_club($im, $cx - $d * .46, $cy - $d * .46, $d * .92); return; }
+    $logo = aff_logo_adv($nom) ?: aff_logo_district($nom);
+    if ($logo) { aff_contenir($im, $logo, $cx, $cy, $d * .74, $d * .74, 3); return; }
+    aff_ecusson_initiales($im, $nom, $cx, $cy, $d * .72);
+}
+/* une ligne de match */
+function aff_ligne_match($im, array $m, bool $resultats, float $x0, float $y0, float $x1, float $hb): void {
+    $w = $x1 - $x0; $cy = $y0 + $hb / 2; $xc = ($x0 + $x1) / 2; $dom = !empty($m['dom']);
+    $z = min(1, $hb / 108);                                        // réduction quand il y a beaucoup de matchs
+    aff_ombre_coin($im, $x0, $y0, $w, $hb, 18, 4, 8);
+    aff_barre($im, $x0, $y0, $w, $hb, 18);
+    aff_rect($im, $x0 + 30, $y0, $w - 60, 2, aff_c($im, '#C9A227'));
+    // au centre : bloc blanc avec un trait de couleur en bas
+    $joue = $resultats && aff_joue($m);
+    if ($joue) { $issue = aff_issue($m); $trait = ['V' => '#22C55E', 'N' => '#A3A3A3', 'D' => '#EF4444'][$issue]; }
+    else $trait = $resultats ? '#A3A3A3' : '#C9A227';
+    $sw = 210 * max(.85, $z); $sh = $hb + 14 * $z; $sy = $cy - $sh / 2;
+    if ($resultats) aff_cadre_resultat($im, $xc - $sw / 2, $sy, $sw, $sh, 16 * $z, $joue ? AFF_COUL_ISSUE[$issue] : AFF_COUL_ISSUE['N'], 5 * max(.8, $z));
+    else {
+        aff_coin($im, $xc - $sw / 2, $sy, $sw, $sh, 16 * $z, aff_c($im, $trait));
+        aff_coin($im, $xc - $sw / 2, $sy, $sw, $sh - 8 * $z, 16 * $z, aff_c($im, '#FFFFFF'));
+    }
+    $gG = true; $gD = true;                                         // qui a gagné : le perdant est atténué
+    if ($joue) {
+        $sg = (int) ($dom ? $m['bp'] : $m['bc']); $sd = (int) ($dom ? $m['bc'] : $m['bp']);
+        $gG = $sg >= $sd; $gD = $sd >= $sg;
+        $ps = $hb * .74; $by = $cy + $ps * .34;
+        foreach ([[$sg, -1], [$sd, 1]] as [$v, $sens]) {
+            aff_texte($im, (string) $v, $xc + $sens * 44 * $z + 2, $by + 3, $ps, '900', '#000000', 0, 'center', .45);
+            aff_texte($im, (string) $v, $xc + $sens * 44 * $z, $by, $ps, '900', '#FFFFFF', 0, 'center');
+        }
+        aff_rect($im, $xc - 2, $cy - $hb * .26, 4, $hb * .46, aff_c($im, '#FFFFFF', .85));
+    } elseif ($resultats) {
+        aff_texte($im, 'NC', $xc, $cy + $hb * .2, $hb * .56, '900', '#FFFFFF', $sw - 30, 'center');   // score pas encore transmis à la FFF
+    } else {
+        $jour = aff_maj(AFF_JOURS[(int) date('w', strtotime($m['date'] . ' 12:00'))]);
+        aff_texte($im, $jour, $xc, $cy - $hb * .15, $hb * .22, '800', '#1C63C4', $sw - 30, 'center');
+        aff_texte($im, aff_maj(aff_hfr($m['heure'] ?? '')) ?: '–', $xc, $cy + $hb * .36, $hb * .56, '900', '#0B1633', $sw - 24, 'center');
+    }
+    // les deux équipes : celle qui reçoit à gauche, celle qui se déplace à droite
+    $ta = $hb * .84;
+    $nous = ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true];
+    $eux = ['nom' => aff_maj((string) $m['adv']), 'brut' => (string) $m['adv'], 'club' => false];
+    [$gauche, $droite] = $dom ? [$nous, $eux] : [$eux, $nous];
+    $zone = ($xc - $sw / 2 - 14) - ($x0 + 22 + $ta + 14);
+    foreach ([[$gauche, 'g', $gG], [$droite, 'd', $gD]] as [$e, $cote, $gagne]) {
+        $cx = $cote === 'g' ? $x0 + 22 + $ta / 2 : $x1 - 22 - $ta / 2;
+        aff_logo_or($im, $e['brut'], $e['club'], $cx, $cy, $ta);
+        $col = $e['club'] ? '#8FC2FF' : '#FFFFFF'; $op = $gagne ? 1 : .62; $fn = min(40, $hb * .36);
+        if ($cote === 'g') aff_texte($im, $e['nom'], $x0 + 22 + $ta + 14, $cy + $fn * .36, $fn, '900', $col, $zone, 'left', $op);
+        else aff_texte($im, $e['nom'], $x1 - 22 - $ta - 14, $cy + $fn * .36, $fn, '900', $col, $zone, 'right', $op);
+    }
+    // la catégorie, avec le niveau et la poule : onglet doré posé sur la barre
+    $lab = aff_maj((string) $m['equipe']) . (($m['sous'] ?? '') !== '' ? '  ·  ' . $m['sous'] : '');
+    $pl = 24 * $z; $hp = 32 * $z; $wl = aff_larg($lab, $pl, '800') + 36 * $z;
+    aff_coin($im, $x0 + 26, $y0 - $hp / 2 - 1, $wl, $hp, 8 * $z, aff_c($im, '#C9A227'));
+    aff_texte($im, $lab, $x0 + 26 + $wl / 2, $y0 + $pl * .34, $pl, '800', '#0B1633', 0, 'center');
+}
+/* ---------- carte d'un plateau ou d'un brassage (foot animation) ----------
+   Catégorie en onglet doré, logo et nom du club qui reçoit, stade et ville, jour et heure dans le bloc blanc,
+   et en bas les logos des autres clubs présents. */
+function aff_lieu_court(array $m): array {
+    if (!empty($m['dom'])) return ['STADE GUSTAVE JAUME', 'PIERRELATTE'];
+    $adr = (string) ($m['adresse'] ?? '');
+    $parts = array_values(array_filter(array_map('trim', explode(',', $adr))));
+    $stade = $parts[0] ?? '';
+    $ville = preg_match('/\b\d{5}\s+(.+)$/u', $adr, $v) ? trim($v[1]) : (count($parts) > 1 ? end($parts) : '');
+    return [aff_maj($stade), aff_maj($ville)];
+}
+/* brassage U13 : chaque équipe joue deux matchs sur le plateau → on garde les deux scores */
+function aff_scores_brassage(array $m): array {   // scores des U10 · U11 et des U13 (une ligne par équipe rencontrée)
+    return array_values(array_filter($m['resultats'] ?? [], fn($r) => is_numeric($r['bp'] ?? null) && is_numeric($r['bc'] ?? null) && trim((string) ($r['adv'] ?? '')) !== ''));
+}
+/* nom court d'un club pour les pastilles : « CERC.S. DE MALATAVERNE » → « MALATAVERNE », « AV. S. SUD ARDECHE FOOTBALL » → « SUD ARDECHE » */
+function aff_nom_court(string $nom): string {
+    $mots = preg_split('/\s+/u', trim(preg_replace('/\s+\d+$/', '', $nom)));
+    $vides = ['FC', 'US', 'AS', 'SC', 'ES', 'RC', 'CO', 'OL', 'AV', 'ENT', 'FOOTBALL', 'FOOT', 'CLUB', 'UNION', 'SPORTIVE', 'SPORTIF', 'ENTENTE', 'ETOILE',
+              'OLYMPIQUE', 'ASSOCIATION', 'SPORTING', 'AMICALE', 'DE', 'DU', 'DES', 'LA', 'LE', 'LES', 'ET'];
+    $test = fn($w) => str_contains($w, '.') || in_array(mb_strtoupper(preg_replace("/[^\p{L}]/u", '', $w)), $vides, true);
+    while (count($mots) > 1 && $test($mots[0])) array_shift($mots);
+    while (count($mots) > 1 && $test(end($mots))) array_pop($mots);
+    return aff_maj(implode(' ', $mots));
+}
+/* les deux lignes du bloc doré : « U10-U11 » / « AVENIR », « U13 » / « ÉQUIPE 4 », « U6-U7 » / « PLATEAU » */
+function aff_cat_lignes(array $m): array {
+    $e = aff_maj((string) ($m['equipe'] ?? ''));
+    if (preg_match('/^(U\s?\d{1,2})\s*·\s*(U\s?\d{1,2})\s*(.*)$/u', $e, $x)) return [$x[1] . '-' . $x[2], trim($x[3]) !== '' ? trim($x[3]) : aff_maj((string) ($m['comp'] ?? 'PLATEAU'))];
+    if (preg_match('/^(U\s?\d{1,2})\s*·?\s*(.*)$/u', $e, $x)) return [$x[1], trim($x[2]) !== '' ? trim($x[2]) : aff_maj((string) ($m['comp'] ?? ''))];
+    return [$e, aff_maj((string) ($m['comp'] ?? ''))];
+}
+/* bloc doré à gauche de la carte, dégradé vertical, coins arrondis à gauche seulement */
+function aff_bloc_cat($im, float $x0, float $y0, float $h, string $l1, string $l2): float {
+    $w = 190;
+    $bande = imagecrop($im, ['x' => (int) ($x0 + $w), 'y' => (int) $y0, 'width' => 20, 'height' => (int) ceil($h) + 1]);
+    aff_coin($im, $x0, $y0, $w + 18, $h, 18, aff_c($im, '#CFA235'));
+    for ($y = 18; $y < $h - 18; $y++) {
+        $t = $y / max(1, $h - 1);
+        aff_rect($im, $x0, $y0 + $y, $w, 1, imagecolorallocate($im, (int) (0xD9 - 24 * $t), (int) (0xB4 - 26 * $t), (int) (0x3A - 10 * $t)));
+    }
+    if ($bande) { imagecopy($im, $bande, (int) ($x0 + $w), (int) $y0, 0, 0, 20, (int) ceil($h) + 1); imagedestroy($bande); }
+    aff_texte($im, $l1, $x0 + $w / 2, $y0 + $h / 2 - 4, 46, '900', '#0B1633', $w - 24, 'center');
+    aff_texte($im, $l2, $x0 + $w / 2, $y0 + $h / 2 + 26, 26, '800', '#0B1633', $w - 24, 'center');
+    return $w;
+}
+function aff_carte_fond($im, float $x0, float $y0, float $x1, float $h): void {
+    aff_ombre_coin($im, $x0, $y0, $x1 - $x0, $h, 18, 4, 7);
+    aff_barre($im, $x0, $y0, $x1 - $x0, $h, 18);
+}
+/* hauteur d'une carte : rencontres 182 avec des adversaires (130 sans) ; résultats 66 + 66 par match */
+function aff_hauteur_plateau(array $m, bool $resultats): float {
+    if ($resultats) return 66 + 66 * max(1, count(aff_scores_brassage($m)));
+    return !empty($m['adversaires']) ? 182 : 130;
+}
+/* ---------- carte d'un plateau ou d'un brassage (rencontres) ---------- */
+function aff_ligne_plateau($im, array $m, float $x0, float $y0, float $x1, float $hb, bool $resultats = false): void {
+    if ($resultats) { aff_ligne_brassage_res($im, $m, $x0, $y0, $x1, $hb); return; }
+    $dom = !empty($m['dom']); $adv = array_values(array_filter($m['adversaires'] ?? [], 'strlen'));
+    aff_carte_fond($im, $x0, $y0, $x1, $hb);
+    [$l1, $l2] = aff_cat_lignes($m);
+    $wc = aff_bloc_cat($im, $x0, $y0, $hb, $l1, $l2);
+    $haut = $adv ? $hb - 62 : $hb;                                    // partie haute : club qui reçoit, stade, heure
+    $dl = min(78, $haut * .62); $lx = $x0 + $wc + 22 + $dl / 2;
+    aff_logo_or($im, $dom ? '' : (string) $m['adv'], $dom, $lx, $y0 + $haut / 2 + 4, $dl);
+    // jour et heure
+    $bw = 150; $bx = $x1 - 18 - $bw; $by = $y0 + 14; $bh = $haut - 24;
+    aff_coin($im, $bx, $by, $bw, $bh, 14, aff_c($im, '#C9A227'));
+    aff_coin($im, $bx, $by, $bw, $bh - 6, 14, aff_c($im, '#FFFFFF'));
+    $jour = aff_maj(AFF_JOURS[(int) date('w', strtotime($m['date'] . ' 12:00'))]);
+    aff_texte($im, $jour, $bx + $bw / 2, $by + $bh * .40, max(18, $bh * .24), '800', '#1C63C4', $bw - 16, 'center');
+    aff_texte($im, aff_maj(aff_hfr($m['heure'] ?? '')) ?: '–', $bx + $bw / 2, $by + $bh * .84, max(30, $bh * .42), '900', '#0B1633', $bw - 16, 'center');
+    // club qui reçoit et stade
+    $tx = $lx + $dl / 2 + 18; $zone = $bx - 16 - $tx;
+    [$stade, $ville] = aff_lieu_court($m);
+    aff_texte($im, $dom ? 'À DOMICILE' : aff_maj((string) $m['adv']), $tx, $y0 + $haut * .50, 40, '900', '#FFFFFF', $zone);
+    aff_texte($im, trim($stade . ($ville ? ' · ' . $ville : '')), $tx, $y0 + $haut * .50 + 34, 25, '700', '#A9CCFF', $zone);
+    // bande du bas : « CONTRE » puis une pastille par équipe (logo + nom court)
+    if ($adv) {
+        $yb = $y0 + $hb - 58;
+        aff_coin($im, $x0 + $wc + 10, $yb, ($x1 - 12) - ($x0 + $wc + 10), 46, 12, aff_c($im, '#050B1F', .60));
+        aff_texte($im, 'CONTRE', $x0 + $wc + 26, $yb + 31, 22, '900', '#E3B64C', 0);
+        $px = $x0 + $wc + 26 + aff_larg('CONTRE', 22, '900') + 16;
+        $place = ($x1 - 24 - $px) / min(4, count($adv));
+        foreach (array_slice($adv, 0, 4) as $k => $a) {
+            $cx = $px + $k * $place;
+            aff_logo_or($im, (string) $a, false, $cx + 17, $yb + 23, 32);
+            aff_texte($im, aff_nom_court((string) $a), $cx + 40, $yb + 32, 24, '800', '#FFFFFF', $place - 56);
+        }
+    }
+}
+/* ---------- résultats : une ligne par match « Pierrelatte · score · adversaire » ---------- */
+function aff_ligne_brassage_res($im, array $m, float $x0, float $y0, float $x1, float $hb): void {
+    aff_carte_fond($im, $x0, $y0, $x1, $hb);
+    [$l1, $l2] = aff_cat_lignes($m);
+    $wc = aff_bloc_cat($im, $x0, $y0, $hb, $l1, $l2);
+    $zx0 = $x0 + $wc + 18; $zx1 = $x1 - 18; $cx = ($zx0 + $zx1) / 2;
+    [$stade, $ville] = aff_lieu_court($m);
+    $lieu = !empty($m['dom']) ? 'À DOMICILE · STADE GUSTAVE JAUME' : aff_maj((string) $m['adv']) . ($ville ? ' · ' . $ville : '');
+    aff_texte($im, $lieu, $cx, $y0 + 34, 23, '800', '#A9CCFF', $zx1 - $zx0, 'center');
+    $scores = array_slice(aff_scores_brassage($m), 0, 6);
+    $n = max(1, count($scores)); $k = min(1, ($hb - 66) / (66 * $n));      // la carte peut être un peu réduite si la feuille est pleine
+    $rh = 58 * $k; $gap = 8 * $k; $gy = $y0 + 52;
+    foreach ($scores as $i => $r) {
+        $ry = $gy + $i * ($rh + $gap); $cy = $ry + $rh / 2;
+        $bp = (int) $r['bp']; $bc = (int) $r['bc']; $iss = $bp > $bc ? 'V' : ($bp < $bc ? 'D' : 'N');
+        $dl = 48 * $k; $sw = 110;
+        aff_logo_or($im, '', true, $zx0 + $dl / 2 + 4, $cy, $dl);
+        aff_texte($im, 'PIERRELATTE', $zx0 + $dl + 16, $cy + 10 * $k, 30 * $k, '900', '#A9CCFF', $cx - $sw / 2 - ($zx0 + $dl + 26));
+        aff_cadre_resultat($im, $cx - $sw / 2, $ry + 3, $sw, $rh - 6, 10, AFF_COUL_ISSUE[$iss], 3);
+        aff_texte($im, "$bp - $bc", $cx, $cy + 13 * $k, 38 * $k, '900', '#FFFFFF', $sw - 10, 'center');
+        aff_logo_or($im, (string) $r['adv'], false, $zx1 - $dl / 2 - 4, $cy, $dl);
+        aff_texte($im, aff_nom_court((string) $r['adv']), $zx1 - $dl - 16, $cy + 10 * $k, 30 * $k, '900', '#FFFFFF', ($zx1 - $dl - 26) - ($cx + $sw / 2 + 10), 'right');
+    }
+}
+function aff_liste_photo(array $matchs, string $samedi, bool $resultats, array $opts, string $fond) {
+    $lieu = in_array($opts['lieu'] ?? '', ['dom', 'ext'], true) ? $opts['lieu'] : null;
+    $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
+    [$im, $hBas, $hAvant, $story, $avecSp] = aff_feuille_debut($opts, $fond);
+    $GLOBALS['aff_bas'] = null;
+    $publication = !$story && $hAvant < AFF_HF;                 // format Instagram 4:5 : on remplira toute la largeur
+    $W = AFF_W; $cx = $W / 2;
+    // titre en haut au milieu, entre le blason et le logo de Pierrelatte
+    $fal = !empty($GLOBALS['aff_fal']);
+    $vetT = !empty($GLOBALS['aff_vet']);
+    $titre = ($opts['titre'] ?? '') !== '' ? aff_maj($opts['titre']) : ($fal ? 'FOOT ANIMATION' : ($vetT ? 'VÉTÉRANS' : ($resultats ? 'RÉSULTATS' : 'RENCONTRES')));
+    aff_texte($im, $titre, $cx + 3, 131, 96, '900', '#000000', 560, 'center', .45);
+    aff_texte($im, $titre, $cx, 128, 96, '900', '#FFFFFF', 560, 'center');
+    $sous = ($fal || $vetT) ? ($resultats ? 'RÉSULTATS DU WEEK-END' : 'RENCONTRES DU WEEK-END') : 'DU WEEK-END';
+    aff_texte($im, $sous, $cx + 2, 193, 54, '800', '#000000', 560, 'center', .45);
+    aff_texte($im, $sous, $cx, 191, 54, '800', '#C9A227', 560, 'center');
+    if ($lieu) {
+        $lib = $lieu === 'dom' ? 'À DOMICILE' : "À L'EXTÉRIEUR"; $pl = 34; $wp = aff_larg($lib, $pl, '800') + 70; $y0 = 290;
+        aff_poly($im, [$cx - $wp / 2 + 16, $y0, $cx + $wp / 2, $y0, $cx + $wp / 2 - 16, $y0 + 48, $cx - $wp / 2, $y0 + 48], aff_c($im, '#C9A227'));
+        aff_texte($im, $lib, $cx, $y0 + 36, $pl, '800', '#0B1633', 0, 'center');
+    }
+    // les matchs, dans l'ordre du week-end (le jour est écrit dans le bloc de l'heure)
+    $liste = [];
+    foreach ($plan as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
+    $n = count($liste);
+    if (!$n) aff_texte($im, $resultats ? 'AUCUN RÉSULTAT CE WEEK-END' : 'AUCUN MATCH PROGRAMMÉ CE WEEK-END', $cx, 900, 52, '800', '#FFFFFF', $W - 160, 'center');
+    else {
+        $ya = 510; $yb = 1310;                                     // sous l'avion ou la maison (toujours visibles), au-dessus du slogan
+        $fal = !empty($GLOBALS['aff_fal']);
+        $pas = min(150, ($yb - $ya) / $n); $hb = $pas * .72;
+        $y = $ya + ($publication ? 0 : (($yb - $ya) - $pas * $n) / 2) + ($pas - $hb) * .62;
+        if ($fal) {                                                            // foot animation : cartes de hauteur variable
+            $besoins = array_map(fn($m) => aff_hauteur_plateau($m, $resultats), $liste);
+            $gap = 26; $k = min(1, (($yb - $ya) - $gap * ($n - 1)) / max(1, array_sum($besoins)));
+            $total = array_sum($besoins) * $k + $gap * ($n - 1);
+            $y = $ya + ($publication ? 0 : max(0, (($yb - $ya) - $total) / 2));
+            foreach ($liste as $i => $m) {
+                $h = $besoins[$i] * $k;
+                if ($resultats) aff_ligne_brassage_res($im, $m, 70, $y, $W - 70, $h); else aff_ligne_plateau($im, $m, 70, $y, $W - 70, $h);
+                $y += $h + $gap;
+            }
+            $GLOBALS['aff_bas'] = $y - $gap;
+            $liste = [];
+        }
+        foreach ($liste as $m) {
+            aff_ligne_match($im, $m, $resultats, 78, $y, $W - 78, $hb);
+            $y += $pas;
+            $GLOBALS['aff_bas'] = $y - $pas + $hb;
+        }
+    }
+    return aff_feuille_fin($im, $hBas, $hAvant, $story, $avecSp);
+}
+
+/* ---------- outils communs aux feuilles sur image du club ---------- */
+function aff_feuille_debut(array $opts, string $fond): array {
+    $hAvant = aff_h(); $story = $hAvant === AFF_H;          // story 1080 × 1920 ; les autres formats sont des publications
+    $GLOBALS['aff_bas'] = null;                              // bas des cartes, noté par la feuille qui en dessine
+    $avecSp = (bool) ($opts['sponsors'] ?? true);
+    $GLOBALS['aff_feuille'] = true; $GLOBALS['aff_h'] = AFF_HF;
+    $hSp = $avecSp ? aff_hauteur_sponsors() : 0;
+    // story : le bas (partenaires, ou bandeau du club sans partenaires) prend toute la place restante, sans flou
+    $hBas = $story ? max($hSp, $hAvant - AFF_HF) : $hSp;
+    $GLOBALS['aff_h'] = AFF_HF + $hBas;
+    $im = aff_nouvelle();
+    aff_poser_fond($im, $fond);
+    aff_degrade_vertical($im, 560, 1330, [[0, '#050B1F', 0], [.13, '#050B1F', .30], [1, '#050B1F', .30]]);
+    return [$im, $hBas, $hAvant, $story, $avecSp];
+}
+/* bandeau du bas quand il n'y a pas de partenaires (story) : aux couleurs du club */
+function aff_bandeau_club($im, float $y, float $h): void {
+    aff_rect($im, 0, $y, AFF_W, $h, aff_c($im, '#0B1633'));
+    aff_rect($im, 0, $y, AFF_W, 8, aff_c($im, '#1C63C4'));
+    aff_rect($im, 0, $y + 8, AFF_W, 4, aff_c($im, '#C9A227'));
+    aff_texte($im, 'ASF-PIERRELATTE.FR', AFF_W / 2, $y + $h / 2 + 10, 64, '900', '#FFFFFF', AFF_W - 120, 'center');
+    aff_texte($im, "ATOM'SPORTS FOOTBALL PIERRELATTE · DEPUIS 1923", AFF_W / 2, $y + $h / 2 + 62, 30, '700', '#C9A227', AFF_W - 120, 'center');
+}
+function aff_feuille_fin($im, int $hBas, int $hAvant, bool $story, bool $avecSp) {
+    $HF = aff_h();
+    if ($hBas > 0) { if ($avecSp) aff_bandeau_sponsors($im, AFF_HF, $hBas); else aff_bandeau_club($im, AFF_HF, $hBas); }
+    aff_grain($im);
+    $GLOBALS['aff_feuille'] = false; $GLOBALS['aff_h'] = $hAvant;
+    if (!$story) {
+        // publication (fil Facebook et Instagram) : l'affiche ENTIÈRE, réduite et centrée au format 4:5,
+        // sur le bleu nuit du club avec un liseré doré — rien n'est coupé
+        if ($HF === $hAvant) return $im;
+        if ($HF < $hAvant) {                                   // format Facebook (1:2) : la feuille entière, centrée, bandes bleu nuit en haut et en bas
+            $s = imagecreatetruecolor(AFF_W, $hAvant); imagealphablending($s, true);
+            aff_rect($s, 0, 0, AFF_W, $hAvant, aff_c($s, '#0B1633'));
+            $y = (int) round(($hAvant - $HF) / 2);
+            imagecopy($s, $im, 0, $y, 0, 0, AFF_W, $HF);
+            aff_rect($s, 0, $y - 4, AFF_W, 4, aff_c($s, '#C9A227'));
+            aff_rect($s, 0, $y + $HF, AFF_W, 4, aff_c($s, '#C9A227'));
+            aff_texte($s, 'ASF-PIERRELATTE.FR', AFF_W / 2, $y / 2 + 22, 56, '900', '#FFFFFF', AFF_W - 120, 'center');
+            imagedestroy($im);
+            return $s;
+        }
+        $bande = $HF - AFF_HF;                                  // hauteur de la bande des partenaires (0 sans partenaires)
+        $haut = $hAvant - $bande;                               // place disponible au-dessus d'elle
+        $bas = isset($GLOBALS['aff_bas']) ? (int) ceil($GLOBALS['aff_bas']) + 28 : AFF_HF;
+        $GLOBALS['aff_bas'] = null;
+        if ($bas <= $haut) {
+            // les cartes tiennent : l'affiche garde TOUTE sa largeur, seul le bas décoratif (slogan) est laissé de côté
+            $s = imagecreatetruecolor(AFF_W, $hAvant); imagealphablending($s, true);
+            imagecopy($s, $im, 0, 0, 0, 0, AFF_W, $haut);
+            if ($bande > 0) imagecopy($s, $im, 0, $haut, 0, AFF_HF, AFF_W, $bande);
+            imagedestroy($im);
+            return $s;
+        }
+        // beaucoup de cartes : on garde tout jusqu'à la dernière carte + les partenaires, réduit au plus juste
+        $h1 = min(AFF_HF, $bas) + $bande;
+        $t = imagecreatetruecolor(AFF_W, $h1); imagealphablending($t, true);
+        imagecopy($t, $im, 0, 0, 0, 0, AFF_W, min(AFF_HF, $bas));
+        if ($bande > 0) imagecopy($t, $im, 0, min(AFF_HF, $bas), 0, AFF_HF, AFF_W, $bande);
+        imagedestroy($im); $im = $t; $HF = $h1;
+        $s = imagecreatetruecolor(AFF_W, $hAvant); imagealphablending($s, true);
+        aff_rect($s, 0, 0, AFF_W, $hAvant, aff_c($s, '#0B1633'));                             // bleu nuit du club, uni
+        $k = $hAvant / $HF; $w = (int) round(AFF_W * $k); $x = (int) round((AFF_W - $w) / 2);
+        imagecopyresampled($s, $im, $x, 0, 0, 0, $w, $hAvant, AFF_W, $HF);
+        aff_rect($s, $x - 4, 0, 4, $hAvant, aff_c($s, '#C9A227'));                             // fin liseré doré de chaque côté
+        aff_rect($s, $x + $w, 0, 4, $hAvant, aff_c($s, '#C9A227'));
+        imagedestroy($im);
+        return $s;
+    }
+    if ($HF === $hAvant) return $im;
+    // cas rare (feuille plus haute que la story) : réduite et centrée sur fond bleu nuit
+    $s = imagecreatetruecolor(AFF_W, $hAvant); imagealphablending($s, true);
+    aff_rect($s, 0, 0, AFF_W, $hAvant, aff_c($s, '#0B1633'));
+    $k = $hAvant / $HF;
+    imagecopyresampled($s, $im, (int) ((AFF_W - AFF_W * $k) / 2), 0, 0, 0, (int) (AFF_W * $k), $hAvant, AFF_W, $HF);
+    imagedestroy($im);
+    return $s;
+}
+/* titre en haut au milieu (entre le blason et le logo de Pierrelatte), sous-titre doré, étiquette domicile / extérieur */
+function aff_titre_haut($im, string $titre, string $sous, ?string $lieu): void {
+    $cx = AFF_W / 2;
+    aff_texte($im, $titre, $cx + 3, 131, 96, '900', '#000000', 560, 'center', .45);
+    aff_texte($im, $titre, $cx, 128, 96, '900', '#FFFFFF', 560, 'center');
+    if ($sous !== '') {
+        aff_texte($im, $sous, $cx + 2, 193, 54, '800', '#000000', 560, 'center', .45);
+        aff_texte($im, $sous, $cx, 191, 54, '800', '#C9A227', 560, 'center');
+    }
+    if ($lieu) {
+        $lib = $lieu === 'dom' ? 'À DOMICILE' : "À L'EXTÉRIEUR"; $pl = 34; $wp = aff_larg($lib, $pl, '800') + 70; $y0 = 290;
+        aff_poly($im, [$cx - $wp / 2 + 16, $y0, $cx + $wp / 2, $y0, $cx + $wp / 2 - 16, $y0 + 48, $cx - $wp / 2, $y0 + 48], aff_c($im, '#C9A227'));
+        aff_texte($im, $lib, $cx, $y0 + 36, $pl, '800', '#0B1633', 0, 'center');
+    }
+}
+/* bandeau d'information : barre bleue, texte à gauche, bloc blanc à droite (heure, résultat…) */
+function aff_bandeau_info($im, float $y, string $gauche, string $droite, string $couleurTexte, string $trait, bool $cadre = false): void {
+    $x0 = 78; $x1 = AFF_W - 78; $h = 110;
+    aff_ombre_coin($im, $x0, $y, $x1 - $x0, $h, 18, 4, 8);
+    aff_barre($im, $x0, $y, $x1 - $x0, $h, 18);
+    aff_rect($im, $x0 + 30, $y, $x1 - $x0 - 60, 2, aff_c($im, '#C9A227'));
+    $bw = $droite !== '' ? 270 : 0;
+    aff_texte($im, $gauche, $x0 + 34, $y + $h / 2 + 56 * .36, 56, '900', '#FFFFFF', $x1 - $x0 - $bw - 80);
+    if ($droite === '') return;
+    $bx = $x1 - 20 - $bw; $by = $y - 8; $bh = $h + 16;
+    if ($cadre) {                                                   // résultat : cadre de couleur transparent, texte blanc
+        aff_cadre_resultat($im, $bx, $by, $bw, $bh, 16, $trait, 5);
+        aff_texte($im, $droite, $bx + $bw / 2, $by + $bh / 2 + 60 * .36, 60, '900', '#FFFFFF', $bw - 34, 'center');
+        return;
+    }
+    aff_coin($im, $bx, $by, $bw, $bh, 16, aff_c($im, $trait));
+    aff_coin($im, $bx, $by, $bw, $bh - 8, 16, aff_c($im, '#FFFFFF'));
+    aff_texte($im, $droite, $bx + $bw / 2, $by + ($bh - 8) / 2 + 64 * .36, 64, '900', $couleurTexte, $bw - 30, 'center');
+}
+/* ---------- jour de match / résultat d'un match, sur l'image du club ---------- */
+function aff_match_photo(array $m, array $opts, string $fond) {
+    [$im, $hBas, $hAvant, $story, $avecSp] = aff_feuille_debut($opts, $fond);
+    $W = AFF_W; $cxp = $W / 2; $dom = !empty($m['dom']);
+    $score = !empty($opts['score']) && aff_joue($m);
+    $sous = aff_sous_etiquette((string) ($m['comp'] ?? ''));
+    $cat = aff_maj((string) $m['equipe']) . ($sous !== '' ? ' · ' . $sous : '');
+    $perso = trim((string) ($opts['titre'] ?? ''));
+    aff_titre_haut($im, $perso !== '' ? aff_maj($perso) : ($score ? 'RÉSULTAT' : 'JOUR DE MATCH'), $cat, $dom ? 'dom' : 'ext');
+    // face à face : l'équipe qui reçoit à gauche, celle qui se déplace à droite
+    $cy = 850; $d = 270; $xl = 255; $xr = $W - 255;
+    $nous = ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true];
+    $eux = ['nom' => aff_maj((string) $m['adv']), 'brut' => (string) $m['adv'], 'club' => false];
+    [$gauche, $droite] = $dom ? [$nous, $eux] : [$eux, $nous];
+    $gG = true; $gD = true; $issue = null;
+    if ($score) {
+        $issue = aff_issue($m);
+        $sg = (int) ($dom ? $m['bp'] : $m['bc']); $sd = (int) ($dom ? $m['bc'] : $m['bp']);
+        $gG = $sg >= $sd; $gD = $sd >= $sg;
+    }
+    foreach ([[$gauche, $xl, $gG], [$droite, $xr, $gD]] as [$e, $x, $gagne]) {
+        imagefilledellipse($im, (int) ($x + 6), (int) ($cy + 12), $d + 10, $d + 10, aff_c($im, '#000000', .35));
+        aff_logo_or($im, $e['brut'], $e['club'], $x, $cy, $d);
+        aff_texte($im, $e['nom'], $x, $cy + $d / 2 + 72, 52, '900', $e['club'] ? '#8FC2FF' : '#FFFFFF', 400, 'center', $gagne ? 1 : .62);
+    }
+    // au centre : le score (perdant atténué, trait de couleur) ou « VS »
+    $trait = $issue ? ['V' => '#22C55E', 'N' => '#A3A3A3', 'D' => '#EF4444'][$issue] : '#C9A227';
+    $sw = 240; $sh = 150; $sy = $cy - $sh / 2;
+    if ($score) {
+        aff_cadre_resultat($im, $cxp - $sw / 2, $sy, $sw, $sh, 18, AFF_COUL_ISSUE[$issue], 6);
+        $ps = 116; $by = $cy + $ps * .34;
+        foreach ([[$sg, -1], [$sd, 1]] as [$v, $sens]) {
+            aff_texte($im, (string) $v, $cxp + $sens * 56 + 3, $by + 4, $ps, '900', '#000000', 0, 'center', .45);
+            aff_texte($im, (string) $v, $cxp + $sens * 56, $by, $ps, '900', '#FFFFFF', 0, 'center');
+        }
+        aff_rect($im, $cxp - 2, $cy - 42, 4, 76, aff_c($im, '#FFFFFF', .85));
+    } else {
+        aff_coin($im, $cxp - $sw / 2, $sy, $sw, $sh, 18, aff_c($im, $trait));
+        aff_coin($im, $cxp - $sw / 2, $sy, $sw, $sh - 10, 18, aff_c($im, '#FFFFFF'));
+        aff_texte($im, 'VS', $cxp, $cy - 5 + 100 * .34, 100, '900', '#0B1633', 0, 'center');
+    }
+    // date, puis l'heure ou le résultat
+    if ($score) aff_bandeau_info($im, 1110, aff_jour_court($m['date']), ['V' => 'VICTOIRE', 'N' => 'MATCH NUL', 'D' => 'DÉFAITE'][$issue],
+        '#FFFFFF', AFF_COUL_ISSUE[$issue], true);
+    else aff_bandeau_info($im, 1110, aff_jour_court($m['date']), aff_maj(aff_hfr($m['heure'] ?? '')), '#0B1633', '#C9A227');
+    // adresse
+    imagefilledellipse($im, 104, 1276, 26, 26, aff_c($im, '#C9A227'));
+    imagefilledellipse($im, 104, 1276, 10, 10, aff_c($im, '#0A1430'));
+    aff_texte($im, aff_maj(aff_lieu($m)), 130, 1287, 32, '800', '#FFFFFF', $W - 220);
+    return aff_feuille_fin($im, $hBas, $hAvant, $story, $avecSp);
+}
+/* ---------- événement du club, sur l'image du stade ---------- */
+function aff_evenement_photo(array $o, string $fond) {
+    [$im, $hBas, $hAvant, $story, $avecSp] = aff_feuille_debut($o, $fond);
+    $W = AFF_W;
+    $titre = trim((string) ($o['titre'] ?? '')); $sous = trim((string) ($o['sous'] ?? ''));
+    aff_titre_haut($im, aff_maj($titre !== '' ? $titre : 'Événement'), aff_maj($sous !== '' ? $sous : ($titre === '' ? 'du club' : '')), null);
+    $y = 660;
+    $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($o['date'] ?? '')) ? $o['date'] : '';
+    $heure = trim((string) ($o['heure'] ?? ''));
+    if ($date !== '') { aff_bandeau_info($im, $y, aff_jour_court($date), $heure !== '' ? aff_maj(aff_hfr($heure)) : '', '#0B1633', '#C9A227'); $y += 160; }
+    $lieu = trim((string) ($o['lieu'] ?? ''));
+    if ($lieu !== '') {
+        imagefilledellipse($im, 104, (int) ($y - 11), 26, 26, aff_c($im, '#C9A227'));
+        imagefilledellipse($im, 104, (int) ($y - 11), 10, 10, aff_c($im, '#0A1430'));
+        aff_texte($im, aff_maj($lieu), 130, $y, 34, '800', '#FFFFFF', $W - 220);
+        $y += 56;
+    }
+    // informations : une barre par ligne
+    $lignes = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) ($o['texte'] ?? '')))));
+    foreach (array_slice($lignes, 0, 6) as $l) {
+        if ($y + 88 > 1312) break;
+        aff_ombre_coin($im, 78, $y, $W - 156, 84, 16, 4, 8);
+        aff_barre($im, 78, $y, $W - 156, 84, 16);
+        aff_rect($im, 108, $y, $W - 216, 2, aff_c($im, '#C9A227'));
+        aff_texte($im, $l, 112, $y + 42 + 40 * .36, 40, '800', '#FFFFFF', $W - 260);
+        $y += 104;
+    }
+    return aff_feuille_fin($im, $hBas, $hAvant, $story, $avecSp);
+}
+
+/* ---------- affiche : jour de match ---------- */
+function aff_blason_grand($im, string $nom, bool $club, float $cx, float $cy, float $d): void {
+    imagefilledellipse($im, (int) round($cx + 8), (int) round($cy + 12), (int) round($d), (int) round($d), aff_c($im, '#000000', .28));
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d), (int) round($d), aff_c($im, '#FFFFFF'));
+    if ($club) { aff_blason_club($im, $cx - $d * .41, $cy - $d * .41, $d * .82); return; }
+    $logo = aff_logo_adv($nom);
+    if ($logo) { aff_contenir($im, $logo, $cx, $cy, $d * .70, $d * .70, 2.8); return; }
+    aff_ecusson_initiales($im, $nom, $cx, $cy, $d * .66);
+}
+function aff_match(array $m, array $opts = []) {
+    if (($nuit = afn_match($m, $opts)) !== null) return $nuit;                               // affiches « stade de nuit »
+    if ($fond = aff_fond_lieu(!empty($m['dom']) ? 'dom' : 'ext')) return aff_match_photo($m, $opts, $fond);
+    $im = aff_nouvelle(); $W = AFF_W; $H = aff_h();
+    $score = !empty($opts['score']) && aff_joue($m);
+    $hSp = ($opts['sponsors'] ?? true) ? aff_hauteur_sponsors() : 0; $H2 = $H - $hSp;
+    aff_fond($im, $H2);
+    // en-tête
+    aff_blason_club($im, 35, 35, 150);
+    aff_texte($im, "ATOM'SPORTS", 200, 98, 46, '800', '#FFFFFF');
+    aff_texte($im, 'FOOTBALL PIERRELATTE', 200, 142, 34, '700', '#8FC2FF');
+    $cat = aff_maj((string) $m['equipe']) . '  ·  ' . aff_maj((string) ($m['comp'] ?? ''));
+    $pc = aff_fit($cat, 30, '700', $W * .6); $wc = aff_larg($cat, $pc, '700') + 44;
+    aff_poly($im, [$W - 48 - $wc + 18, 196, $W - 48, 196, $W - 66, 244, $W - 48 - $wc, 244], aff_c($im, '#C9A227'));
+    aff_texte($im, $cat, $W - 48 - $wc / 2, 231, $pc, '700', '#0B1633', 0, 'center');
+    // titre massif
+    $couleurIssue = $score ? ['V' => '#16A34A', 'N' => '#6B7280', 'D' => '#DC2626'][aff_issue($m)] : '#C9A227';
+    $perso = trim((string) ($opts['titre'] ?? ''));
+    if ($perso !== '') {
+        [$l1, $l2] = aff_deux_lignes(aff_maj($perso), 230, $W - 96);
+        if ($l2 !== '') { aff_texte_evide($im, $l1, 48, 440, 190, '#FFFFFF', $W - 96); aff_texte($im, $l2, 42, 640, 230, '900', '#FFFFFF', $W - 96); }
+        else aff_texte($im, $l1, 42, 620, 250, '900', '#FFFFFF', $W - 96);
+    } elseif ($score) {
+        aff_texte_evide($im, 'RÉSULTAT', 48, 440, 190, '#FFFFFF', $W - 96);
+        aff_texte($im, aff_maj(['V' => 'Victoire', 'N' => 'Match nul', 'D' => 'Défaite'][aff_issue($m)]), 42, 640, 230, '900', '#FFFFFF', $W - 96);
+    } else {
+        aff_texte_evide($im, 'JOUR DE', 48, 440, 190, '#FFFFFF', $W - 96);
+        aff_texte($im, 'MATCH', 42, 640, 250, '900', '#FFFFFF', $W - 96);
+    }
+    aff_rect($im, 52, 668, 190, 12, aff_c($im, $couleurIssue));
+    // les deux blasons face à face
+    $cy = 880; $d = 300; $dom = !empty($m['dom']); $adv = aff_maj((string) $m['adv']);
+    aff_blason_grand($im, $dom ? '' : (string) $m['adv'], $dom, 250, $cy, $d);
+    aff_blason_grand($im, $dom ? (string) $m['adv'] : '', !$dom, $W - 250, $cy, $d);
+    if ($score) {
+        $sc = ($dom ? $m['bp'] : $m['bc']) . '-' . ($dom ? $m['bc'] : $m['bp']);
+        aff_poly($im, [$W / 2 - 92, $cy - 66, $W / 2 + 112, $cy - 66, $W / 2 + 92, $cy + 66, $W / 2 - 112, $cy + 66], aff_c($im, '#FFFFFF'));
+        aff_texte($im, $sc, $W / 2, $cy + 44, 118, '900', '#0B1633', 190, 'center');
+    } else {
+        aff_poly($im, [$W / 2 - 70, $cy - 58, $W / 2 + 88, $cy - 58, $W / 2 + 70, $cy + 58, $W / 2 - 88, $cy + 58], aff_c($im, '#FFFFFF'));
+        aff_texte($im, 'VS', $W / 2, $cy + 38, 104, '900', '#0B1633', 0, 'center');
+    }
+    aff_texte($im, $dom ? 'PIERRELATTE' : $adv, 250, $cy + $d / 2 + 80, 56, '800', '#FFFFFF', 440, 'center');
+    aff_texte($im, $dom ? $adv : 'PIERRELATTE', $W - 250, $cy + $d / 2 + 80, 56, '800', '#FFFFFF', 440, 'center');
+    // bandeau date et heure
+    $y0 = 1230;
+    aff_poly($im, [40, $y0 + 12, $W - 20, $y0 + 12, $W - 50, $y0 + 152, 10, $y0 + 152], aff_c($im, '#000000', .3));
+    aff_poly($im, [30, $y0, $W - 30, $y0, $W - 60, $y0 + 140, 0, $y0 + 140], aff_c($im, '#FFFFFF'));
+    aff_poly($im, [$W - 330, $y0, $W - 30, $y0, $W - 60, $y0 + 140, $W - 360, $y0 + 140], aff_c($im, $score ? $couleurIssue : '#1C63C4'));
+    aff_texte($im, aff_jour_court($m['date']), 60, $y0 + 100, 84, '900', '#0B1633', $W - 470);
+    aff_texte($im, $score ? 'TERMINÉ' : aff_maj(aff_hfr($m['heure'] ?? '')), $W - 195, $y0 + 102, 96, '900', '#FFFFFF', 250, 'center');
+    // adresse
+    imagefilledellipse($im, 64, (int) ($y0 + 196), 26, 26, aff_c($im, '#C9A227'));
+    imagefilledellipse($im, 64, (int) ($y0 + 196), 10, 10, aff_c($im, '#0A1430'));
+    aff_texte($im, aff_maj(aff_lieu($m)), 92, $y0 + 207, 30, '700', '#D8E4FB', $W - 140);
+    if ($hSp) aff_bandeau_sponsors($im, $H2, $hSp);
+    aff_grain($im);
+    return $im;
+}
+
+/* coupe un titre en deux lignes équilibrées si tout ne tient pas sur une seule */
+function aff_deux_lignes(string $t, float $px, float $max): array {
+    if (aff_larg($t, $px, '900') <= $max || !str_contains($t, ' ')) return [$t, ''];
+    $mots = explode(' ', $t); $mieux = [$t, '']; $ecart = INF;
+    for ($i = 1; $i < count($mots); $i++) {
+        $a = implode(' ', array_slice($mots, 0, $i)); $b = implode(' ', array_slice($mots, $i));
+        $e = abs(aff_larg($a, $px, '900') - aff_larg($b, $px, '900'));
+        if ($e < $ecart) { $ecart = $e; $mieux = [$a, $b]; }
+    }
+    return $mieux;
+}
+
+/* ---------- affiche : événement du club ---------- */
+function aff_evenement(array $o) {
+    if (($nuit = afn_evenement($o)) !== null) return $nuit;                                  // affiches « stade de nuit »
+    if ($fond = aff_fond_lieu('dom')) return aff_evenement_photo($o, $fond);
+    $im = aff_nouvelle(); $W = AFF_W; $H = aff_h();
+    $hSp = ($o['sponsors'] ?? true) ? aff_hauteur_sponsors() : 0; $H2 = $H - $hSp;
+    aff_fond($im, $H2);
+    aff_blason_club($im, 35, 35, 150);
+    aff_texte($im, "ATOM'SPORTS", 200, 98, 46, '800', '#FFFFFF');
+    aff_texte($im, 'FOOTBALL PIERRELATTE', 200, 142, 34, '700', '#8FC2FF');
+    // titre sur une ou deux lignes
+    $titre = aff_maj(trim((string) ($o['titre'] ?? '')) ?: 'Événement du club');
+    [$l1, $l2] = aff_deux_lignes($titre, 200, $W - 96);
+    $y = 470;
+    if ($l2 !== '') { aff_texte_evide($im, $l1, 48, $y, 180, '#FFFFFF', $W - 96); $y += 200; aff_texte($im, $l2, 42, $y, 210, '900', '#FFFFFF', $W - 96); }
+    else { aff_texte($im, $l1, 42, $y + 60, 230, '900', '#FFFFFF', $W - 96); $y += 60; }
+    aff_rect($im, 52, $y + 28, 190, 12, aff_c($im, '#C9A227'));
+    $y += 64;
+    $sous = trim((string) ($o['sous'] ?? ''));
+    if ($sous !== '') {
+        $ps = aff_fit(aff_maj($sous), 36, '800', $W - 160); $ws = aff_larg(aff_maj($sous), $ps, '800') + 50;
+        aff_poly($im, [64, $y, 48 + $ws, $y, 32 + $ws, $y + 56, 48, $y + 56], aff_c($im, '#C9A227'));
+        aff_texte($im, aff_maj($sous), 48 + $ws / 2, $y + 42, $ps, '800', '#0B1633', 0, 'center');
+        $y += 90;
+    }
+    // date et heure
+    $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($o['date'] ?? '')) ? $o['date'] : '';
+    if ($date !== '') {
+        $y0 = $y + 20;
+        aff_poly($im, [40, $y0 + 12, $W - 20, $y0 + 12, $W - 50, $y0 + 152, 10, $y0 + 152], aff_c($im, '#000000', .3));
+        aff_poly($im, [30, $y0, $W - 30, $y0, $W - 60, $y0 + 140, 0, $y0 + 140], aff_c($im, '#FFFFFF'));
+        $heure = trim((string) ($o['heure'] ?? ''));
+        if ($heure !== '') aff_poly($im, [$W - 330, $y0, $W - 30, $y0, $W - 60, $y0 + 140, $W - 360, $y0 + 140], aff_c($im, '#1C63C4'));
+        aff_texte($im, aff_jour_court($date), 60, $y0 + 100, 84, '900', '#0B1633', $heure !== '' ? $W - 470 : $W - 140);
+        if ($heure !== '') aff_texte($im, aff_maj(aff_hfr($heure)), $W - 195, $y0 + 102, 96, '900', '#FFFFFF', 250, 'center');
+        $y = $y0 + 190;
+    }
+    $lieu = trim((string) ($o['lieu'] ?? ''));
+    if ($lieu !== '') {
+        imagefilledellipse($im, 64, (int) ($y - 11), 26, 26, aff_c($im, '#C9A227'));
+        imagefilledellipse($im, 64, (int) ($y - 11), 10, 10, aff_c($im, '#0A1430'));
+        aff_texte($im, aff_maj($lieu), 92, $y, 32, '700', '#D8E4FB', $W - 140);
+        $y += 50;
+    }
+    // informations, une carte blanche par ligne
+    $lignes = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) ($o['texte'] ?? '')))));
+    $y += 10;
+    foreach (array_slice($lignes, 0, 6) as $l) {
+        if ($y + 96 > $H2 - 30) break;
+        aff_ombre_coin($im, 40, $y, $W - 80, 86, 14);
+        aff_coin($im, 40, $y, $W - 80, 86, 14, aff_c($im, '#FFFFFF'));
+        aff_poly($im, [40, $y, 70, $y, 58, $y + 86, 40, $y + 86], aff_c($im, '#1C63C4'));
+        aff_coin($im, 40, $y, 22, 86, 10, aff_c($im, '#1C63C4'));
+        aff_texte($im, $l, 92, $y + 58, 40, '800', '#0B1633', $W - 180);
+        $y += 104;
+    }
+    if ($hSp) aff_bandeau_sponsors($im, $H2, $hSp);
+    aff_grain($im);
+    return $im;
+}
+
+/* Publication du fil : les stories entières, côte à côte, dans un carré 2048 x 2048
+   (taille maximale de Facebook : les affiches gardent presque leur pleine résolution, le texte reste net). */
+function aff_combiner(array $fichiers, string $nom): string {
+    $C = 2048;
+    $im = imagecreatetruecolor($C, $C); imagealphablending($im, true);
+    aff_rect($im, 0, 0, $C, $C, aff_c($im, '#0A1430'));
+    aff_poly($im, [$C * .52, 0, $C, 0, $C, $C, $C * .2, $C], aff_c($im, '#123C8C'));
+    aff_poly($im, [$C * .86, 0, $C * .90, 0, $C * .76, $C, $C * .72, $C], aff_c($im, '#FFFFFF', .16));
+    $n = count($fichiers); $gap = 44; $marge = 36;
+    $w = $n > 1 ? intdiv($C - 2 * $marge - $gap, 2) : 1080; $h = (int) round($w * 1920 / 1080);
+    if ($h > $C - 72) { $h = $C - 72; $w = (int) round($h * 1080 / 1920); }
+    $x = ($C - ($n * $w + ($n - 1) * $gap)) / 2; $y = ($C - $h) / 2;
+    foreach (array_values($fichiers) as $f) {
+        $src = aff_image($f);
+        if (!$src) continue;
+        foreach ([[26, .10], [17, .10], [9, .12]] as [$d, $o]) aff_rect($im, $x + $d, $y + $d + 6, $w, $h, aff_c($im, '#000000', $o));
+        imagecopyresampled($im, $src, (int) round($x), (int) round($y), 0, 0, $w, $h, imagesx($src), imagesy($src));
+        imagedestroy($src);
+        $x += $w + $gap;
+    }
+    $dossier = dirname(__DIR__) . '/affiches';
+    if (!is_dir($dossier)) @mkdir($dossier, 0755, true);
+    $fichier = "$dossier/$nom.jpg";
+    imageinterlace($im, true);
+    imagejpeg($im, $fichier, 96);          // haute qualité : moins de flou après la recompression de Facebook
+    imagedestroy($im);
+    return $fichier;
+}
+function aff_enregistrer($im, string $nom): string {
+    $dossier = dirname(__DIR__) . '/affiches';
+    if (!is_dir($dossier)) @mkdir($dossier, 0755, true);
+    $f = "$dossier/$nom.jpg";
+    imagejpeg($im, $f, 95);
+    imagedestroy($im);
+    return $f;
+}
+
+/* ================= Affiches « stade de nuit » (saison 2026-2027) =================
+   Le décor de chaque format est une image toute prête : img/affiches-nuit/decor-{fb|story|insta}-{dom|ext}.jpg
+   (le stade Gustave Jaume de nuit, le ballon du club, le blason, « 1923 » et la signature du club).
+   Le serveur y écrit tout le reste : le bandeau du haut, la pastille domicile / extérieur, les titres, la date,
+   la liste des matchs (sa taille est calculée pour que tout tienne, les noms ne sont jamais coupés) et les partenaires.
+   Sans ces images, les anciennes affiches sont dessinées comme avant. */
+const AFN_FORMATS = [   // positions en pixels, reprises du modèle (affiche.html du kit)
+    'fb'    => ['H' => 2160, 'barre' => 58, 'tete' => 96, 'bl' => 120, 'titre' => 300, 't1' => 150, 't2' => 84, 'date' => 630, 'zone' => [792, 1812], 'part' => 1950, 'logo' => 58],
+    'story' => ['H' => 1920, 'barre' => 58, 'tete' => 96, 'bl' => 112, 'titre' => 290, 't1' => 140, 't2' => 78, 'date' => 596, 'zone' => [740, 1590], 'part' => 1714, 'logo' => 54],
+    'insta' => ['H' => 1350, 'barre' => 46, 'tete' => 66, 'bl' => 84,  'titre' => 176, 't1' => 104, 't2' => 58, 'date' => 402, 'zone' => [462, 1102], 'part' => 1160, 'logo' => 40],
+];
+const AFN_METAL = ['dom' => [[0, '#FFF3C4'], [.40, '#F2CD6C'], [.66, '#C99A2E'], [1, '#F0CF7A']],     // or (domicile)
+                   'ext' => [[0, '#FFFFFF'], [.38, '#DCE8FB'], [.66, '#9DB9E6'], [1, '#E8F0FC']]];    // argent bleuté (extérieur)
+const AFN_ACC = ['dom' => ['#E3B64C', '#F7DC92'], 'ext' => ['#A9C4EE', '#E1EBFB']];
+const AFN_ISSUE = ['V' => ['#2BB566', '#16773F'], 'D' => ['#D9534B', '#9C2A24'], 'N' => ['#6F7C9C', '#465170']];
+const AFN_CIEL = '#C9D4F2';
+const AFN_SS = 2;                                   // la liste est dessinée deux fois plus grande puis réduite : bords bien lisses
+const AFN_POLICES = ['900i' => 'BarlowCondensed-BlackItalic.ttf', '800i' => 'BarlowCondensed-ExtraBoldItalic.ttf',
+    's600' => 'SourceSans3-SemiBold.ttf', 's700' => 'SourceSans3-Bold.ttf', 's800' => 'SourceSans3-ExtraBold.ttf', 's700i' => 'SourceSans3-BoldItalic.ttf'];
+
+/* police : '900', '800', '700' (Barlow Condensed), '900i' (italique), 's700', 's800', 's700i' (Source Sans 3) ;
+   si une police manque, on prend la Barlow Condensed la plus proche */
+function afn_police(string $p): string {
+    static $cache = [];
+    if (isset($cache[$p])) return $cache[$p];
+    if (!isset(AFN_POLICES[$p])) return $cache[$p] = aff_police($p);
+    foreach ([__DIR__ . '/polices', dirname(__DIR__) . '/polices', dirname(__DIR__) . '/api/polices', __DIR__] as $d)
+        if (is_file($f = $d . '/' . AFN_POLICES[$p]) && is_readable($f)) return $cache[$p] = $f;
+    return $cache[$p] = aff_police(['900i' => '900', '800i' => '800', 's600' => '600', 's700' => '700', 's800' => '800', 's700i' => '700'][$p]);
+}
+function afn_format(): string { $h = aff_h(); return $h >= 2000 ? 'fb' : ($h < 1500 ? 'insta' : 'story'); }
+function afn_decor(string $fmt, string $lieu): ?string {
+    foreach (['jpg', 'png', 'webp'] as $ext) if (is_file($p = dirname(__DIR__) . "/img/affiches-nuit/decor-$fmt-$lieu.$ext")) return $p;
+    return null;
+}
+function afn_actif(?string $lieu = null): bool { return aff_polices_ok() && afn_decor(afn_format(), $lieu === 'ext' ? 'ext' : 'dom') !== null; }
+
+/* ---------- texte ---------- */
+function afn_bb(string $t, float $px, string $f): array { return @imagettfbbox($px * .75, 0, $f, $t) ?: [0, 0, 0, 0, 0, 0, 0, 0]; }
+/* avance (largeur typographique, comme dans le navigateur) ; $ls : espacement des lettres en pixels */
+function afn_larg(string $t, float $px, string $p, float $ls = 0): float {
+    if ($t === '') return 0;
+    $f = afn_police($p); if ($f === '') return mb_strlen($t) * $px * .5;
+    return afn_bb($t . 'H', $px, $f)[2] - afn_bb('H', $px, $f)[2] + $ls * mb_strlen($t);
+}
+/* écrit sur la ligne de base $y ; $col : couleur déjà allouée ; renvoie la largeur */
+function afn_texte($im, string $t, float $x, float $y, float $px, string $p, int $col, string $align = 'left', float $ls = 0): float {
+    $f = afn_police($p); if ($f === '' || $t === '') return 0;
+    $w = afn_larg($t, $px, $p, $ls);
+    if ($align === 'right') $x -= $w; elseif ($align === 'center') $x -= $w / 2;
+    if ($ls == 0) { imagettftext($im, $px * .75, 0, (int) round($x), (int) round($y), $col, $f, $t); return $w; }
+    $pre = ''; $i = 0;
+    foreach (mb_str_split($t) as $c) {
+        $dx = $pre === '' ? 0 : afn_bb($pre . 'H', $px, $f)[2] - afn_bb('H', $px, $f)[2];
+        imagettftext($im, $px * .75, 0, (int) round($x + $dx + $i * $ls), (int) round($y), $col, $f, $c);
+        $pre .= $c; $i++;
+    }
+    return $w;
+}
+/* taille qui fait tenir le texte dans $max (comme « data-fit » du modèle) : de $px jusqu'à $px × $min, puis plus petit si vraiment nécessaire */
+function afn_fit(string $t, float $px, string $p, float $max, float $min = .6, float $lsEm = 0): float {
+    $s = $px;
+    while ($s > $px * $min && afn_larg($t, $s, $p, $s * $lsEm) > $max + 1) $s -= .5;
+    while ($s > 6 && afn_larg($t, $s, $p, $s * $lsEm) > $max + 1) $s -= .5;     // jamais coupé : on réduit encore
+    return $s;
+}
+/* un nom sur deux lignes (retour à la ligne entre les mots, comme dans le navigateur) */
+function afn_deux_lignes(string $t, float $px, string $p, float $max): array {
+    $mots = preg_split('/\s+/u', trim($t)); $l1 = array_shift($mots);
+    while ($mots && afn_larg($l1 . ' ' . $mots[0], $px, $p) <= $max) $l1 .= ' ' . array_shift($mots);
+    return [$l1, implode(' ', $mots)];
+}
+
+/* ---------- couleurs, dégradés, formes ---------- */
+function afn_rgb(string $hex): array { return sscanf(ltrim($hex, '#'), '%02x%02x%02x'); }
+function afn_mix(array $arrets, float $t): array {   // [[position 0..1, '#hex'], …] → [r, g, b]
+    $t = max(0, min(1, $t)); $n = count($arrets);
+    for ($i = 0; $i < $n - 2 && $t > $arrets[$i + 1][0]; $i++);
+    [$p0, $c0] = $arrets[$i]; [$p1, $c1] = $arrets[min($i + 1, $n - 1)];
+    $k = $p1 > $p0 ? ($t - $p0) / ($p1 - $p0) : 0; $a = afn_rgb($c0); $b = afn_rgb($c1);
+    return [(int) round($a[0] + ($b[0] - $a[0]) * $k), (int) round($a[1] + ($b[1] - $a[1]) * $k), (int) round($a[2] + ($b[2] - $a[2]) * $k)];
+}
+function afn_c($im, array $rgb, float $op = 1): int { return imagecolorallocatealpha($im, $rgb[0], $rgb[1], $rgb[2], (int) round(127 * (1 - max(0, min(1, $op))))); }
+/* retrait horizontal d'un coin arrondi de rayon $r à la hauteur $d (0 = bord) */
+function afn_retrait(float $r, float $d): float { if ($r <= 0 || $d >= $r) return 0; $e = $r - $d; return $r - sqrt(max(0, $r * $r - $e * $e)); }
+/* rectangle à coins arrondis ($r : rayon ou [haut-gauche, haut-droit, bas-droit, bas-gauche]) rempli :
+   $remp = '#hex' | ['v', arrêts] (dégradé vertical) | ['h', arrêts] (dégradé horizontal) ; $op : opacité */
+function afn_boite($im, float $x, float $y, float $w, float $h, $r, $remp, float $op = 1): void {
+    [$rhg, $rhd, $rbd, $rbg] = is_array($r) ? $r : [$r, $r, $r, $r];
+    $x0 = (int) round($x); $y0 = (int) round($y); $x1 = (int) round($x + $w); $y1 = (int) round($y + $h);
+    if ($x1 <= $x0 || $y1 <= $y0) return;
+    $plein = is_string($remp) ? afn_c($im, afn_rgb($remp), $op) : null;
+    if (is_array($remp) && $remp[0] === 'h') {                       // colonne par colonne
+        for ($i = $x0; $i < $x1; $i++) {
+            $dg = $i + .5 - $x0; $dd = $x1 - $i - .5;
+            $ih = max(afn_retrait($rhg, $dg), afn_retrait($rhd, $dd)); $ib = max(afn_retrait($rbg, $dg), afn_retrait($rbd, $dd));
+            imageline($im, $i, (int) round($y0 + $ih), $i, (int) round($y1 - $ib) - 1, afn_c($im, afn_mix($remp[1], ($i - $x0) / max(1, $x1 - $x0 - 1)), $op));
+        }
+        return;
+    }
+    for ($j = $y0; $j < $y1; $j++) {                                  // ligne par ligne
+        $dh = $j + .5 - $y0; $db = $y1 - $j - .5;
+        $ig = max(afn_retrait($rhg, $dh), afn_retrait($rbg, $db)); $id = max(afn_retrait($rhd, $dh), afn_retrait($rbd, $db));
+        $c = $plein ?? afn_c($im, afn_mix($remp[1], ($j - $y0) / max(1, $y1 - $y0 - 1)), $op);
+        imageline($im, (int) round($x0 + $ig), $j, (int) round($x1 - $id) - 1, $j, $c);
+    }
+}
+/* liseré intérieur (« inset ») d'épaisseur $ep le long d'un rectangle arrondi */
+function afn_lisere($im, float $x, float $y, float $w, float $h, float $r, float $ep, string $hex, float $op): void {
+    $c = afn_c($im, afn_rgb($hex), $op);
+    $x0 = (int) round($x); $y0 = (int) round($y); $x1 = (int) round($x + $w); $y1 = (int) round($y + $h);
+    for ($j = $y0; $j < $y1; $j++) {
+        $dh = $j + .5 - $y0; $db = $y1 - $j - .5; $d = min($dh, $db);
+        $io = afn_retrait($r, $d);
+        if ($d < $ep) { imageline($im, (int) round($x0 + $io), $j, (int) round($x1 - $io) - 1, $j, $c); continue; }
+        $ii = $ep + afn_retrait(max(0, $r - $ep), $d - $ep);
+        imageline($im, (int) round($x0 + $io), $j, (int) round($x0 + max($ii, $io + 1)) - 1, $j, $c);
+        imageline($im, (int) round($x1 - max($ii, $io + 1)), $j, (int) round($x1 - $io) - 1, $j, $c);
+    }
+}
+/* calque transparent */
+function afn_calque(int $w, int $h) {
+    $l = imagecreatetruecolor(max(1, $w), max(1, $h));
+    imagealphablending($l, false); imagesavealpha($l, true);
+    imagefilledrectangle($l, 0, 0, $w, $h, imagecolorallocatealpha($l, 0, 0, 0, 127));
+    imagealphablending($l, true);
+    return $l;
+}
+/* ombre douce : $formes dessine en blanc sur un petit masque noir (coordonnées divisées par $k) ; flou ≈ celui du navigateur */
+function afn_ombre($im, float $x0, float $y0, float $w, float $h, callable $formes, float $flou, float $op, string $hex = '#000000'): void {
+    if ($flou <= 0 || $w < 1 || $h < 1) return;
+    $k = max(1, (int) round($flou / 6)); $mw = (int) ceil($w / $k) + 2; $mh = (int) ceil($h / $k) + 2;
+    $m = imagecreatetruecolor($mw, $mh);
+    imagefilledrectangle($m, 0, 0, $mw, $mh, imagecolorallocate($m, 0, 0, 0));
+    $formes($m, $k, imagecolorallocate($m, 255, 255, 255));
+    $n = (int) min(40, round((($flou / 2) / (.85 * $k)) ** 2));
+    for ($i = 0; $i < $n; $i++) imagefilter($m, IMG_FILTER_GAUSSIAN_BLUR);
+    [$r, $g, $b] = afn_rgb($hex);
+    $l = afn_calque($mw, $mh); imagealphablending($l, false);
+    for ($j = 0; $j < $mh; $j++) for ($i = 0; $i < $mw; $i++) {
+        $v = (imagecolorat($m, $i, $j) >> 16) & 255;
+        if ($v) imagesetpixel($l, $i, $j, imagecolorallocatealpha($l, $r, $g, $b, 127 - (int) round($v / 255 * 127 * $op)));
+    }
+    imagedestroy($m);
+    imagealphablending($im, true);
+    imagecopyresampled($im, $l, (int) round($x0), (int) round($y0), 0, 0, $mw * $k, $mh * $k, $mw, $mh);
+    imagedestroy($l);
+}
+/* texte rempli d'un dégradé vertical (titre « métal ») : $haut et $bas bornent le dégradé */
+function afn_texte_degrade($im, string $t, float $x, float $y, float $px, string $p, array $arrets, float $haut, float $bas): void {
+    $f = afn_police($p); if ($f === '') return;
+    $w = (int) ceil(afn_larg($t, $px, $p) + $px * .4); $h = (int) ceil($px * 1.5);
+    $ox = (int) floor($x - $px * .1); $oy = (int) floor($y - $px * 1.15);
+    $l = afn_calque($w, $h);
+    imagettftext($l, $px * .75, 0, (int) round($x - $ox), (int) round($y - $oy), imagecolorallocate($l, 255, 255, 255), $f, $t);
+    imagealphablending($l, false);
+    for ($j = 0; $j < $h; $j++) {
+        $rgb = afn_mix($arrets, ($oy + $j - $haut) / max(1, $bas - $haut));
+        for ($i = 0; $i < $w; $i++) {
+            $a = (imagecolorat($l, $i, $j) >> 24) & 127;
+            if ($a < 127) imagesetpixel($l, $i, $j, imagecolorallocatealpha($l, $rgb[0], $rgb[1], $rgb[2], $a));
+        }
+    }
+    imagealphablending($im, true);
+    imagecopy($im, $l, $ox, $oy, 0, 0, $w, $h);
+    imagedestroy($l);
+}
+/* ombre portée floue d'un texte */
+function afn_ombre_texte($im, string $t, float $x, float $y, float $px, string $p, float $dy, float $flou, float $op, float $ls = 0): void {
+    $w = afn_larg($t, $px, $p, $ls); $f = afn_police($p); if ($f === '') return;
+    $x0 = $x - 2 * $flou; $y0 = $y - $px * 1.1 - 2 * $flou + $dy;
+    afn_ombre($im, $x0, $y0, $w + 4 * $flou + $px * .3, $px * 1.4 + 4 * $flou, function ($m, $k, $blanc) use ($t, $x, $y, $x0, $y0, $px, $f, $dy) {
+        imagettftext($m, $px / $k * .75, 0, (int) round(($x - $x0) / $k), (int) round(($y + $dy - $y0) / $k), $blanc, $f, $t);
+    }, $flou, $op);
+}
+
+/* ---------- petits dessins ---------- */
+/* icônes (repère de 24 × 24) : maison, avion, repère de lieu */
+function afn_icone($im, string $nom, float $x, float $y, float $taille, int $col, ?int $fond = null): void {
+    $k = $taille / 24;
+    $pts = [];
+    if ($nom === 'maison') $pts = [3, 11.2, 12, 4, 21, 11.2, 21, 21, 14.8, 21, 14.8, 14.9, 9.2, 14.9, 9.2, 21, 3, 21];
+    elseif ($nom === 'avion') {
+        $pts = [21.5, 15.8, 21.5, 13.9, 13.4, 8.8, 13.4, 3.6];
+        for ($i = 1; $i < 8; $i++) { $a = M_PI * $i / 8; $pts[] = 12 + 1.4 * cos($a); $pts[] = 3.6 - 1.4 * sin($a); }
+        array_push($pts, 10.6, 3.6, 10.6, 8.8, 2.5, 13.9, 2.5, 15.8, 10.6, 13.3, 10.6, 18.7, 8.4, 20.3, 8.4, 22, 12, 21, 15.6, 22, 15.6, 20.3, 13.4, 18.7, 13.4, 13.3);
+    } else {                                                          // repère : goutte et rond intérieur
+        imagefilledellipse($im, (int) round($x + 12 * $k), (int) round($y + 10 * $k), (int) round(14 * $k), (int) round(14 * $k), $col);
+        aff_poly($im, [$x + 5.4 * $k, $y + 12.6 * $k, $x + 18.6 * $k, $y + 12.6 * $k, $x + 12 * $k, $y + 22 * $k], $col);
+        if ($fond !== null) imagefilledellipse($im, (int) round($x + 12 * $k), (int) round($y + 10 * $k), (int) round(5.4 * $k), (int) round(5.4 * $k), $fond);
+        return;
+    }
+    $p = []; foreach ($pts as $i => $v) $p[] = ($i % 2 ? $y : $x) + $v * $k;
+    aff_poly($im, $p, $col);
+}
+/* blason rond : blason du club, logo adverse, ou rond bleu nuit aux initiales ; $u = pixels par pixel du modèle */
+function afn_blason($im, string $nom, bool $club, float $cx, float $cy, float $d, float $u, ?string $court = null): void {
+    $logo = $club ? null : (aff_logo_adv($nom) ?: aff_logo_district($nom));
+    $ini = !$club && !$logo;
+    foreach ([[10, .07], [6, .09], [3, .11]] as [$e, $o])                                         // ombre portée douce
+        imagefilledellipse($im, (int) round($cx), (int) round($cy + 6 * $u), (int) round($d + $e * $u), (int) round($d + $e * $u), aff_c($im, '#000000', $o));
+    imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d + 4 * $u), (int) round($d + 4 * $u), aff_c($im, '#FFFFFF', $ini ? .35 : .25));
+    if (!$ini) {
+        imagefilledellipse($im, (int) round($cx), (int) round($cy), (int) round($d), (int) round($d), aff_c($im, '#FFFFFF'));
+        if ($club) aff_blason_club($im, $cx - $d * .43, $cy - $d * .43, $d * .86);
+        else aff_contenir($im, $logo, $cx, $cy, $d * .84, $d * .84, 4);
+        return;
+    }
+    // initiales : dégradé radial #4A5784 → #1B2340, centré en haut à gauche
+    $r = $d / 2; $gx = $cx - $r + $d * .35; $gy = $cy - $r + $d * .30; $R = $d * .955 * .70;
+    $x0 = (int) floor($cx - $r); $y0 = (int) floor($cy - $r); $n = (int) ceil($d) + 1;
+    for ($j = 0; $j < $n; $j++) for ($i = 0; $i < $n; $i++) {
+        $px = $x0 + $i + .5; $py = $y0 + $j + .5;
+        if (($px - $cx) ** 2 + ($py - $cy) ** 2 > $r * $r) continue;
+        imagesetpixel($im, $x0 + $i, $y0 + $j, afn_c($im, afn_mix([[0, '#4A5784'], [1, '#1B2340']], sqrt(($px - $gx) ** 2 + ($py - $gy) ** 2) / $R)));
+    }
+    $vides = ['fc', 'us', 'u', 's', 'as', 'es', 'o', 'et', 'de', 'du', 'd', 'la', 'le', 'f', 'co', 'sc', 'r', 'st'];
+    preg_match_all('/[A-Za-zÀ-ÿ]+/u', $court ?? $nom, $mm);
+    $mots = array_values(array_filter($mm[0], fn($w) => !in_array(mb_strtolower($w), $vides, true)));
+    $i = aff_maj(mb_substr(implode('', array_map(fn($w) => mb_substr($w, 0, 1), $mots)), 0, 2) ?: mb_substr($nom, 0, 2));
+    afn_texte($im, $i, $cx, $cy + $d * .42 * .4, $d * .42, '900', aff_c($im, '#FFFFFF'), 'center');
+}
+/* bloc bleu rayé (catégorie, en-tête de la grande carte) : dégradé à 160° et rayures à -55°, gardé en mémoire par taille */
+function afn_raye(int $w, int $h, float $u) {
+    static $cache = [];
+    $cle = "$w|$h|$u";
+    if (isset($cache[$cle])) return $cache[$cle];
+    $l = afn_calque($w, $h); imagealphablending($l, false);
+    $a = deg2rad(160); $dx = sin($a); $dy = -cos($a); $long = abs($w * $dx) + abs($h * $dy);
+    $b = deg2rad(-55); $sx = sin($b); $sy = -cos($b);
+    for ($j = 0; $j < $h; $j++) for ($i = 0; $i < $w; $i++) {
+        $t = (($i - $w / 2) * $dx + ($j - $h / 2) * $dy) / $long + .5;
+        [$r, $g, $bl] = afn_mix([[0, '#2457CF'], [1, '#132F7E']], $t);
+        $s = fmod(($i * $sx + $j * $sy) / $u + 10000, 16);
+        if ($s < 6) { $r += (255 - $r) * .07; $g += (255 - $g) * .07; $bl += (255 - $bl) * .07; }
+        imagesetpixel($l, $i, $j, imagecolorallocate($l, (int) $r, (int) $g, (int) $bl));
+    }
+    imagealphablending($l, true);
+    return $cache[$cle] = $l;
+}
+/* colle un bloc rayé avec des coins arrondis [hg, hd, bd, bg] */
+function afn_coller_raye($im, float $x, float $y, float $w, float $h, array $r, float $u): void {
+    $w = (int) round($w); $h = (int) round($h);
+    $src = afn_raye($w, $h, $u);
+    $l = afn_calque($w, $h); imagealphablending($l, false);
+    imagecopy($l, $src, 0, 0, 0, 0, $w, $h);
+    $vide = imagecolorallocatealpha($l, 0, 0, 0, 127);
+    [$rhg, $rhd, $rbd, $rbg] = $r;
+    for ($j = 0; $j < $h; $j++) {
+        $dh = $j + .5; $db = $h - $j - .5;
+        $ig = (int) round(max(afn_retrait($rhg, $dh), afn_retrait($rbg, $db))); $id = (int) round(max(afn_retrait($rhd, $dh), afn_retrait($rbd, $db)));
+        if ($ig > 0) imageline($l, 0, $j, $ig - 1, $j, $vide);
+        if ($id > 0) imageline($l, $w - $id, $j, $w - 1, $j, $vide);
+    }
+    imagealphablending($im, true);
+    imagecopy($im, $l, (int) round($x), (int) round($y), 0, 0, $w, $h);
+    imagedestroy($l);
+}
+/* score : deux cases de couleur (victoire, nul, défaite), celle de Pierrelatte cerclée d'or ou d'argent */
+function afn_cases($im, array $A, $bp, $bc, bool $nousDabord, float $x, float $y, float $cw, float $ch, float $r, float $gap, float $px, float $u): void {
+    $joue = is_numeric($bp) && is_numeric($bc);
+    $iss = $joue ? ($bp > $bc ? 'V' : ($bp < $bc ? 'D' : 'N')) : 'N';
+    $deg = ['v', [[0, AFN_ISSUE[$iss][0]], [1, AFN_ISSUE[$iss][1]]]];
+    if (!$joue) {                                                          // score pas encore transmis : « NC »
+        afn_boite($im, $x, $y, $cw * 2 + $gap, $ch, $r, $deg);
+        afn_texte($im, 'NC', $x + $cw + $gap / 2, $y + ($ch - 1.2 * $px) / 2 + $px, $px, '900', aff_c($im, '#FFFFFF'), 'center');
+        return;
+    }
+    $vals = $nousDabord ? [[$bp, true], [$bc, false]] : [[$bc, false], [$bp, true]];
+    foreach ($vals as $i => [$v, $nous]) {
+        $bx = $x + $i * ($cw + $gap);
+        if ($nous) { afn_boite($im, $bx, $y, $cw, $ch, $r, $A['accl']); afn_boite($im, $bx + 3 * $u, $y + 3 * $u, $cw - 6 * $u, $ch - 6 * $u, max(0, $r - 3 * $u), $deg); }
+        else afn_boite($im, $bx, $y, $cw, $ch, $r, $deg);
+        afn_texte($im, (string) $v, $bx + $cw / 2, $y + ($ch - 1.2 * $px) / 2 + $px, $px, '900', aff_c($im, '#FFFFFF'), 'center');
+    }
+}
+/* heure : bloc « métal » avec le jour au-dessus */
+function afn_heure($im, array $A, string $jour, string $heure, float $x, float $y, float $w, float $h, float $pj, float $ph, float $u, float $r): void {
+    afn_boite($im, $x, $y, $w, $h, $r, ['v', $A['metal']]);
+    $top = $y + ($h - $pj - $ph) / 2; $nuit = aff_c($im, '#0B1633');
+    afn_texte($im, aff_maj($jour), $x + $w / 2, $top + $pj * .9, $pj, '800', $nuit, 'center', $pj * .14);
+    afn_texte($im, $heure !== '' ? $heure : '–', $x + $w / 2, $top + $pj + $ph * .9, $ph, '900i', $nuit, 'center');
+}
+/* nom d'une équipe : réduit pour tenir, ou sur deux lignes, jamais coupé ; $cy : milieu vertical */
+function afn_nom($im, string $nom, float $x, float $cy, float $max, float $px, float $fit, string $p, string $hex, string $align): void {
+    $s = $px;
+    while ($s > $px * $fit && afn_larg($nom, $s, $p) > $max + 1) $s -= .5;
+    $col = aff_c($im, $hex);
+    if (afn_larg($nom, $s, $p) <= $max + 1 || !str_contains(trim($nom), ' ')) {
+        $s = afn_fit($nom, $s, $p, $max, 0);
+        afn_texte($im, $nom, $x, $cy + .4 * $s, $s, $p, $col, $align);
+        return;
+    }
+    $s2 = $px * .78;
+    [$l1, $l2] = afn_deux_lignes($nom, $s2, $p, $max);
+    $s2 = min(afn_fit($l1, $s2, $p, $max, 0), afn_fit($l2, $s2, $p, $max, 0));
+    $lh = .95 * $s2;
+    afn_texte($im, $l1, $x, $cy - $lh + .475 * $s2 + .4 * $s2, $s2, $p, $col, $align);
+    afn_texte($im, $l2, $x, $cy + .475 * $s2 + .4 * $s2, $s2, $p, $col, $align);
+}
+/* ligne « lieu » : repère + texte en capitales */
+function afn_lieu($im, array $A, string $t, float $x, float $top, float $max, float $px, float $u, int $fondRepere): void {
+    $icone = 17 * $u;
+    $lh = 1.424 * $px;
+    afn_icone($im, 'lieu', $x, $top + ($lh - $icone) / 2, $icone, aff_c($im, $A['acc']), $fondRepere);
+    $t = aff_maj($t); $tx = $x + $icone + 7 * $u; $s = afn_fit($t, $px, 's700', $max - ($tx - $x), .7, .06);
+    afn_texte($im, $t, $tx, $top + ($lh - 1.424 * $s) / 2 + 1.024 * $s, $s, 's700', aff_c($im, $A['accl']), 'left', $s * .06);
+}
+
+/* ---------- les blocs de la liste ---------- */
+/* hauteur d'un bloc, en pixels du modèle, pour une largeur de carte $wc */
+function afn_hauteur(array $b, float $wc): float {
+    switch ($b['t']) {
+        case 'match': return 92;
+        case 'plateau':
+            if (!$b['adv']) return 92;
+            return max(92, 12 + 24.2 + 8 + afn_lignes_contre($b, $wc - 150 - 128 - 36) * 42 - 8 + 12);
+        case 'plateau-res': return max(92, 12 + 24.2 + count($b['res']) * 52 + 14);
+        case 'duo': return 63.2 + afn_duo_corps($b, $wc)['h'] + 1 + 74;
+        case 'evt': return afn_evt($b, $wc)['h'];
+        default: return 189.3;
+    }
+}
+/* « contre » puis une pastille par club : nombre de lignes, et position de chaque élément */
+function afn_contre(array $b, float $max): array {
+    $el = [['em', 'contre', afn_larg('contre', 18, 's700i')]];
+    foreach ($b['adv'] as $a) $el[] = ['adv', $a, 34 + 8 + min($max - 42, afn_larg(aff_maj(aff_nom_court($a)), 24, '800'))];
+    $x = 0; $ligne = 0; $pos = [];
+    foreach ($el as $e) {
+        if ($x > 0 && $x + $e[2] > $max) { $x = 0; $ligne++; }
+        $pos[] = [$e, $x, $ligne]; $x += $e[2] + 18;
+    }
+    return [$ligne + 1, $pos];
+}
+function afn_lignes_contre(array $b, float $max): int { return afn_contre($b, $max)[0]; }
+function afn_duo_corps(array $b, float $wc): array {
+    $mil = $b['res'] ? 104 * 2 + 5 + 8 : 22 + max(afn_larg(aff_maj($b['jour']), 22, '800', 22 * .14), afn_larg($b['heure'], 78, '900i')) + 22;
+    $cote = ($wc - 52 - $mil - 20) / 2;
+    $deux = false;
+    foreach (['PIERRELATTE', $b['adv']] as $n) if (afn_larg($n, 44 * .6, '800') > $cote + 1 && str_contains(trim($n), ' ')) $deux = true;
+    $hEq = 190 + 18 + ($deux ? 2 * .95 * 44 * .78 : 44);
+    $hMil = $b['res'] ? 120 : 124;
+    return ['h' => 34 + max($hEq, $hMil) + 26, 'mil' => $mil, 'cote' => $cote, 'hEq' => $hEq, 'hMil' => $hMil];
+}
+/* fond d'une carte (dégradé bleu nuit, fin liseré clair) */
+function afn_carte($im, float $x, float $y, float $w, float $h, float $r, float $u, string $sens = 'h', float $op1 = .95, float $op2 = .93): void {
+    // les deux opacités sont proches : une seule, la moyenne, avec un dégradé de couleur
+    afn_boite($im, $x, $y, $w, $h, $r, [$sens, [[0, '#091436'], [1, '#050C22']]], ($op1 + $op2) / 2);
+    afn_lisere($im, $x, $y, $w, $h, $r, max(1, $u), '#FFFFFF', .08);
+}
+/* catégorie dans le bloc rayé de gauche */
+function afn_bloc_cat($im, array $A, array $b, float $x, float $y, float $h, float $u): void {
+    afn_coller_raye($im, $x, $y, 150 * $u, $h, [14 * $u, 0, 0, 14 * $u], $u);
+    afn_boite($im, $x + 147 * $u, $y, 3 * $u, $h, 0, $A['acc']);
+    $w = 130 * $u;
+    $pb = afn_fit(aff_maj($b['cat']), 34 * $u, '900', $w, .6);
+    $ps = $b['niv'] !== '' ? afn_fit(aff_maj($b['niv']), 14 * $u, 's800', $w, .7, .1) : 0;
+    $hc = $pb + ($ps ? 4 * $u + 1.1 * $ps : 0); $top = $y + ($h - $hc) / 2; $cx = $x + 75 * $u;
+    afn_texte($im, aff_maj($b['cat']), $cx, $top + .9 * $pb, $pb, '900', aff_c($im, '#FFFFFF'), 'center');
+    if ($ps) afn_texte($im, aff_maj($b['niv']), $cx, $top + $pb + 4 * $u + (1.1 * $ps - 1.424 * $ps) / 2 + 1.024 * $ps, $ps, 's800', aff_c($im, $A['accl']), 'center', $ps * .1);
+}
+/* une équipe dans une ligne : nom + blason ($cote 'g' : nom puis blason, aligné à droite) */
+function afn_equipe($im, array $e, string $cote, float $x0, float $x1, float $cy, float $d, float $u, float $px, float $gap = 14): void {
+    $max = ($x1 - $x0) - $d - $gap * $u;
+    $hex = $e['club'] ? '#FFFFFF' : '#D3DDF4'; $p = $e['club'] ? '800' : '700'; $fit = $e['club'] ? .7 : .72;
+    if ($cote === 'g') {
+        afn_blason($im, $e['brut'], $e['club'], $x1 - $d / 2, $cy, $d, $u);
+        afn_nom($im, $e['nom'], $x1 - $d - $gap * $u, $cy, $max, $px, $fit, $p, $hex, 'right');
+    } else {
+        afn_blason($im, $e['brut'], $e['club'], $x0 + $d / 2, $cy, $d, $u);
+        afn_nom($im, $e['nom'], $x0 + $d + $gap * $u, $cy, $max, $px, $fit, $p, $hex, 'left');
+    }
+}
+/* dessine un bloc ; ($x, $y) : coin haut gauche en pixels du calque, $u : pixels du calque par pixel du modèle, $wc : largeur (modèle) */
+function afn_bloc($im, array $A, array $b, float $x, float $y, float $u, float $wc): void {
+    $h = afn_hauteur($b, $wc) * $u; $w = $wc * $u;
+    $fondRepere = afn_c($im, [8, 18, 48]);
+    if ($b['t'] === 'vide') {
+        afn_carte($im, $x, $y, $w, $h, 18 * $u, $u, 'v', .92, .92);
+        $t = aff_maj($b['texte']); $pt = afn_fit($t, 54 * $u, '900i', $w - 60 * $u, .5);
+        afn_texte($im, $t, $x + $w / 2, $y + 46 * $u + (54 * $u - $pt) / 2 + .9 * $pt, $pt, '900i', aff_c($im, '#FFFFFF'), 'center');
+        afn_texte($im, $b['sous'] ?? 'Rendez-vous le week-end prochain !', $x + $w / 2, $y + 134.5 * $u, 22 * $u, 's700', aff_c($im, AFN_CIEL), 'center');
+        return;
+    }
+    if ($b['t'] === 'duo') { afn_duo($im, $A, $b, $x, $y, $u, $wc); return; }
+    if ($b['t'] === 'evt') { afn_evt($b, $wc, $im, $A, $x, $y, $u); return; }
+    afn_carte($im, $x, $y, $w, $h, 14 * $u, $u);
+    afn_bloc_cat($im, $A, $b, $x, $y, $h, $u);
+    $cx0 = $x + 150 * $u;                                                // début de la partie droite
+    if ($b['t'] === 'match') {
+        $col = ($wc - 278) / 2 * $u; $cy = $y + $h / 2;
+        $nous = ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true];
+        $eux = ['nom' => aff_maj($b['adv']), 'brut' => $b['adv'], 'club' => false];
+        [$g, $d] = $b['dom'] ? [$nous, $eux] : [$eux, $nous];
+        afn_equipe($im, $g, 'g', $cx0 + 14 * $u, $cx0 + $col - 14 * $u, $cy, 54 * $u, $u, 30 * $u);
+        $mx = $cx0 + $col;
+        if ($b['res']) afn_cases($im, $A, $b['bp'], $b['bc'], $b['dom'], $mx + 5.5 * $u, $y + ($h - 62 * $u) / 2, 56 * $u, 62 * $u, 9 * $u, 5 * $u, 44 * $u, $u);
+        else afn_heure($im, $A, $b['jour'], $b['heure'], $mx + 4 * $u, $y + 12 * $u, 120 * $u, $h - 24 * $u, 14 * $u, 40 * $u, $u, 10 * $u);
+        afn_equipe($im, $d, 'd', $mx + 128 * $u + 14 * $u, $mx + 128 * $u + $col - 14 * $u, $cy, 54 * $u, $u, 30 * $u);
+        return;
+    }
+    if ($b['t'] === 'plateau') {
+        $col = ($wc - 278) * $u; $lx = $cx0 + 18 * $u;
+        afn_lieu($im, $A, $b['lieu'], $lx, $y + 12 * $u, $col - 36 * $u, 17 * $u, $u, $fondRepere);
+        if ($b['adv']) {
+            [, $pos] = afn_contre($b, $wc - 278 - 36);
+            foreach ($pos as [$e, $ex, $li]) {
+                $ly = $y + (12 + 24.2 + 8 + $li * 42) * $u; $ex = $lx + $ex * $u;
+                if ($e[0] === 'em') { afn_texte($im, 'contre', $ex, $ly + 22.6 * $u, 18 * $u, 's700i', aff_c($im, AFN_CIEL)); continue; }
+                $n = aff_maj(aff_nom_court($e[1]));
+                afn_blason($im, $e[1], false, $ex + 17 * $u, $ly + 17 * $u, 34 * $u, $u, $n); $max = ($e[2] - 42) * $u;
+                $s = afn_fit($n, 24 * $u, '800', $max, 0);
+                afn_texte($im, $n, $ex + 42 * $u, $ly + 17 * $u + .4 * $s, $s, '800', aff_c($im, '#E6ECFA'));
+            }
+        }
+        afn_heure($im, $A, $b['jour'], $b['heure'], $cx0 + $col + 4 * $u, $y + 12 * $u, 112 * $u, $h - 24 * $u, 14 * $u, 40 * $u, $u, 10 * $u);
+        return;
+    }
+    // plateau-res : une ligne par match du plateau (Pierrelatte · score · adversaire)
+    $zw = ($wc - 150 - 36) * $u; $lx = $cx0 + 18 * $u;
+    afn_lieu($im, $A, $b['lieu'], $lx, $y + 12 * $u, $zw, 17 * $u, $u, $fondRepere);
+    $mil = 97 * $u; $cote = ($zw - $mil - 20 * $u) / 2;
+    foreach ($b['res'] as $i => $r) {
+        $ty = $y + (12 + 24.2 + 8 + $i * 52) * $u; $cy = $ty + 22 * $u;
+        afn_equipe($im, ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true], 'g', $lx, $lx + $cote, $cy, 40 * $u, $u, 24 * $u);
+        afn_cases($im, $A, $r['bp'], $r['bc'], true, $lx + $cote + 10 * $u + 4 * $u, $ty, 42 * $u, 44 * $u, 7 * $u, 5 * $u, 32 * $u, $u);
+        $e = ['nom' => aff_maj($r['adv']), 'brut' => $r['adv'], 'club' => false];
+        $rx = $lx + $cote + 20 * $u + $mil;
+        $max = $cote - 40 * $u - 14 * $u;
+        afn_blason($im, $r['adv'], false, $rx + 20 * $u, $cy, 40 * $u, $u);
+        afn_nom($im, $e['nom'], $rx + 54 * $u, $cy, $max, 24 * $u, .66, '700', '#D3DDF4', 'left');
+    }
+}
+/* un seul match : grande carte (catégorie en tête, les deux blasons, l'heure ou le score, la date et le stade) */
+function afn_duo($im, array $A, array $b, float $x, float $y, float $u, float $wc): void {
+    $w = $wc * $u; $c = afn_duo_corps($b, $wc); $h = (63.2 + $c['h'] + 1 + 74) * $u;
+    afn_carte($im, $x, $y, $w, $h, 22 * $u, $u, 'v', .94, .94);
+    afn_coller_raye($im, $x, $y, $w, 63.2 * $u, [22 * $u, 22 * $u, 0, 0], $u);
+    afn_boite($im, $x, $y + 60.2 * $u, $w, 3 * $u, 0, $A['acc']);
+    // en-tête : « U18 · DISTRICT 1 »
+    $t1 = aff_maj($b['cat']); $t2 = $b['niv'] !== '' ? '· ' . aff_maj($b['niv']) : '';
+    $pt = 26 * $u; $ls = $pt * .14;
+    while ($pt > 14 * $u && afn_larg($t1, $pt, '900', $ls) + ($t2 ? 14 * $u + afn_larg($t2, $pt, '900', $ls) : 0) > $w - 32 * $u) { $pt -= $u; $ls = $pt * .14; }
+    $tw = afn_larg($t1, $pt, '900', $ls) + ($t2 ? 14 * $u + afn_larg($t2, $pt, '900', $ls) : 0);
+    $tx = $x + ($w - $tw) / 2; $by = $y + (63.2 * $u - 1.2 * $pt) / 2 + $pt - 1.5 * $u;
+    $tx += afn_texte($im, $t1, $tx, $by, $pt, '900', aff_c($im, '#FFFFFF'), 'left', $ls) + 14 * $u;
+    if ($t2) afn_texte($im, $t2, $tx, $by, $pt, '900', aff_c($im, $A['accl']), 'left', $ls);
+    // corps : équipe qui reçoit à gauche
+    $top = $y + (63.2 + 34) * $u; $hc = ($c['h'] - 60) * $u; $cy = $top + $hc / 2;
+    $cote = $c['cote'] * $u; $mil = $c['mil'] * $u;
+    $nous = ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true];
+    $eux = ['nom' => aff_maj($b['adv']), 'brut' => $b['adv'], 'club' => false];
+    foreach ([[$b['dom'] ? $nous : $eux, $x + 26 * $u], [$b['dom'] ? $eux : $nous, $x + $w - 26 * $u - $cote]] as [$e, $ex]) {
+        $ey = $cy - $c['hEq'] * $u / 2;
+        afn_blason($im, $e['brut'], $e['club'], $ex + $cote / 2, $ey + 95 * $u, 190 * $u, $u);
+        afn_nom($im, $e['nom'], $ex + $cote / 2, $ey + (190 + 18) * $u + ($c['hEq'] - 208) * $u / 2, $cote, 44 * $u, .6, $e['club'] ? '800' : '700', $e['club'] ? '#FFFFFF' : '#D3DDF4', 'center');
+    }
+    $mx = $x + 26 * $u + $cote + 10 * $u;
+    if ($b['res']) afn_cases($im, $A, $b['bp'], $b['bc'], $b['dom'], $mx + 4 * $u, $cy - 60 * $u, 104 * $u, 120 * $u, 14 * $u, 5 * $u, 96 * $u, $u);
+    else afn_heure($im, $A, $b['jour'], $b['heure'], $mx, $cy - 62 * $u, $mil, 124 * $u, 22 * $u, 78 * $u, $u, 10 * $u);
+    // pied : date et stade
+    $py = $y + (63.2 + $c['h']) * $u;
+    afn_boite($im, $x, $py, $w, max(1, $u), 0, '#FFFFFF', .10);
+    $q = aff_maj($b['quand']); $l = aff_maj($b['lieu']);
+    $pq = 30 * $u; $pl = 20 * $u; $place = $w - 40 * $u;
+    while ($pl > 12 * $u && afn_larg($q, $pq, '800') + 22 * $u + 24 * $u + afn_larg($l, $pl, 's700', $pl * .06) > $place) { $pl -= .5 * $u; if ($pq > 22 * $u) $pq -= .5 * $u; }
+    $wl = 24 * $u + afn_larg($l, $pl, 's700', $pl * .06); $tot = afn_larg($q, $pq, '800') + ($l !== '' ? 22 * $u + $wl : 0);
+    $px0 = $x + ($w - $tot) / 2; $mid = $py + $u + (16 + 18) * $u;
+    $px0 += afn_texte($im, $q, $px0, $mid + .4 * $pq, $pq, '800', aff_c($im, '#FFFFFF')) + 22 * $u;
+    if ($l !== '') {
+        afn_icone($im, 'lieu', $px0, $mid - 8.5 * $u, 17 * $u, aff_c($im, $A['acc']), afn_c($im, [7, 15, 40]));
+        afn_texte($im, $l, $px0 + 24 * $u, $mid + (1.024 - .712) * $pl, $pl, 's700', aff_c($im, $A['accl']), 'left', $pl * .06);
+    }
+}
+
+/* texte coupé en lignes (entre les mots) pour tenir dans $max */
+function afn_paragraphe(string $t, float $px, string $p, float $max): array {
+    $l = []; $cur = '';
+    foreach (preg_split('/\s+/u', trim($t)) as $mot) {
+        if ($cur !== '' && afn_larg("$cur $mot", $px, $p) > $max) { $l[] = $cur; $cur = $mot; }
+        else $cur = $cur === '' ? $mot : "$cur $mot";
+    }
+    if ($cur !== '') $l[] = $cur;
+    return $l;
+}
+/* carte d'un événement (stage, loto, tournoi…) : « Infos pratiques », la date et l'heure, le lieu, puis les informations ligne par ligne.
+   Sans $im : calcule seulement la hauteur. */
+function afn_evt(array $b, float $wc, $im = null, ?array $A = null, float $x = 0, float $y = 0, float $u = 1): array {
+    $pad = 34; $zw = $wc - 2 * $pad; $h = 63.2 + 28;
+    $hw = $b['heure'] !== '' ? 22 + max(afn_larg('HEURE', 18, '800', 18 * .14), afn_larg($b['heure'], 64, '900i')) + 22 : 0;
+    $dl = []; $pd = 0;
+    if ($b['date'] !== '') {
+        $pd = afn_fit(aff_maj($b['date']), 56, '900i', $zw - ($hw ? $hw + 24 : 0), .6);
+        $dl = ['y' => $h]; $h += 22 + 8 + .9 * 56 + 10;
+    }
+    $ly = null;
+    if ($b['lieu'] !== '') { $ly = $h + 6; $h += 6 + 36; }
+    $paras = [];
+    if ($b['lignes']) {
+        $sep = $h + 18; $h += 18 + 1 + 22;
+        foreach ($b['lignes'] as $t) { $ls = afn_paragraphe($t, 32, '700', $zw - 34); $paras[] = [$h, $ls]; $h += count($ls) * 40 + 12; }
+        $h -= 12;
+    }
+    $h += 30;
+    if ($im === null) return ['h' => $h];
+    $w = $wc * $u; $X = fn($v) => $x + $v * $u; $Y = fn($v) => $y + $v * $u;
+    afn_carte($im, $x, $y, $w, $h * $u, 22 * $u, $u, 'v', .94, .94);
+    afn_coller_raye($im, $x, $y, $w, 63.2 * $u, [22 * $u, 22 * $u, 0, 0], $u);
+    afn_boite($im, $x, $Y(60.2), $w, 3 * $u, 0, $A['acc']);
+    $pt = 26 * $u;
+    afn_texte($im, 'INFOS PRATIQUES', $x + $w / 2, $Y(31.6) + .4 * $pt, $pt, '900', aff_c($im, '#FFFFFF'), 'center', $pt * .14);
+    if ($dl) {
+        afn_texte($im, 'RENDEZ-VOUS', $X($pad), $Y($dl['y'] + 16), 15 * $u, 's800', aff_c($im, $A['accl']), 'left', 15 * .2 * $u);
+        afn_texte($im, aff_maj($b['date']), $X($pad), $Y($dl['y'] + 30 + .9 * 56 - (56 - $pd) / 2), $pd * $u, '900i', aff_c($im, '#FFFFFF'));
+        if ($hw) afn_heure($im, $A, 'Heure', $b['heure'], $X($wc - $pad - $hw), $Y($dl['y'] - 4), $hw * $u, 96 * $u, 18 * $u, 64 * $u, $u, 10 * $u);
+    }
+    if ($ly !== null) afn_lieu($im, $A, $b['lieu'], $X($pad), $Y($ly), $zw * $u, 22 * $u, $u, afn_c($im, [8, 18, 46]));
+    if ($paras) {
+        afn_boite($im, $X($pad), $Y($sep), $zw * $u, max(1, $u), 0, '#FFFFFF', .12);
+        foreach ($paras as [$py, $ls]) {
+            aff_poly($im, [$X($pad + 7), $Y($py + 12), $X($pad + 14), $Y($py + 19), $X($pad + 7), $Y($py + 26), $X($pad), $Y($py + 19)], aff_c($im, $A['acc']));
+            foreach ($ls as $i => $l) afn_texte($im, $l, $X($pad + 34), $Y($py + $i * 40 + 31), 32 * $u, '700', aff_c($im, '#E6ECFA'));
+        }
+    }
+    return ['h' => $h];
+}
+
+/* ---------- la feuille ---------- */
+/* fond, bandeau du haut, pastille domicile / extérieur */
+function afn_debut(?string $lieu): array {
+    $fmt = afn_format(); $F = AFN_FORMATS[$fmt]; $W = AFF_W; $H = $F['H'];
+    $l = $lieu === 'ext' ? 'ext' : 'dom';
+    $A = ['fmt' => $fmt, 'F' => $F, 'lieu' => $lieu, 'acc' => AFN_ACC[$l][0], 'accl' => AFN_ACC[$l][1], 'metal' => AFN_METAL[$l]];
+    $im = imagecreatetruecolor($W, $H); imagealphablending($im, true);
+    $src = aff_image(afn_decor($fmt, $l));
+    if ($src) { imagecopyresampled($im, $src, 0, 0, 0, 0, $W, $H, imagesx($src), imagesy($src)); imagedestroy($src); }
+    else aff_rect($im, 0, 0, $W, $H, aff_c($im, '#030817'));
+    $A['im'] = $im;
+    // bandeau : saison · site · compte Instagram
+    $B = $F['barre']; $s = $B * .36; $sp = $s * .82;
+    aff_rect($im, 0, 0, $W, $B, aff_c($im, '#050B1F'));
+    aff_rect($im, 0, $B - 3, $W, 3, aff_c($im, $A['acc']));
+    $an = (int) date('Y') - ((int) date('n') < 8 ? 1 : 0);
+    $g = "SAISON $an-" . ($an + 1); $m = 'ASF-PIERRELATTE.FR'; $d = '@ASFP.OFFICIEL';
+    $wg = afn_larg($g, $sp, '800', $sp * .18); $wm = afn_larg($m, $s, '800', $s * .14); $wd = afn_larg($d, $sp, '800', $sp * .18);
+    $esp = ($W - 68 - $wg - $wm - $wd) / 2;
+    afn_texte($im, $g, 34, $B / 2 + .4 * $sp, $sp, '800', aff_c($im, $A['accl']), 'left', $sp * .18);
+    afn_texte($im, $m, 34 + $wg + $esp, $B / 2 + .4 * $s, $s, '800', aff_c($im, '#FFFFFF'), 'left', $s * .14);
+    afn_texte($im, $d, $W - 34 - $wd, $B / 2 + .4 * $sp, $sp, '800', aff_c($im, $A['accl']), 'left', $sp * .18);
+    // pastille « À DOMICILE » (maison) ou « À L'EXTÉRIEUR » (avion), dessinée deux fois plus grande puis réduite
+    if ($lieu) {
+        $lib = $lieu === 'dom' ? 'À DOMICILE' : "À L'EXTÉRIEUR";
+        $pw = 16 + 28 + 10 + afn_larg($lib, 26, '900', 26 * .07) + 22; $px1 = $W - 46; $px0 = $px1 - $pw; $py = $F['tete'] + $F['bl'] * .5 - 26;
+        afn_ombre($im, $px0 - 40, $py - 30, $pw + 80, 52 + 80, function ($m, $k, $blanc) use ($pw) {
+            aff_coin($m, 40 / $k, (30 + 10) / $k, $pw / $k, 52 / $k, 26 / $k, $blanc);
+        }, 26, .45);
+        $z = AFN_SS; $c = afn_calque((int) ceil($pw * $z), 52 * $z);
+        afn_boite($c, 0, 0, $pw * $z, 52 * $z, 26 * $z, ['v', $A['metal']]);
+        afn_icone($c, $lieu === 'dom' ? 'maison' : 'avion', 16 * $z, 12 * $z, 28 * $z, aff_c($c, '#0B1633'));
+        afn_texte($c, $lib, (16 + 28 + 10) * $z, 36.4 * $z, 26 * $z, '900', aff_c($c, '#0B1633'), 'left', 26 * .07 * $z);
+        $r = afn_calque((int) ceil($pw), 52); imagealphablending($r, false);
+        imagecopyresampled($r, $c, 0, 0, 0, 0, (int) ceil($pw), 52, imagesx($c), imagesy($c));
+        imagealphablending($im, true); imagecopy($im, $r, (int) round($px0), (int) round($py), 0, 0, (int) ceil($pw), 52);
+        imagedestroy($c); imagedestroy($r);
+    }
+    return $A;
+}
+/* sur-titre, grand titre, sous-titre « métal », date */
+function afn_titres(array $A, string $sur, string $t1, string $t2, string $date, bool $deuxLignes = false): void {
+    $im = $A['im']; $F = $A['F']; $x = 46; $max = 640;
+    $fs = $F['t2'] * .26; $y = $F['titre'];
+    $sur = aff_maj($sur);
+    afn_boite($im, $x, $y + (1.424 * $fs - 3) / 2, 40, 3, 0, ['v', $A['metal']]);
+    afn_texte($im, $sur, $x + 54, $y + 1.024 * $fs, $fs, 's800', aff_c($im, $A['accl']), 'left', $fs * .2);
+    $y += 1.424 * $fs + 12;
+    $t1 = aff_maj($t1); $s1 = afn_fit($t1, $F['t1'], '900i', $max, .55);
+    $lignes = [$t1];
+    if ($deuxLignes && $s1 < $F['t1'] * .7 && str_contains($t1, ' ')) {          // titre long (stage, tournoi…) : deux lignes équilibrées
+        $mots = explode(' ', $t1); $ecart = INF;
+        for ($i = 1; $i < count($mots); $i++) {
+            $a = implode(' ', array_slice($mots, 0, $i)); $b = implode(' ', array_slice($mots, $i));
+            $e = max(afn_larg($a, 100, '900i'), afn_larg($b, 100, '900i'));
+            if ($e < $ecart) { $ecart = $e; $lignes = [$a, $b]; }
+        }
+        $s1 = min(afn_fit($lignes[0], $F['t1'] * .8, '900i', $max, .4), afn_fit($lignes[1], $F['t1'] * .8, '900i', $max, .4));
+    }
+    foreach ($lignes as $l) {
+        afn_ombre_texte($im, $l, $x, $y + .83 * $s1, $s1, '900i', 6, 30, .55);
+        afn_texte($im, $l, $x, $y + .83 * $s1, $s1, '900i', aff_c($im, '#FFFFFF'));
+        $y += .86 * $s1;
+    }
+    $y += 4;
+    $t2 = aff_maj($t2); $s2 = afn_fit($t2, $F['t2'], '900i', $max, .55);
+    if ($t2 !== '') {
+        afn_ombre_texte($im, $t2, $x, $y + .875 * $s2, $s2, '900i', 4, 18, .5);
+        afn_texte_degrade($im, $t2, $x, $y + .875 * $s2, $s2, '900i', $A['metal'], $y, $y + .95 * $s2);
+    }
+    if ($date !== '') {
+        $fd = $F['t2'] * .36; $yd = $F['date'] + 1.024 * $fd;
+        afn_ombre_texte($im, $date, $x, $yd, $fd, 's700', 2, 12, .9);
+        afn_texte($im, $date, $x, $yd, $fd, 's700', aff_c($im, '#FFFFFF'));
+    }
+}
+/* la liste : taille calculée pour remplir la zone sans déborder, puis réduite d'un coup (bords lisses) */
+function afn_zone(array $A, array $blocs, float $zoomMax): void {
+    $im = $A['im']; [$z0, $z1] = $A['F']['zone']; $zh = $z1 - $z0; $zw = AFF_W - 60; $n = count($blocs);
+    if (!$n) return;
+    $k = $zoomMax;
+    while (true) {
+        $wc = $zw / $k; $hs = array_map(fn($b) => afn_hauteur($b, $wc), $blocs);
+        $tot = array_sum($hs) + 12 * ($n - 1);
+        if ($tot * $k <= $zh || $k <= .3) break;
+        $k -= .01;
+    }
+    $gap = 12;
+    if ($n > 1 && $zh - $tot * $k > 0) $gap = min(30, 12 + ($zh - $tot * $k) / $k / ($n - 1));
+    $total = (array_sum($hs) + $gap * ($n - 1)) * $k;
+    $y = $z0 + ($zh - $total) / 2;
+    // calque deux fois plus grand couvrant la zone (avec de la marge pour les ombres)
+    $z = AFN_SS; $m = 70; $ly0 = (int) floor($y - $m); $lh = (int) ceil($total + 2 * $m);
+    $L = afn_calque(AFF_W * $z, $lh * $z);
+    $u = $k * $z; $yy = ($y - $ly0) * $z;
+    $pos = [];
+    foreach ($blocs as $i => $b) { $pos[] = $yy; $yy += ($hs[$i] + $gap) * $u; }
+    // ombres des cartes : 0 12px 30px noir 40 % (50 % sous la grande carte)
+    $duo = $blocs[0]['t'] === 'duo';
+    afn_ombre($L, 0, 0, AFF_W * $z, $lh * $z, function ($mk, $kk, $blanc) use ($pos, $hs, $u, $z, $duo) {
+        foreach ($pos as $i => $py) aff_coin($mk, 30 * $z / $kk, ($py + ($duo ? 24 : 12) * $u) / $kk, (AFF_W - 60) * $z / $kk, $hs[$i] * $u / $kk, 14 * $u / $kk, $blanc);
+    }, ($duo ? 60 : 30) * $u, $duo ? .5 : .4);
+    foreach ($blocs as $i => $b) afn_bloc($L, $A, $b, 30 * $z, $pos[$i], $u, $zw / $k);
+    $R = afn_calque(AFF_W, $lh); imagealphablending($R, false);
+    imagecopyresampled($R, $L, 0, 0, 0, 0, AFF_W, $lh, AFF_W * $z, $lh * $z);
+    imagedestroy($L);
+    imagealphablending($im, true);
+    imagecopy($im, $R, 0, $ly0, 0, 0, AFF_W, $lh);
+    imagedestroy($R);
+}
+/* bas de l'affiche : les partenaires (moitié domicile / moitié extérieur), ou le bandeau du club */
+function afn_partenaires(array $A, bool $avec): void {
+    $im = $A['im']; $F = $A['F']; $W = AFF_W; $H = $F['H']; $P = $F['part'];
+    $logos = [];
+    if ($avec) foreach (aff_sponsors() as $id) {
+        foreach (['jpg', 'png', 'webp'] as $ext) if (is_file($f = dirname(__DIR__) . "/img/partenaires/$id.$ext")) { if ($src = aff_image($f)) $logos[] = $src; break; }
+    }
+    aff_rect($im, 0, $P - 5, $W, 5, aff_c($im, $A['acc']));
+    if (!$logos) {
+        aff_rect($im, 0, $P, $W, $H - $P, aff_c($im, '#050B1F'));
+        $h = $H - $P;
+        afn_texte($im, 'ASF-PIERRELATTE.FR', $W / 2, $P + $h * .48, $h * .28, '900', aff_c($im, '#FFFFFF'), 'center', $h * .28 * .06);
+        afn_texte($im, "ATOM'SPORTS FOOTBALL PIERRELATTE · DEPUIS 1923", $W / 2, $P + $h * .72, $h * .12, 's800', aff_c($im, $A['accl']), 'center', $h * .12 * .2);
+        return;
+    }
+    aff_rect($im, 0, $P, $W, $H - $P, aff_c($im, '#FFFFFF'));
+    $ph = $A['fmt'] === 'insta' ? 14 : 18; $hh = 1.2 * $ph;
+    $L = $F['logo']; $place = $H - $P - 20;
+    // rangées de logos (hauteur fixe, largeur selon le logo, 2,4 fois la hauteur au plus), réduites si elles ne tiennent pas
+    while (true) {
+        $rangs = [[]]; $x = 0;
+        foreach ($logos as $src) {
+            $lw = min($L * 2.4, $L * imagesx($src) / max(1, imagesy($src)));
+            if ($x > 0 && $x + $lw > $W - 40) { $rangs[] = []; $x = 0; }
+            $rangs[count($rangs) - 1][] = [$src, $lw]; $x += $lw + 22;
+        }
+        $tot = $hh + 10 + count($rangs) * $L + (count($rangs) - 1) * 10;
+        if ($tot <= $place || $L <= 20) break;
+        $L -= 2;
+    }
+    $y = $P + 10 + ($place - $tot) / 2;
+    $nuit = aff_c($im, '#0B1633');
+    $wt = afn_larg('NOS PARTENAIRES', $ph, '900', $ph * .24);
+    afn_texte($im, 'NOS PARTENAIRES', $W / 2 - $wt / 2, $y + $ph, $ph, '900', $nuit, 'left', $ph * .24);
+    foreach ([-1, 1] as $sens) aff_rect($im, $sens < 0 ? $W / 2 - $wt / 2 - 12 - 46 : $W / 2 + $wt / 2 + 12, $y + $hh / 2 - 1, 46, 2, aff_c($im, '#0B1633', .35));
+    $y += $hh + 10;
+    foreach ($rangs as $rang) {
+        $rw = array_sum(array_column($rang, 1)) + 22 * (count($rang) - 1); $x = ($W - $rw) / 2;
+        foreach ($rang as [$src, $lw]) { aff_contenir($im, $src, $x + $lw / 2, $y + $L / 2, $lw, $L); $x += $lw + 22; }
+        $y += $L + 10;
+    }
+    foreach ($logos as $src) imagedestroy($src);
+}
+
+/* ---------- données des matchs → blocs ---------- */
+function afn_cat(array $m, bool $fal): array {
+    if ($fal) { [$a, $b] = aff_cat_lignes($m); return [preg_replace('/^(U\s?\d{1,2})-(U\s?\d{1,2})$/u', '$1 · $2', $a), $b]; }
+    $sous = (string) ($m['sous'] ?? aff_sous_etiquette((string) ($m['comp'] ?? '')));
+    return [aff_maj((string) ($m['equipe'] ?? '')), $sous !== '' ? $sous : aff_maj((string) ($m['comp'] ?? ''))];
+}
+function afn_jour(string $d): string { return ucfirst(AFF_JOURS[(int) date('w', strtotime($d . ' 12:00'))]); }
+function afn_quand(string $d): string { $t = strtotime($d . ' 12:00'); $j = (int) date('j', $t); return ucfirst(AFF_JOURS[(int) date('w', $t)]) . ' ' . ($j === 1 ? '1er' : $j) . ' ' . AFF_MOIS[(int) date('n', $t) - 1]; }
+/* « Samedi 3 et dimanche 4 octobre », « Vendredi 2, samedi 3 et dimanche 4 octobre », « Samedi 31 octobre et dimanche 1er novembre » */
+function afn_date_weekend(array $plan, string $samedi): string {
+    $jours = array_column($plan, 'date');
+    if (!$jours) $jours = array_slice(aff_weekend($samedi), 1);
+    $mois = fn($d) => (int) date('n', strtotime($d . ' 12:00'));
+    $parts = [];
+    foreach ($jours as $i => $d) {
+        $t = strtotime($d . ' 12:00'); $j = (int) date('j', $t);
+        $txt = AFF_JOURS[(int) date('w', $t)] . ' ' . ($j === 1 ? '1er' : $j);
+        if ($i === count($jours) - 1 || $mois($d) !== $mois($jours[$i + 1])) $txt .= ' ' . AFF_MOIS[$mois($d) - 1];
+        $parts[] = $txt;
+    }
+    $der = array_pop($parts);
+    return ucfirst($parts ? implode(', ', $parts) . ' et ' . $der : $der);
+}
+function afn_stade(array $m): string {
+    if (!empty($m['dom'])) return 'Stade Gustave Jaume, Pierrelatte';
+    [$stade, $ville] = aff_lieu_court($m);
+    $t = trim($stade . ($ville !== '' && $ville !== $stade ? ', ' . $ville : ''), ' ,');
+    return $t !== '' ? $t : aff_lieu($m);
+}
+function afn_blocs(array $liste, bool $resultats, bool $fal): array {
+    $out = [];
+    foreach ($liste as $m) {
+        [$cat, $niv] = afn_cat($m, $fal);
+        $b = ['cat' => $cat, 'niv' => $niv, 'dom' => !empty($m['dom']), 'adv' => (string) ($m['adv'] ?? ''), 'jour' => afn_jour($m['date']),
+              'heure' => aff_hfr((string) ($m['heure'] ?? '')), 'quand' => afn_quand($m['date']), 'lieu' => afn_stade($m)];
+        if ($fal) {
+            $club = aff_nom_club((string) ($m['adv'] ?? ''));
+            [, $ville] = aff_lieu_court($m);
+            $quoi = preg_match('/brassage/i', (string) ($m['comp'] ?? '')) ? 'Brassage' : 'Plateau';
+            $b['lieu'] = !empty($m['dom']) ? 'À domicile · Stade Gustave Jaume, Pierrelatte'
+                : ($ville !== '' ? "$quoi à " . mb_convert_case(mb_strtolower($ville), MB_CASE_TITLE) . ($club !== '' ? " · $club" : '') : "$quoi chez $club");
+            if ($resultats) { $b['t'] = 'plateau-res'; $b['res'] = array_slice(aff_scores_brassage($m), 0, 6); }
+            else { $b['t'] = 'plateau'; $b['adv'] = array_values(array_filter(array_map('strval', $m['adversaires'] ?? []), 'strlen')); }
+        } else {
+            $b['t'] = 'match'; $b['res'] = $resultats; $b['bp'] = $m['bp'] ?? null; $b['bc'] = $m['bc'] ?? null;
+        }
+        $out[] = $b;
+    }
+    return $out;
+}
+function afn_zoom_max(int $n): float { return [1 => 1.4, 2 => 1.4, 3 => 1.28, 4 => 1.18][$n] ?? 1.12; }
+
+/* jour de match ou résultat d'un match (story du jour de match, aperçu « match » / « score ») ; null si le décor manque */
+function afn_match(array $m, array $opts = []) {
+    $dom = !empty($m['dom']); $lieu = $dom ? 'dom' : 'ext';
+    if (!afn_actif($lieu)) return null;
+    $score = !empty($opts['score']) && aff_joue($m); $fal = aff_fal($m);
+    $m['sous'] = aff_sous_etiquette((string) ($m['comp'] ?? ''));
+    $b = afn_blocs([$m], $score, $fal)[0];
+    if (!$fal) $b['t'] = 'duo';
+    $perso = trim((string) ($opts['titre'] ?? ''));
+    $t1 = $perso !== '' ? $perso : ($score ? 'Résultat' : 'Jour de match');
+    $t2 = $score ? ['V' => 'Victoire !', 'N' => 'Match nul', 'D' => 'Défaite'][aff_issue($m)] : (string) ($m['equipe'] ?? '');
+    $A = afn_debut($lieu);
+    afn_titres($A, aff_vet($m) ? 'Championnat vétérans' : ($fal ? 'École de foot' : "Atom'Sports Football Pierrelatte"), $t1, $t2,
+        afn_quand($m['date']) . (!$score && ($m['heure'] ?? '') !== '' ? ' · ' . aff_hfr($m['heure']) : ''));
+    afn_zone($A, [$b], 1.15);
+    afn_partenaires($A, (bool) ($opts['sponsors'] ?? true));
+    return $A['im'];
+}
+/* événement du club (stage, loto, tournoi…) : titre, sous-titre, date, heure, lieu et informations ; null si le décor manque */
+function afn_evenement(array $o) {
+    if (!afn_actif('dom')) return null;
+    $titre = trim((string) ($o['titre'] ?? '')); $sous = trim((string) ($o['sous'] ?? ''));
+    $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($o['date'] ?? '')) ? afn_quand($o['date']) : '';
+    $heure = trim((string) ($o['heure'] ?? '')); $heure = $heure !== '' ? aff_hfr($heure) : '';
+    $lignes = array_slice(array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) ($o['texte'] ?? ''))))), 0, 8);
+    $A = afn_debut(null);
+    afn_titres($A, "Atom'Sports Football Pierrelatte", $titre !== '' ? $titre : 'Événement du club', $sous, '', true);
+    $b = ['t' => 'evt', 'date' => $date, 'heure' => $heure, 'lieu' => trim((string) ($o['lieu'] ?? '')), 'lignes' => $lignes];
+    if ($date === '' && $b['lieu'] === '' && !$lignes) $b = ['t' => 'vide', 'texte' => 'Infos à venir', 'sous' => 'Toutes les informations très bientôt'];
+    afn_zone($A, [$b], 1.15);
+    afn_partenaires($A, (bool) ($o['sponsors'] ?? true));
+    return $A['im'];
+}
+
+/* affiche « résultats » ou « rencontres » du week-end (championnats, foot animation, vétérans) ; null si le décor manque */
+function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) {
+    $lieu = in_array($opts['lieu'] ?? '', ['dom', 'ext'], true) ? $opts['lieu'] : null;
+    if (!afn_actif($lieu)) return null;
+    $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
+    $liste = [];
+    foreach ($plan as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
+    $fal = !empty($GLOBALS['aff_fal']); $vet = !empty($GLOBALS['aff_vet']);
+    $quoi = $resultats ? 'Résultats' : 'Rencontres';
+    [$sur, $t1, $t2] = $fal ? ['École de foot', 'Foot animation', "$quoi du week-end"]
+        : ($vet ? ['Championnat vétérans', 'Vétérans', "$quoi du week-end"] : ["Atom'Sports Football Pierrelatte", $quoi, 'du week-end']);
+    if (trim((string) ($opts['titre'] ?? '')) !== '') {                // titre choisi dans l'espace club
+        $t1 = trim((string) $opts['titre']);
+        if (preg_match('/week-?end/iu', $t1)) $t2 = $fal || $vet ? $quoi : '';
+    }
+    $A = afn_debut($lieu);
+    afn_titres($A, $sur, $t1, $t2, afn_date_weekend($plan, $samedi));
+    $blocs = afn_blocs($liste, $resultats, $fal);
+    if (!$blocs) { $blocs = [['t' => 'vide', 'texte' => $resultats ? 'Aucun résultat ce week-end' : 'Aucun match programmé ce week-end']]; $zm = 1.1; }
+    elseif (count($blocs) === 1 && !$fal) { $blocs[0]['t'] = 'duo'; $zm = 1.15; }
+    else $zm = afn_zoom_max(count($blocs));
+    afn_zone($A, $blocs, $zm);
+    $GLOBALS['aff_sp_partie'] = in_array($opts['partie'] ?? null, [1, 2], true) ? $opts['partie'] : ($lieu === 'ext' ? 2 : ($lieu === 'dom' ? 1 : null));
+    afn_partenaires($A, (bool) ($opts['sponsors'] ?? true));
+    $GLOBALS['aff_sp_partie'] = null;
+    return $A['im'];
+}
+
+/* ---------- Facebook ---------- */
+function fb_pret(): bool { return reglage('fb_page_id') && reglage('fb_token') && reglage('fb_pause') !== '1'; }
+function fb_appel(string $chemin, array $champs): array {
+    $ch = curl_init('https://graph.facebook.com/' . FB_VERSION . '/' . $chemin);
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $champs, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60]);
+    $r = json_decode((string) curl_exec($ch), true) ?: [];
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code >= 400 || isset($r['error'])) throw new RuntimeException(fb_erreur_fr($r['error'] ?? [], (int) $code));
+    return $r;
+}
+/* traduit une erreur de Facebook en une phrase claire, avec ce qu'il faut faire */
+function fb_erreur_fr(array $e, int $http = 0): string {
+    $c = (int) ($e['code'] ?? 0); $sc = (int) ($e['error_subcode'] ?? 0);
+    $brut = trim((string) ($e['error_user_msg'] ?? ($e['message'] ?? "erreur $http")));
+    $m = mb_strtolower($brut);
+    $aide = match (true) {
+        str_contains($m, 'identity') || str_contains($m, 'identité') || str_contains($m, 'publishing authorization') || $sc === 2069007
+            => "Meta demande de confirmer ton identité avant que le site publie : sur ton téléphone, ouvre facebook.com/id (connecté à Facebook) et va jusqu'au bout.",
+        $c === 190 => "La clé de la page a expiré ou a été retirée : relie à nouveau la page dans les réglages.",
+        $c === 368 => "Facebook bloque temporairement les publications de la page (trop de publications ou de suppressions rapprochées) : attends 24 à 72 h avant de réessayer.",
+        $c === 10 || $c === 200 || $c === 3 => "L'application n'a pas le droit de publier sur cette page : vérifie qu'elle est « En production » et que la page est bien cochée avec l'autorisation pages_manage_posts.",
+        $c === 100 && $sc === 33 => "Cet identifiant n'est pas une page que l'application peut gérer.",
+        in_array($c, [4, 17, 32, 613], true) => "Trop de demandes envoyées à Facebook d'un coup : réessaie dans une heure.",
+        $c === 9004 || str_contains($m, 'media') => "Facebook n'a pas pu récupérer l'image : réessaie dans quelques minutes.",
+        default => '',
+    };
+    return 'Facebook' . ($c ? " (code $c" . ($sc ? "/$sc" : '') . ')' : '') . ' : ' . $brut . ($aide ? ' → ' . $aide : '');
+}
+function fb_photo_cachee(string $fichier, string $page, string $jeton): string {
+    $r = fb_appel("$page/photos", ['source' => new CURLFile($fichier, 'image/jpeg'), 'published' => 'false', 'access_token' => $jeton]);
+    if (empty($r['id'])) throw new RuntimeException('Facebook : photo refusée');
+    return $r['id'];
+}
+/* vérifie que Facebook et Instagram acceptent une publication du site, sans rien publier pour de vrai */
+function fb_tester_publication(): array {
+    $l = [];
+    $dossier = dirname(__DIR__) . '/affiches'; if (!is_dir($dossier)) @mkdir($dossier, 0755, true);
+    $f = "$dossier/test-publication.jpg";
+    $im = imagecreatetruecolor(600, 600); imagefill($im, 0, 0, imagecolorallocate($im, 28, 63, 158)); imagejpeg($im, $f, 85); imagedestroy($im);
+    if (!fb_pret()) $l[] = 'Facebook : page non reliée ou publication en pause.';
+    else {
+        foreach (fb_pages() as $p) {
+            try {
+                $effacer = function (string $id) use ($p) {
+                    try { $ch = curl_init('https://graph.facebook.com/' . FB_VERSION . "/$id?access_token=" . urlencode($p['jeton']));
+                          curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => 'DELETE', CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20]); curl_exec($ch); curl_close($ch); } catch (Throwable $e) {}
+                };
+                $id = fb_photo_cachee($f, $p['id'], $p['jeton']);          // photo non publiée : invisible sur la page
+                $effacer($id);
+                // publication non publiée (invisible) : c'est exactement le chemin des vraies annonces, puis on l'efface
+                $post = fb_appel($p['id'] . '/feed', ['message' => 'Test du site asf-pierrelatte.fr', 'published' => 'false', 'access_token' => $p['jeton']]);
+                if (!empty($post['id'])) $effacer((string) $post['id']);
+                $l[] = '✅ Facebook accepte les publications du site sur la page ' . $p['id'] . '.';
+            } catch (Throwable $e) { $l[] = '❌ ' . $e->getMessage(); }
+        }
+    }
+    if (!ig_pret()) $l[] = 'Instagram : compte non relié ou publication en pause.';
+    else {
+        try { ig_conteneur(['image_url' => ig_url($f)]); $l[] = '✅ Instagram accepte les publications du site.'; }   // préparé mais jamais publié
+        catch (Throwable $e) { $l[] = '❌ Instagram : ' . preg_replace('/^Facebook/', '', $e->getMessage()); }
+    }
+    return $l;
+}
+/* pages où publier : la page du club, et pendant le changement de page, l'ancienne aussi */
+function fb_pages(): array {
+    // une seule page : celle du club. L'ancienne « deuxième page » (abandonnée) est effacée si elle traîne encore dans les réglages.
+    if (reglage('fb_page2_id') || reglage('fb_token2')) { reglage_ecrire('fb_page2_id', null); reglage_ecrire('fb_token2', null); }
+    return (reglage('fb_page_id') && reglage('fb_token')) ? [['id' => reglage('fb_page_id'), 'jeton' => reglage('fb_token')]] : [];
+}
+function fb_story(string $fichier): void {
+    $erreurs = [];
+    foreach (fb_pages() as $p) {
+        try { fb_appel($p['id'] . '/photo_stories', ['photo_id' => fb_photo_cachee($fichier, $p['id'], $p['jeton']), 'access_token' => $p['jeton']]); }
+        catch (Throwable $e) { $erreurs[] = $p['id'] . ' : ' . $e->getMessage(); }
+    }
+    if (count($erreurs) === count(fb_pages())) throw new RuntimeException(implode(' · ', $erreurs));
+}
+/* une vidéo dans le fil de la page : Facebook va la chercher à son adresse publique (dossier /affiches) */
+function fb_video(string $fichier, string $texte): void {
+    $erreurs = [];
+    foreach (fb_pages() as $p) {
+        try {
+            $ch = curl_init('https://graph-video.facebook.com/' . FB_VERSION . '/' . $p['id'] . '/videos');
+            curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 180,
+                CURLOPT_POSTFIELDS => ['file_url' => ig_url($fichier), 'description' => $texte, 'access_token' => $p['jeton']]]);
+            $r = json_decode((string) curl_exec($ch), true) ?: [];
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($code >= 400 || isset($r['error'])) throw new RuntimeException(fb_erreur_fr($r['error'] ?? [], (int) $code));
+        } catch (Throwable $e) { $erreurs[] = $p['id'] . ' : ' . $e->getMessage(); }
+    }
+    if (count($erreurs) === count(fb_pages())) throw new RuntimeException(implode(' · ', $erreurs));
+}
+/* une vidéo en story Facebook : on ouvre l'envoi, Facebook télécharge la vidéo à son adresse publique, puis on publie */
+function fb_story_video(string $fichier): void {
+    $erreurs = [];
+    foreach (fb_pages() as $p) {
+        try {
+            $debut = fb_appel($p['id'] . '/video_stories', ['upload_phase' => 'start', 'access_token' => $p['jeton']]);
+            if (empty($debut['video_id']) || empty($debut['upload_url'])) throw new RuntimeException("Facebook n'a pas ouvert l'envoi de la story vidéo");
+            $ch = curl_init($debut['upload_url']);
+            curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 180, CURLOPT_POSTFIELDS => '',
+                CURLOPT_HTTPHEADER => ['Authorization: OAuth ' . $p['jeton'], 'file_url: ' . ig_url($fichier)]]);
+            $r = json_decode((string) curl_exec($ch), true) ?: [];
+            curl_close($ch);
+            if (empty($r['success'])) throw new RuntimeException('Facebook : la vidéo de la story n\'a pas pu être envoyée');
+            fb_appel($p['id'] . '/video_stories', ['upload_phase' => 'finish', 'video_id' => $debut['video_id'], 'access_token' => $p['jeton']]);
+        } catch (Throwable $e) { $erreurs[] = $p['id'] . ' : ' . $e->getMessage(); }
+    }
+    if (count($erreurs) === count(fb_pages())) throw new RuntimeException(implode(' · ', $erreurs));
+}
+function est_video(string $fichier): bool { return (bool) preg_match('/\.(mp4|mov|m4v|webm)$/i', $fichier); }
+function fb_publication(array $fichiers, string $texte): void {
+    $erreurs = [];
+    foreach (fb_pages() as $p) {
+        try {
+            $champs = ['message' => $texte, 'access_token' => $p['jeton']];
+            foreach (array_values($fichiers) as $i => $f) $champs["attached_media[$i]"] = json_encode(['media_fbid' => fb_photo_cachee($f, $p['id'], $p['jeton'])]);
+            fb_appel($p['id'] . '/feed', $champs);
+        } catch (Throwable $e) { $erreurs[] = $p['id'] . ' : ' . $e->getMessage(); }
+    }
+    if (count($erreurs) === count(fb_pages())) throw new RuntimeException(implode(' · ', $erreurs));
+}
+
+/* ---------- Instagram (compte professionnel relié à la page Facebook) ----------
+   Instagram va chercher l'image à une adresse publique : on lui donne celle du fichier dans /affiches. */
+function ig_pret(): bool { return reglage('ig_id') && reglage('fb_token') && reglage('fb_pause') !== '1'; }
+function fb_lire(string $chemin, array $q = []): array {
+    $ch = curl_init('https://graph.facebook.com/' . FB_VERSION . '/' . $chemin . '?' . http_build_query($q + ['access_token' => reglage('fb_token')]));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+    $r = json_decode((string) curl_exec($ch), true) ?: [];
+    curl_close($ch);
+    if (isset($r['error'])) throw new RuntimeException('Meta : ' . ($r['error']['message'] ?? 'erreur'));
+    return $r;
+}
+function ig_url(string $fichier): string {
+    $site = rtrim(reglage('site_url') ?: ('https://' . ($_SERVER['HTTP_HOST'] ?? 'asf-pierrelatte.fr')), '/');
+    return $site . BASE . '/affiches/' . basename($fichier) . '?v=' . @filemtime($fichier);
+}
+/* prépare un média Instagram et attend qu'il soit prêt, puis rend son identifiant */
+function ig_conteneur(array $champs): string {
+    $ig = reglage('ig_id');
+    $c = fb_appel("$ig/media", $champs + ['access_token' => reglage('fb_token')]);
+    if (empty($c['id'])) throw new RuntimeException('Instagram : fichier refusé');
+    $video = isset($champs['video_url']);
+    for ($i = 0; $i < ($video ? 60 : 15); $i++) {  // Instagram prépare le fichier avant de pouvoir le publier (une vidéo prend plus de temps)
+        $s = fb_lire($c['id'], ['fields' => 'status_code,status']);
+        if (($s['status_code'] ?? '') === 'FINISHED') break;
+        if (($s['status_code'] ?? '') === 'ERROR') throw new RuntimeException($video
+            ? "Instagram : la vidéo n'a pas pu être traitée (format MP4 en H.264 conseillé, 3 s à 15 min, 1 Go au plus)"
+            : "Instagram : l'image n'a pas pu être traitée");
+        sleep($video ? 3 : 2);
+    }
+    return (string) $c['id'];
+}
+function ig_publier(array $champs): void {
+    fb_appel(reglage('ig_id') . '/media_publish', ['creation_id' => ig_conteneur($champs), 'access_token' => reglage('fb_token')]);
+}
+function ig_story(string $fichier): void {
+    ig_publier(est_video($fichier) ? ['video_url' => ig_url($fichier), 'media_type' => 'STORIES'] : ['image_url' => ig_url($fichier), 'media_type' => 'STORIES']);
+}
+/* publication dans le fil Instagram : une image, ou un carrousel domicile + extérieur, avec le même texte que Facebook */
+function ig_publication(array $fichiers, string $texte): void {
+    $fichiers = array_values(array_filter($fichiers));
+    if (!$fichiers) return;
+    $legende = mb_substr(trim($texte), 0, 2150);
+    if (count($fichiers) === 1) {
+        ig_publier(est_video($fichiers[0]) ? ['video_url' => ig_url($fichiers[0]), 'media_type' => 'REELS', 'caption' => $legende, 'share_to_feed' => 'true']
+            : ['image_url' => ig_url($fichiers[0]), 'caption' => $legende]);
+        return;
+    }
+    $enfants = [];
+    foreach (array_slice($fichiers, 0, 10) as $f)
+        $enfants[] = ig_conteneur(est_video($f) ? ['video_url' => ig_url($f), 'media_type' => 'VIDEO', 'is_carousel_item' => 'true']
+            : ['image_url' => ig_url($f), 'is_carousel_item' => 'true']);
+    ig_publier(['media_type' => 'CAROUSEL', 'children' => implode(',', $enfants), 'caption' => $legende]);
+}
+
+/* ---------- messages des publications, rédigés à partir des scores et du programme ---------- */
+/* « CERC.S. DE MALATAVERNE » → « Cerc.S. de Malataverne » ; « F.C. TRICASTIN » → « F.C. Tricastin » ; sigles gardés */
+function aff_joli(string $t): string {
+    $petits = ['de', 'du', 'des', 'la', 'le', 'les', 'et', 'sur', 'en', 'aux', 'au', 'sous'];
+    $sigles = ['FC', 'US', 'AS', 'RC', 'SC', 'ES', 'OL', 'CO', 'AC', 'AV', 'ASF', 'UMS', 'RCS', 'AFC', 'JS', 'SO', 'ASPTT', 'OMS'];
+    $mots = preg_split('/(\s+)/u', trim($t), -1, PREG_SPLIT_DELIM_CAPTURE);
+    $i = 0;
+    foreach ($mots as &$w) {
+        if (trim($w) === '') continue;
+        $nu = preg_replace('/[^A-Za-zÀ-ÿ0-9]/u', '', $w);
+        if (preg_match('/^([A-ZÀ-Ý]\.)+[A-ZÀ-Ý]?\.?$/u', $w) || in_array(mb_strtoupper($nu), $sigles, true) || preg_match('/^(U\d{1,2}|[DR]\d|\d+)$/iu', $nu)) { $w = mb_strtoupper($w); }
+        elseif ($i > 0 && in_array(mb_strtolower($nu), $petits, true)) { $w = mb_strtolower($w); }
+        else {
+            $w = mb_strtolower($w);
+            $w = preg_replace_callback("/(^|[-'’.])(\p{L})/u", fn($x) => $x[1] . mb_strtoupper($x[2]), $w);
+        }
+        $i++;
+    }
+    unset($w);
+    return implode('', $mots);
+}
+function aff_nom_club(string $adv): string { return aff_joli(preg_replace('/\s+\d+$/', '', trim($adv))); }
+/* nom d'équipe dans les textes : « Seniors 1 », « U15 R2 », « U15 2 », « U10-U11 Avenir », « U13 équipe 3 » */
+function aff_nom_equipe(array $m): string {
+    $e = (string) ($m['equipeDetail'] ?? '') !== '' ? (string) $m['equipeDetail'] : (string) ($m['equipe'] ?? '');
+    $e = preg_replace('/r[ée]gional(?:e)?\s*(\d)/iu', 'R$1', $e);
+    $e = preg_replace('/f[ée]minin[a-z]*\b.*$/iu', 'Féminines', $e);
+    $e = str_replace(' · ', ' ', $e);
+    $e = preg_replace('/^(U\d{1,2}) (U\d{1,2})\b/u', '$1-$2', $e);
+    return str_replace(['Équipe', 'ÉQUIPE', 'Equipe'], 'équipe', aff_joli($e));
+}
+function aff_message_resultats(array $matchs, string $samedi, ?string $lieu = null): string {
+    $plan = aff_plan_weekend($matchs, $samedi, true, $lieu);
+    $v = $n = $d = $nc = [];
+    foreach ($plan as $j) foreach ($j['matchs'] as $m) {
+        $adv = aff_nom_club((string) $m['adv']); $eq = aff_nom_equipe($m);
+        if (!aff_joue($m)) { $nc[] = "• $eq face à $adv : score à venir"; continue; }
+        $dom = !empty($m['dom']);
+        // une phrase par équipe, selon son résultat et l'écart
+        $bp = (int) $m['bp']; $bc = (int) $m['bc']; $ecart = abs($bp - $bc); $ou = $dom ? 'à domicile' : "à l'extérieur";
+        $sc = "$bp-$bc";
+        if ($bp > $bc)      $phrase = $ecart >= 3 ? "large victoire de nos $eq, $sc face à $adv $ou" : ($ecart === 1 ? "victoire arrachée par nos $eq, $sc contre $adv $ou" : "nos $eq s'imposent $sc face à $adv $ou");
+        elseif ($bp < $bc)  $phrase = $ecart === 1 ? "courte défaite de nos $eq, $sc contre $adv $ou" : "nos $eq s'inclinent $sc face à $adv $ou";
+        else                $phrase = $bp === 0 ? "match nul et vierge pour nos $eq face à $adv $ou" : "nos $eq accrochent le nul $sc face à $adv $ou";
+        $ligne = '• ' . mb_strtoupper(mb_substr($phrase, 0, 1)) . mb_substr($phrase, 1) . ($dom ? ' 🏠' : ' ✈️');
+        ['V' => function () use (&$v, $ligne) { $v[] = $ligne; }, 'N' => function () use (&$n, $ligne) { $n[] = $ligne; }, 'D' => function () use (&$d, $ligne) { $d[] = $ligne; }][aff_issue($m)]();
+    }
+    $total = count($v) + count($n) + count($d);
+    if (!$total && !$nc) return '';
+    if ($total && count($v) === $total) $intro = "🔥 Carton plein ce week-end pour l'ASF Pierrelatte ! Toutes nos équipes se sont imposées 💙";
+    elseif (count($v) > count($d)) $intro = "⚽ Beau week-end pour l'ASF Pierrelatte ! Voici les résultats de nos équipes 💙";
+    elseif (count($v) === count($d) && $total) $intro = "⚽ Voici les résultats du week-end de l'ASF Pierrelatte !";
+    else $intro = "⚽ Week-end compliqué pour nos équipes, mais on se relève ensemble dès la semaine prochaine 💪";
+    $txt = [$intro, ''];
+    if ($lieu) array_splice($txt, 1, 0, [$lieu === 'dom' ? '🏠 Nos matchs à domicile' : "✈️ Nos matchs à l'extérieur"]);
+    if ($v) { $txt[] = count($v) > 1 ? "✅ Victoires" : "✅ Victoire"; array_push($txt, ...$v); $txt[] = ''; }
+    if ($n) { $txt[] = count($n) > 1 ? "🤝 Matchs nuls" : "🤝 Match nul"; array_push($txt, ...$n); $txt[] = ''; }
+    if ($d) { $txt[] = count($d) > 1 ? "❌ Défaites" : "❌ Défaite"; array_push($txt, ...$d); $txt[] = ''; }
+    if ($nc) { array_push($txt, ...$nc); $txt[] = ''; }
+    $txt[] = count($v) ? 'Bravo à tous nos joueurs, joueuses et éducateurs 👏' : 'Merci à nos supporters pour leur soutien 🙏';
+    $txt[] = 'Tous les résultats sur asf-pierrelatte.fr';
+    $txt[] = '#ASFPierrelatte #AtomSports #Pierrelatte';
+    return implode("\n", $txt);
+}
+/* texte de l'annonce du foot animation */
+function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = false, ?string $lieu = null): string {
+    $GLOBALS['aff_fal'] = true;
+    $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
+    $GLOBALS['aff_fal'] = false;
+    if (!$plan) return '';
+    $liste = fn(array $noms) => count($noms) > 1 ? implode(', ', array_slice($noms, 0, -1)) . ' et ' . end($noms) : ($noms[0] ?? '');
+    if (!$resultats) {
+        $txt = ["⚽ Foot animation : le programme du week-end de nos jeunes" . ($lieu === 'dom' ? ' à domicile' : ($lieu === 'ext' ? " à l'extérieur" : '')) . ' !', ''];
+        foreach ($plan as $j) {
+            $txt[] = '🗓️ ' . aff_date_longue($j['date']);
+            foreach ($j['matchs'] as $m) {
+                $eq = aff_nom_equipe($m); $h = aff_hfr($m['heure'] ?? '');
+                $ou = !empty($m['dom']) ? 'à domicile, au stade Gustave Jaume' : 'chez ' . aff_nom_club((string) $m['adv']);
+                $contre = array_map('aff_nom_club', $m['adversaires'] ?? []);
+                $txt[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . "$eq · " . mb_strtolower((string) ($m['comp'] ?? 'plateau')) . " $ou" . ($h ? " à $h" : '')
+                    . ($contre ? ', avec ' . $liste($contre) : '');
+            }
+            $txt[] = '';
+        }
+        $txt[] = 'Allez les petits ! 💙🤍';
+        $txt[] = '#ASFPierrelatte #FootAnimation #EcoleDeFoot';
+        return implode("\n", $txt);
+    }
+    // résultats : U10-U11 et U13, une ligne par match, et une phrase d'introduction selon le bilan
+    $v = $n = $d = 0; $blocs = [];
+    foreach ($plan as $j) foreach ($j['matchs'] as $m) {
+        $lignes = [];
+        foreach (aff_scores_brassage($m) as $r) {
+            $bp = (int) $r['bp']; $bc = (int) $r['bc'];
+            if ($bp > $bc) { $v++; $e = '✅'; } elseif ($bp < $bc) { $d++; $e = '❌'; } else { $n++; $e = '🤝'; }
+            $lignes[] = "   $e $bp-$bc contre " . aff_nom_club((string) $r['adv']);
+        }
+        $blocs[] = (!empty($m['dom']) ? '🏠 ' : '✈️ ') . aff_nom_equipe($m) . ' · ' . (!empty($m['dom']) ? 'à domicile' : 'chez ' . aff_nom_club((string) $m['adv']))
+            . "\n" . implode("\n", $lignes);
+    }
+    $total = $v + $n + $d;
+    $pl = fn($k, $mot) => "$k $mot" . ($k > 1 ? 's' : '');
+    $bilan = implode(', ', array_filter([$v ? $pl($v, 'victoire') : '', $n ? $pl($n, 'nul') : '', $d ? $pl($d, 'défaite') : '']));
+    if ($total && $v === $total) $intro = "🔥 Carton plein pour nos jeunes ce week-end : $bilan !";
+    elseif ($v > $d)             $intro = "💪 Beau week-end pour nos jeunes : $bilan.";
+    elseif ($v === $d)           $intro = "⚖️ Week-end équilibré pour nos jeunes : $bilan.";
+    else                         $intro = "Week-end compliqué pour nos jeunes ($bilan), on garde le sourire et on continue de progresser ! 💙";
+    return "⚽ Foot animation : les résultats du week-end" . ($lieu === 'dom' ? ' à domicile' : ($lieu === 'ext' ? " à l'extérieur" : '')) . "\n\n$intro\n\n" . implode("\n\n", $blocs)
+        . "\n\nBravo à nos joueurs et à leurs éducateurs ! 👏\n#ASFPierrelatte #FootAnimation";
+}
+function aff_message_veterans(array $matchs, string $samedi, bool $resultats): string {
+    $GLOBALS['aff_vet'] = true;
+    $t = $resultats ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi);
+    $GLOBALS['aff_vet'] = false;
+    if (trim($t) === '') return '';
+    $t = preg_replace("/^[^\n]*\n/u", '', $t, 1);                        // on remplace la phrase d'introduction générale
+    return ($resultats ? "⚽ Vétérans : le résultat du week-end\n" : "⚽ Vétérans : le match du week-end\n") . $t;
+}
+function aff_message_rencontres(array $matchs, string $samedi, ?string $lieu = null): string {
+    $plan = aff_plan_weekend($matchs, $samedi, false, $lieu);
+    if (!$plan) return '';
+    $txt = [$lieu === 'dom' ? "🏠 Le programme du week-end à domicile de l'ASF Pierrelatte !" : ($lieu === 'ext' ? "✈️ Le programme du week-end à l'extérieur de l'ASF Pierrelatte !" : "📅 Le programme du week-end de l'ASF Pierrelatte !"), ''];
+    $domicile = false;
+    foreach ($plan as $j) {
+        $txt[] = '🗓️ ' . aff_date_longue($j['date']);
+        foreach ($j['matchs'] as $m) {
+            $adv = aff_nom_club((string) $m['adv']); $h = aff_hfr($m['heure'] ?? '');
+            $eq = aff_nom_equipe($m);
+            if (!empty($m['dom'])) { $domicile = true; $txt[] = "🏠 $eq reçoit $adv à $h"; }
+            else $txt[] = "✈️ $eq se déplace à $adv à $h";
+        }
+        $txt[] = '';
+    }
+    if ($domicile) $txt[] = 'Venez nombreux encourager nos équipes au stade Gustave Jaume 💙';
+    else $txt[] = 'Allez Pierrelatte ! 💙';
+    $txt[] = 'Toutes les infos et les itinéraires sur asf-pierrelatte.fr';
+    $txt[] = '#ASFPierrelatte #AtomSports #Pierrelatte';
+    return implode("\n", $txt);
+}
+
+/* ---------- historique visible par les dirigeants ---------- */
+function aff_historique(string $cle, string $titre, array $fichiers, string $etat): void {
+    $h = aff_doc('site/affiches');
+    $liste = array_values(array_filter($h['liste'] ?? [], fn($x) => ($x['cle'] ?? '') !== $cle));
+    array_unshift($liste, ['cle' => $cle, 'titre' => $titre, 'date' => date('c'), 'etat' => $etat,
+        'images' => array_map(fn($f) => '/affiches/' . basename($f) . '?v=' . time(), $fichiers)]);
+    $json = json_encode(['liste' => array_slice($liste, 0, 30)], JSON_UNESCAPED_UNICODE);
+    base()->prepare('INSERT INTO documents (path, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data), maj = NOW()')->execute(['site/affiches', $json]);
+}
+/* Chaque affiche n'est traitée qu'une fois par réseau ; en cas d'échec, 3 essais (un par heure) sur ce réseau seulement. */
+function aff_traiter(string $cle, string $titre, callable $creer, array $canaux, array &$journal): void {
+    if (reglage("pub_$cle") === 'fait') return;
+    $fichiers = $creer();
+    if (!$fichiers) { reglage_ecrire("pub_$cle", 'fait'); return; }
+    $etats = []; $reste = false;
+    foreach ($canaux as $nom => $publier) {
+        $pret = $nom === 'Facebook' ? fb_pret() : ig_pret();
+        if (!$pret) { $etats[] = "$nom : " . (reglage('fb_pause') === '1' ? 'en pause' : 'pas relié'); continue; }
+        $k = strtolower($nom) . "_$cle";
+        if (reglage("pub_$k") === 'fait') { $etats[] = "$nom : publié"; continue; }
+        try {
+            $publier($fichiers);
+            reglage_ecrire("pub_$k", 'fait'); $etats[] = "$nom : publié";
+            $journal[] = "affiche $cle publiée sur $nom";
+        } catch (Throwable $ex) {
+            $n = (int) reglage("essai_$k", '0') + 1; reglage_ecrire("essai_$k", (string) $n);
+            // blocage temporaire de Facebook (code 368) : on n'insiste pas, chaque nouvel essai prolongerait le blocage
+            if (str_contains($ex->getMessage(), 'code 368')) { reglage_ecrire("pub_$k", 'fait'); $etats[] = "$nom : bloqué temporairement par Facebook, à republier avec le bouton « Publier maintenant » une fois le blocage levé"; }
+            elseif ($n >= 3) { reglage_ecrire("pub_$k", 'fait'); $etats[] = "$nom : échec définitif (" . $ex->getMessage() . ')'; }
+            else { $reste = true; $etats[] = "$nom : échec, nouvel essai dans une heure"; }
+            $journal[] = "affiche $cle, $nom : " . $ex->getMessage();
+        }
+    }
+    if (!$reste) reglage_ecrire("pub_$cle", 'fait');
+    aff_historique($cle, $titre, array_values($fichiers), implode(' · ', $etats));
+}
+
+/* ---------- le programme, appelé à chaque passage du cron ---------- */
+/* Publication à la demande : 'resultats' (week-end passé) ou 'rencontres' (week-end à venir),
+   championnats puis foot animation, chacune avec ses feuilles domicile et extérieur, ses stories et son texte */
+function aff_publier_annonce(string $quoi, array &$journal): void {
+    if (!aff_polices_ok()) throw new RuntimeException('polices introuvables dans api/polices');
+    $matchs = aff_matchs();
+    $lundi = date('Y-m-d', strtotime('monday this week'));
+    $res = $quoi === 'resultats';
+    $samedi = $res ? date('Y-m-d', strtotime("$lundi -2 days")) : date('Y-m-d', strtotime("$lundi +5 days"));
+    foreach ([false, true] as $fal) {
+        $GLOBALS['aff_fal'] = $fal;
+        $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
+        $nom = ($fal ? 'Foot animation · ' : '') . ($res ? 'résultats' : 'rencontres');
+        if (!$lieux) { $GLOBALS['aff_fal'] = false; $journal[] = "$nom : rien à publier"; continue; }
+        $f = [];
+        foreach ($lieux as $l) {
+            foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
+                aff_format($fmt);
+                $f["{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]),
+                    ($fal ? 'fal-' : '') . ($res ? 'resultats' : 'rencontres') . "-$l-$samedi-manuel$suf");
+            }
+        }
+        aff_format('story');
+        $texte = $fal ? aff_message_plateaux($matchs, $samedi, $res) : ($res ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi));
+        $GLOBALS['aff_fal'] = false;
+        $carres = array_values(array_filter([$f['dom_carre'] ?? null, $f['ext_carre'] ?? null]));
+        $stories = array_values(array_filter([$f['dom_story'] ?? null, $f['ext_story'] ?? null]));
+        $etats = [];
+        if (fb_pret()) {
+            try {
+                fb_publication(array_values(array_filter([$f['dom_fb'] ?? null, $f['ext_fb'] ?? null])), $texte);   // les deux feuilles dans la même annonce
+                foreach ($stories as $st) fb_story($st);
+                $etats[] = 'Facebook : publié';
+            } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
+        }
+        if (ig_pret()) {
+            try { ig_publication($carres, $texte); foreach ($stories as $st) ig_story($st); $etats[] = 'Instagram : publié'; }
+            catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
+        }
+        $journal[] = "$nom : " . ($etats ? implode(', ', $etats) : 'aucun réseau relié');
+    }
+}
+function aff_publier_choix(array $annonces, array $o, array &$journal): void {
+    if (!aff_polices_ok()) throw new RuntimeException('polices introuvables dans api/polices');
+    $matchs = aff_matchs();
+    $lundi = date('Y-m-d', strtotime('monday this week'));
+    $types = [
+        'resultats' => [true, false, false], 'rencontres' => [false, false, false],
+        'fal-resultats' => [true, true, false], 'fal-rencontres' => [false, true, false],
+        'vet-resultats' => [true, false, true], 'vet-rencontres' => [false, false, true],
+    ];
+    $noms = ['resultats' => 'Résultats', 'rencontres' => 'Rencontres', 'fal-resultats' => 'Foot animation · résultats',
+             'fal-rencontres' => 'Foot animation · rencontres', 'vet-resultats' => 'Vétérans · résultats', 'vet-rencontres' => 'Vétérans · rencontres'];
+    $fbPub = !empty($o['fb_pub']); $fbSt = !empty($o['fb_story']); $igPub = !empty($o['ig_pub']); $igSt = !empty($o['ig_story']);
+    foreach ($annonces as $cle) {
+        if (!isset($types[$cle])) continue;
+        [$res, $fal, $vet] = $types[$cle];
+        $samedi = $res ? date('Y-m-d', strtotime("$lundi -2 days")) : date('Y-m-d', strtotime("$lundi +5 days"));
+        $GLOBALS['aff_fal'] = $fal; $GLOBALS['aff_vet'] = $vet;
+        $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
+        if (!$lieux) { $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false; $journal[] = $noms[$cle] . ' : rien à publier'; continue; }
+        $f = [];
+        foreach ($lieux as $l) {
+            $formats = array_filter(['story' => $fbSt || $igSt, 'carre' => $igPub, 'fb' => $fbPub]);
+            foreach (array_keys($formats) as $fmt) {
+                aff_format($fmt);
+                $f["{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]),
+                    "$cle-$l-$samedi-choix-$fmt");
+            }
+        }
+        aff_format('story');
+        $texte = $fal ? aff_message_plateaux($matchs, $samedi, $res) : ($vet ? aff_message_veterans($matchs, $samedi, $res)
+            : ($res ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi)));
+        $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false;
+        $pris = fn($fmt) => array_values(array_filter([$f["dom_$fmt"] ?? null, $f["ext_$fmt"] ?? null]));
+        $etats = [];
+        if ($fbPub || $fbSt) {
+            if (!fb_pret()) $etats[] = 'Facebook : non relié ou en pause';
+            else try {
+                if ($fbPub && $pris('fb')) fb_publication($pris('fb'), $texte);
+                if ($fbSt) foreach ($pris('story') as $st) fb_story($st);
+                $etats[] = 'Facebook : ' . implode(' + ', array_filter([$fbPub ? 'publication' : '', $fbSt ? 'story' : '']));
+            } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
+        }
+        if ($igPub || $igSt) {
+            if (!ig_pret()) $etats[] = 'Instagram : non relié ou en pause';
+            else try {
+                if ($igPub && $pris('carre')) ig_publication($pris('carre'), $texte);
+                if ($igSt) foreach ($pris('story') as $st) ig_story($st);
+                $etats[] = 'Instagram : ' . implode(' + ', array_filter([$igPub ? 'publication' : '', $igSt ? 'story' : '']));
+            } catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
+        }
+        $journal[] = $noms[$cle] . ' → ' . ($etats ? implode(', ', $etats) : 'aucun réseau choisi');
+    }
+}
+function affiches_cron(array &$journal, bool $force = false): void {
+    if (!aff_polices_ok()) { $journal[] = 'affiches : polices introuvables dans api/polices, ou FreeType absent'; return; }
+    $maintenant = time();
+    if (!$force && (int) date('G', $maintenant) < 9) return;
+    $auj = date('Y-m-d', $maintenant);
+    $matchs = aff_matchs();
+
+    // lundi : résultats + rencontres
+    if ((int) date('N', $maintenant) === 1 || $force) {
+        $lundi = date('Y-m-d', strtotime('monday this week', $maintenant));
+        $sam = date('Y-m-d', strtotime($lundi . ' +5 days'));
+        $samPasse = date('Y-m-d', strtotime($lundi . ' -2 days'));
+        aff_traiter("lundi-$lundi", 'Résultats et rencontres du week-end', function () use ($matchs, $sam, $samPasse, $lundi) {
+            $f = [];
+            // pour chaque annonce : une affiche à domicile, une à l'extérieur ; en story (9:16) et en carré pour la publication
+            foreach (['resultats' => [$samPasse, true], 'programme' => [$sam, false]] as $type => [$samedi, $res]) {
+                $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
+                foreach ($lieux as $i => $l) {
+                    $partie = $l === 'dom' ? 1 : 2;                   // toujours 15 partenaires sur la feuille domicile, 15 sur l'extérieur
+                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suffixe) {
+                        aff_format($fmt);
+                        $f["{$type}_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $partie]),
+                            ($type === 'resultats' ? 'resultats' : 'rencontres') . "-$l-$lundi$suffixe");
+                    }
+                }
+            }
+            aff_format('story');
+            return $f;
+        }, [
+            'Facebook' => function (array $f) use ($matchs, $samPasse, $sam) {
+                foreach ($f as $k => $fichier) if (str_ends_with($k, '_story')) fb_story($fichier);
+                // une annonce = une publication : feuille domicile + feuille extérieur, au format 1:2 que Facebook montre en entier côte à côte
+                $res = array_values(array_filter([$f['resultats_dom_fb'] ?? null, $f['resultats_ext_fb'] ?? null]));
+                if ($res) fb_publication($res, aff_message_resultats($matchs, $samPasse));
+                $ren = array_values(array_filter([$f['programme_dom_fb'] ?? null, $f['programme_ext_fb'] ?? null]));
+                if ($ren) fb_publication($ren, aff_message_rencontres($matchs, $sam));
+            },
+            'Instagram' => function (array $f) use ($matchs, $samPasse, $sam) {
+                foreach ($f as $k => $fichier) if (str_ends_with($k, '_story')) ig_story($fichier);
+                // mêmes annonces que sur Facebook, en carrousel dans le fil Instagram
+                ig_publication([$f['resultats_dom_carre'] ?? null, $f['resultats_ext_carre'] ?? null], aff_message_resultats($matchs, $samPasse));
+                ig_publication([$f['programme_dom_carre'] ?? null, $f['programme_ext_carre'] ?? null], aff_message_rencontres($matchs, $sam));
+            },
+        ], $journal);
+    }
+
+    // vétérans : deux annonces à part, seulement quand un match a été saisi (et son score pour les résultats)
+    if ((int) date('N') === 1 || $force) {
+        foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
+            $GLOBALS['aff_vet'] = true;
+            $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
+            $GLOBALS['aff_vet'] = false;
+            if (!$lieux) continue;
+            aff_traiter("vet-$quoi-$samedi", 'Vétérans · ' . $quoi, function () use ($matchs, $samedi, $res, $quoi, $lieux) {
+                $f = [];
+                $GLOBALS['aff_vet'] = true;
+                foreach ($lieux as $l) {
+                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
+                        aff_format($fmt);
+                        $f["vet_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]), "vet-$quoi-$l-$samedi$suf");
+                    }
+                }
+                aff_format('story');
+                $GLOBALS['aff_vet'] = false;
+                return $f;
+            }, [
+                'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
+                    $imgs = array_values(array_filter([$f['vet_dom_fb'] ?? null, $f['vet_ext_fb'] ?? null]));
+                    if ($imgs) fb_publication($imgs, aff_message_veterans($matchs, $samedi, $res));
+                    foreach (['vet_dom_story', 'vet_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
+                },
+                'Instagram' => function (array $f) use ($matchs, $samedi, $res) {
+                    ig_publication([$f['vet_dom_carre'] ?? null, $f['vet_ext_carre'] ?? null], aff_message_veterans($matchs, $samedi, $res));
+                    foreach (['vet_dom_story', 'vet_ext_story'] as $k) if (!empty($f[$k])) ig_story($f[$k]);
+                },
+            ], $journal);
+        }
+    }
+
+    // foot animation : deux annonces à part (rencontres et résultats), chacune avec sa feuille domicile et sa feuille extérieur
+    if ((int) date('N') === 1 || $force) {
+        foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
+            $GLOBALS['aff_fal'] = true;
+            $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
+            $liste = aff_plan_weekend($matchs, $samedi, $res);
+            $GLOBALS['aff_fal'] = false;
+            if (!$lieux) continue;
+            aff_traiter("fal-$quoi-$samedi", 'Foot animation · ' . $quoi, function () use ($matchs, $samedi, $res, $quoi, $lieux) {
+                $f = [];
+                $GLOBALS['aff_fal'] = true;
+                foreach ($lieux as $i => $l) {
+                    $partie = $l === 'dom' ? 1 : 2;                     // toujours 15 partenaires sur la feuille domicile, 15 sur l'extérieur
+                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
+                        aff_format($fmt);
+                        $f["fal_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $partie]), "fal-$quoi-$l-$samedi$suf");
+                    }
+                }
+                aff_format('story');
+                $GLOBALS['aff_fal'] = false;
+                return $f;
+            }, [
+                'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
+                    $imgs = array_values(array_filter([$f['fal_dom_fb'] ?? null, $f['fal_ext_fb'] ?? null]));
+                    if ($imgs) fb_publication($imgs, aff_message_plateaux($matchs, $samedi, $res));       // les deux feuilles dans la même annonce
+                    foreach (['fal_dom_story', 'fal_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
+                },
+                'Instagram' => function (array $f) use ($matchs, $samedi, $res) {
+                    ig_publication([$f['fal_dom_carre'] ?? null, $f['fal_ext_carre'] ?? null], aff_message_plateaux($matchs, $samedi, $res));
+                    foreach (['fal_dom_story', 'fal_ext_story'] as $k) if (!empty($f[$k])) ig_story($f[$k]);
+                },
+            ], $journal);
+        }
+    }
+
+    // jour de match : une story par équipe
+    foreach ($matchs as $m) {
+        if (($m['date'] ?? '') !== $auj || aff_joue($m)) continue;
+        aff_traiter('match-' . $m['id'], 'Jour de match · ' . $m['equipe'], fn() => ['match' => aff_enregistrer(aff_match($m), 'match-' . cle_club($m['id']))],
+            ['Facebook' => function (array $f) { fb_story($f['match']); }, 'Instagram' => function (array $f) { ig_story($f['match']); }], $journal);
+    }
+}
+
+/* ---------- aperçu et téléchargement pour les dirigeants ----------
+   /api/affiches.php?apercu=programme|resultats|match|score|evenement
+     &date=AAAA-MM-JJ &id=… &titre=… &sous=… &texte=… &heure=… &lieu=… &sponsors=0 &telecharger=1 */
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    if (rang_effectif() < 2) { http_response_code(403); header('Content-Type: text/plain; charset=utf-8'); echo 'Connecte-toi avec un compte coach ou bureau.'; exit; }
+    @set_time_limit(60);
+    // /api/affiches.php?verif=1&date=AAAA-MM-JJ : chaque match du week-end, et pourquoi il est (ou n'est pas) sur les affiches
+    if (isset($_GET['verif'])) {
+        header('Content-Type: text/plain; charset=utf-8');
+        $d0 = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'] ?? '') ? $_GET['date'] : date('Y-m-d');
+        $t = strtotime($d0 . ' 12:00'); $w = (int) date('w', $t);
+        $sam = date('Y-m-d', $t + (($w === 0 ? -1 : 6 - $w) * 86400));
+        $jours = aff_weekend($sam); $tous = aff_matchs();
+        $surAff = [];
+        foreach ([true => 'Résultats', false => 'Rencontres'] as $res => $nomAff)
+            foreach (aff_plan_weekend($tous, $sam, (bool) $res) as $j) foreach ($j['matchs'] as $m) $surAff[$m['id']] = $nomAff;
+        $liste = array_values(array_filter($tous, fn($m) => in_array($m['date'] ?? '', $jours, true)));
+        usort($liste, fn($a, $b) => strcmp(($a['date'] ?? '') . ($a['heure'] ?? ''), ($b['date'] ?? '') . ($b['heure'] ?? '')));
+        echo "Week-end du " . date('d/m/Y', strtotime($jours[0])) . " au " . date('d/m/Y', strtotime($jours[2])) . " : " . count($liste) . " match(s) dans le calendrier du site\n";
+        echo "(aujourd'hui : " . date('d/m/Y') . ")\n\n";
+        $n = 0;
+        foreach ($liste as $m) {
+            $jour = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][(int) date('w', strtotime($m['date']))];
+            $score = aff_joue($m) ? ' · score ' . $m['bp'] . '-' . $m['bc'] : ' · pas de score';
+            if (isset($surAff[$m['id']])) { $etat = 'SUR L\'AFFICHE ' . mb_strtoupper($surAff[$m['id']]); $n++; }
+            elseif (aff_joue($m) && $m['date'] > date('Y-m-d')) $etat = 'CACHÉ : score noté alors que le match est à venir';
+            else $etat = 'CACHÉ : doublon, ou adversaire absent de la poule FFF de l\'équipe (match impossible)';
+            echo "$jour " . date('d/m', strtotime($m['date'])) . ' ' . ($m['heure'] ?? '') . ' · ' . ($m['equipe'] ?? '') . ' (' . ($m['comp'] ?? '') . ') · '
+               . (!empty($m['dom']) ? 'reçoit ' : 'va à ') . ($m['adv'] ?? '') . $score . "\n    → $etat\n";
+            if (!empty($m['fff']) && is_array($m['fff'])) {
+                $f = $m['fff'];
+                echo "      FFF : match n°" . ($f['match'] ?? '?') . ' · ' . ($f['recoit'] ?? '?') . ' contre ' . ($f['visiteur'] ?? '?') . ' · ' . ($f['compet'] ?? '')
+                   . ' · poule ' . ($f['poule'] ?? '?') . ' · journée ' . ($f['journee'] ?? '?') . ' · statut ' . json_encode($f['statut'] ?? null, JSON_UNESCAPED_UNICODE)
+                   . ' · équipe ' . ($f['equipe_club'] ?? '?') . "\n";
+            } else echo "      (pas de détail FFF enregistré pour ce match" . (str_starts_with((string) $m['id'], 'fff-') ? '' : ' : il n\'a pas été créé par la synchronisation FFF') . ")\n";
+        }
+        echo "\n$n match(s) sur les affiches.\n";
+        // ce que la FFF envoie EN CE MOMENT pour ce week-end (lecture directe, sans rien enregistrer)
+        if (defined('CLE_ECRITURE')) {
+            @set_time_limit(200);
+            $ch = curl_init('https://' . $_SERVER['HTTP_HOST'] . '/api/sync.php?test=1&cle=' . urlencode(CLE_ECRITURE));
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 180]);
+            $rep = json_decode((string) curl_exec($ch), true) ?: [];
+            curl_close($ch);
+            $fff = array_values(array_filter($rep['matchs'] ?? [], fn($m) => in_array($m['date'] ?? '', $jours, true)));
+            usort($fff, fn($a, $b) => strcmp(($a['date'] ?? '') . ($a['heure'] ?? ''), ($b['date'] ?? '') . ($b['heure'] ?? '')));
+            echo "\nCe que la FFF envoie en ce moment pour ce week-end : " . count($fff) . " match(s)\n";
+            echo "(sources : " . implode(' · ', array_filter($rep['journal'] ?? [], fn($l) => preg_match('/dofa|ics|corico|FFF/i', $l))) . ")\n";
+            foreach ($fff as $m) {
+                $f = is_array($m['fff'] ?? null) ? $m['fff'] : [];
+                echo '  ' . date('d/m', strtotime($m['date'])) . ' ' . ($m['heure'] ?? '') . ' · ' . ($m['equipe'] ?? '') . ' (' . ($m['comp'] ?? '') . ') · '
+                   . (!empty($m['dom']) ? 'reçoit ' : 'va à ') . ($m['adv'] ?? '') . ' · score ' . json_encode([$m['bp'] ?? null, $m['bc'] ?? null])
+                   . ($f ? ' · statut ' . json_encode($f['statut'] ?? null, JSON_UNESCAPED_UNICODE) . ' · ' . ($f['equipe_club'] ?? '') : '') . "\n";
+            }
+        }
+        $ign = json_decode((string) reglage('matchs_ignores', '{}'), true) ?: [];
+        $ignWe = array_filter(array_keys($ign), fn($k) => in_array(explode('|', $k)[0], $jours, true));
+        echo "\nMatchs de ce week-end supprimés du calendrier (liste d'exclusion) : " . ($ignWe ? '' : 'aucun') . "\n";
+        foreach ($ignWe as $k) echo "  - " . str_replace('|', ' · ', $k) . ' (supprimé le ' . date('d/m à H:i', strtotime((string) $ign[$k])) . ")\n";
+        exit;
+    }
+    if (isset($_GET['diag'])) {
+        header('Content-Type: text/plain; charset=utf-8');
+        $gd = function_exists('gd_info') ? gd_info() : [];
+        echo "PHP " . PHP_VERSION . "\n";
+        echo "GD : " . ($gd['GD Version'] ?? 'ABSENT') . "\n";
+        echo "FreeType (textes) : " . (!empty($gd['FreeType Support']) ? 'oui' : 'NON') . "\n";
+        echo "JPEG : " . (!empty($gd['JPEG Support']) ? 'oui' : 'NON') . " | PNG : " . (!empty($gd['PNG Support']) ? 'oui' : 'NON') . "\n\n";
+        echo "Dossier attendu : " . __DIR__ . "/polices\n";
+        foreach (AFF_FICHIERS_POLICES as $p => $f) echo "  $f : " . (is_file(__DIR__ . "/polices/$f") ? 'présent (' . filesize(__DIR__ . "/polices/$f") . ' octets)' : 'MANQUANT') . "\n";
+        echo "\nPolice utilisée : " . (aff_police('800') ?: 'AUCUNE') . "\n";
+        echo "Blason : " . (is_file(dirname(__DIR__) . '/img/blason.png') ? 'présent' : 'MANQUANT (img/blason.png)') . "\n";
+        $fonds = glob(dirname(__DIR__) . '/img/fond-affiche*') ?: [];
+        foreach ($fonds as $fo) {
+            $ok = @imagecreatefromstring((string) @file_get_contents($fo));
+            $dim = @getimagesize($fo);
+            echo "Image de fond : " . basename($fo) . ' · ' . round(filesize($fo) / 1024) . ' Ko · ' . ($dim ? "{$dim[0]} x {$dim[1]} px · {$dim['mime']}" : 'format inconnu')
+               . ' · ' . ($ok ? 'lisible par le serveur' : 'ILLISIBLE par le serveur') . "\n";
+        }
+        echo "Autres fichiers dans img : " . implode(', ', array_map('basename', array_filter(glob(dirname(__DIR__) . '/img/*') ?: [], 'is_file'))) . "\n";
+        foreach (['domicile', 'exterieur'] as $n) echo "Image $n : " . (($p = aff_fond_lieu($n === 'domicile' ? 'dom' : 'ext')) && str_contains($p, "fond-$n") ? basename($p) . ' · présente' : "MANQUANTE (attendu : img/fond-$n.jpg)") . "\n";
+        echo "Version du moteur : V33 du 02/10 · affiches « stade de nuit »\n";
+        echo "Affiches « stade de nuit » : " . (aff_polices_ok() && afn_decor('story', 'dom') ? 'ACTIVES' : 'inactives (anciennes affiches)') . "\n";
+        foreach (['fb', 'story', 'insta'] as $f) foreach (['dom', 'ext'] as $l)
+            echo "  décor $f-$l : " . (afn_decor($f, $l) ? 'présent' : "MANQUANT (attendu : img/affiches-nuit/decor-$f-$l.jpg)") . "\n";
+        foreach (AFN_POLICES as $p => $f) echo "  police $f : " . (basename(afn_police($p)) === $f ? 'présente' : 'absente (remplacée par une Barlow Condensed)') . "\n";
+        echo "Partenaires : " . count(glob(dirname(__DIR__) . '/img/partenaires/*') ?: []) . " logo(s) dans img/partenaires\n";
+        $dossierAff = dirname(__DIR__) . '/affiches';
+        echo "Dossier affiches : " . (is_dir($dossierAff) ? (is_writable($dossierAff) ? 'présent, écriture possible' : 'présent mais ÉCRITURE IMPOSSIBLE') : 'absent (sera créé)') . "\n";
+        exit;
+    }
+    $matchs = aff_matchs(); $type = $_GET['apercu'] ?? 'programme';
+    $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'] ?? '') ? $_GET['date'] : null;
+    $opts = ['titre' => mb_substr((string) ($_GET['titre'] ?? ''), 0, 80), 'sponsors' => ($_GET['sponsors'] ?? '1') !== '0'];
+    if ($type === 'veterans' || $type === 'veterans-resultats') {                    // affiches des vétérans
+        $GLOBALS['aff_vet'] = true;
+        $type = $type === 'veterans-resultats' ? 'resultats' : 'programme';
+    }
+    if ($type === 'plateaux' || $type === 'plateaux-resultats') {                    // affiches du foot animation
+        $GLOBALS['aff_fal'] = true;
+        $type = $type === 'plateaux-resultats' ? 'resultats' : 'programme';
+    }
+    aff_format(in_array($_GET['format'] ?? '', ['post', 'carre', 'fb'], true) ? $_GET['format'] : 'story');
+    if ($type === 'match' || $type === 'score') {
+        $id = $_GET['id'] ?? ''; $m = null;
+        foreach ($matchs as $x) if ($x['id'] === $id) $m = $x;
+        if (!$m) {
+            usort($matchs, fn($a, $b) => strcmp($a['date'], $b['date']));
+            if ($type === 'score') { foreach (array_reverse($matchs) as $x) if (aff_joue($x)) { $m = $x; break; } }
+            else foreach ($matchs as $x) if (!aff_joue($x) && $x['date'] >= date('Y-m-d')) { $m = $x; break; }
+        }
+        if (!$m) { http_response_code(404); header('Content-Type: text/plain; charset=utf-8'); echo 'Aucun match trouvé.'; exit; }
+        $im = aff_match($m, $opts + ['score' => $type === 'score']);
+        $nom = ($type === 'score' ? 'resultat-' : 'match-') . cle_club($m['equipe'] . '-' . $m['adv']);
+    } elseif ($type === 'evenement') {
+        $im = aff_evenement($opts + ['sous' => mb_substr((string) ($_GET['sous'] ?? ''), 0, 80), 'texte' => mb_substr((string) ($_GET['texte'] ?? ''), 0, 600),
+            'date' => $date ?? '', 'heure' => preg_match('/^\d{1,2}:\d{2}$/', $_GET['heure'] ?? '') ? $_GET['heure'] : '', 'lieu' => mb_substr((string) ($_GET['lieu'] ?? ''), 0, 90)]);
+        $nom = 'evenement-' . cle_club($opts['titre'] ?: 'club');
+    } else {
+        $lundi = strtotime('monday this week');
+        if ($date) { $t = strtotime($date . ' 12:00'); $w = (int) date('w', $t); $t += (($w === 0 ? -1 : 6 - $w) * 86400); $sam = date('Y-m-d', $t); }
+        else $sam = date('Y-m-d', $type === 'resultats' ? strtotime('-2 days', $lundi) : strtotime('+5 days', $lundi));
+        if ($type === 'resultats' && !isset($_GET['exact']) && !aff_plan_weekend($matchs, $sam, true)) {   // exact=1 : le week-end demandé, même vide
+            $joues = array_filter($matchs, fn($x) => aff_joue($x) && $x['date'] <= date('Y-m-d'));
+            usort($joues, fn($x, $y) => strcmp($y['date'], $x['date']));
+            if ($joues) { $t = strtotime($joues[0]['date'] . ' 12:00'); $w = (int) date('w', $t); $sam = date('Y-m-d', $t + (($w === 0 ? -1 : 6 - $w) * 86400)); }
+        }
+        if (isset($_GET['message'])) {       // /api/affiches.php?apercu=resultats&message=1 : le texte de la publication
+            header('Content-Type: text/plain; charset=utf-8');
+            if (!empty($GLOBALS['aff_fal'])) { $GLOBALS['aff_fal'] = false; echo aff_message_plateaux($matchs, $sam, $type === 'resultats'); }
+            else echo $type === 'resultats' ? aff_message_resultats($matchs, $sam) : aff_message_rencontres($matchs, $sam);
+            exit;
+        }
+        $im = aff_liste($matchs, $sam, $type === 'resultats', $opts + ['lieu' => $_GET['lieu'] ?? null, 'partie' => in_array($_GET['partie'] ?? '', ['1', '2'], true) ? (int) $_GET['partie'] : null]);
+        $nom = ($type === 'resultats' ? 'resultats-' : 'rencontres-') . $sam;
+    }
+    if (!aff_polices_ok()) {   // on l'écrit sur l'image avec la police de secours de GD
+        $rouge = imagecolorallocate($im, 220, 38, 38); $blanc = imagecolorallocate($im, 255, 255, 255);
+        imagefilledrectangle($im, 0, 380, AFF_W, 520, $rouge);
+        imagestring($im, 5, 40, 410, 'POLICES INTROUVABLES : les textes ne peuvent pas etre ecrits.', $blanc);
+        imagestring($im, 5, 40, 440, 'Depose le dossier polices (4 fichiers .ttf) dans le dossier api du site.', $blanc);
+        imagestring($im, 5, 40, 470, 'Diagnostic : /api/affiches.php?diag=1', $blanc);
+    }
+    header('Content-Type: image/jpeg'); header('Cache-Control: no-store');
+    if (!empty($_GET['telecharger'])) header('Content-Disposition: attachment; filename="asf-pierrelatte-' . $nom . '.jpg"');
+    imagejpeg($im, null, 92);
+}
