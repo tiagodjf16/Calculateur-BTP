@@ -11420,8 +11420,21 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     "score":          { ico: "🏁", nom: "Résultat", sous: "d'un match", fam: "seul", res: true },
   };
   const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Annonce", "1080 × 1350", "4/5"], ["fb", "Facebook", "1080 × 2160", "1/2"]];
-  const CATS_FAL = (typeof ONGLETS_ANIM_CAL !== "undefined" && Array.isArray(ONGLETS_ANIM_CAL)) ? ONGLETS_ANIM_CAL
-    : ["U6 · U7", "U8 · U9", "U10 · U11 Avenir", "U10 · U11 Espoir", "U13 · équipe 3", "U13 · équipe 4"];
+  // foot animation : les catégories du club (le nombre d'équipes se choisit à part)
+  const CATS_FAL = ["U6 · U7", "U8 · U9", "U10 · U11", "U13"];
+  /* « U8 · U9 Promotion », « U10-U11 », « U13 · équipe 4 » → catégorie simple ; « équipe 4 » → numéro */
+  function catSimple(eq){
+    const t = String(eq || "");
+    const p = t.match(/U\s?(\d{1,2})\s*(?:·|-|\/|à|a)\s*U?\s?(\d{1,2})/i);
+    const n = p ? +p[1] : +((t.match(/U\s?(\d{1,2})/i) || [])[1] || 0);
+    if (n === 6 || n === 7) return "U6 · U7";
+    if (n === 8 || n === 9) return "U8 · U9";
+    if (n === 10 || n === 11) return "U10 · U11";
+    if (n === 12 || n === 13) return "U13";
+    return t || CATS_FAL[0];
+  }
+  const numeroEquipe = eq => { const m = String(eq || "").match(/[ée]quipe\s*(\d)/i); return m ? m[1] : ""; };
+  const MAX_EQUIPES = 8;
   const MAX = 12;
 
   /* ---------- état (gardé dans ce navigateur) ---------- */
@@ -11430,7 +11443,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function nouveau(t, samedi){
     const fam = TYPES[t].fam;
     const m = { dom: true, equipe: fam === "vet" ? "Vétérans" : "", comp: fam === "fal" ? "Plateau" : "", adv: "", date: samedi, heure: "", adresse: "", bp: "", bc: "" };
-    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.adversaires = ""; m.resultats = [{ adv: "", bp: "", bc: "" }]; }
+    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.equipes = "1"; m.numero = ""; m.adversaires = ""; m.resultats = [{ adv: "", bp: "", bc: "" }]; }
     return m;
   }
   function charger(){
@@ -11482,6 +11495,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const o = { equipe: t.fam === "vet" ? "Vétérans" : net(m.equipe), comp: net(m.comp), adv: net(m.adv),
       dom: !!m.dom, date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : net(m.adresse) };
     if (t.fam === "fal"){
+      o.equipe = catSimple(o.equipe);
+      if (t.res){ if (m.numero) o.numero = +m.numero; } else o.equipes = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
       o.adversaires = lignes(sansEmoji(m.adversaires));
       o.resultats = (m.resultats || []).map(r => ({ adv: net(r.adv), bp: nombre(r.bp), bc: nombre(r.bc) })).filter(r => r.adv);
     } else if (t.res){ o.bp = nombre(m.bp); o.bc = nombre(m.bc); }
@@ -11567,7 +11582,10 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       <button type="button" class="as-fmt ${!m.dom ? "on" : ""}" data-am-a="dom" data-i="${i}" data-k="0">✈️ À l'extérieur</button></div>`;
     let corps;
     if (fal){
-      corps = `<label>Catégorie<select data-am="equipe" data-i="${i}">${[...new Set([...CATS_FAL, m.equipe].filter(Boolean))].map(c => `<option ${c === m.equipe ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+      const cat = catSimple(m.equipe);
+      corps = `<label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+        ${t.res ? `<label>Équipe<select data-am="numero" data-i="${i}"><option value="" ${!m.numero ? "selected" : ""}>Une seule équipe</option>${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.numero) === String(k + 1) ? "selected" : ""}>Équipe ${k + 1}</option>`).join("")}</select></label>`
+          : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.equipes || 1) === String(k + 1) ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
         <label>Type<select data-am="comp" data-i="${i}">${["Plateau", "Brassage"].map(c => `<option ${c === m.comp ? "selected" : ""}>${c}</option>`).join("")}</select></label>
         ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", "Heure", m.heure, "", "time")}
         ${m.dom ? "" : champ(i, "adv", "Chez (club qui reçoit)", m.adv, `maxlength="60" list="am-clubs" placeholder="C.O. Donzérois"`)}
@@ -11609,7 +11627,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const opt = (k, lb, res) => `<label class="af-choix ${e.pub[k] ? "on" : ""}"><input type="checkbox" data-am-pub="${k}" aria-label="${lb} ${res}" ${e.pub[k] ? "checked" : ""}>${lb}</label>`;
     const clubs = [...new Set([...(S.matchs || []).map(m => m.adv), ...(S.matchsAnimation || []).flatMap(m => [m.adv, ...(m.adversaires || [])])]
       .filter(Boolean).map(x => String(x).trim()))].sort((a, b) => a.localeCompare(b)).slice(0, 400);
-    const equipes = (() => { try { return toutesEquipes(); } catch(err){ return []; } })();
+    const equipes = (() => { let l = []; try { l = toutesEquipes(); } catch(err){}
+      return [...new Set([...l.filter(x => !/U\s?6\s*à\s*U?\s?11/i.test(x)), "U6 · U7", "U8 · U9", "U10 · U11"])]; })();
     return `<div class="ev-zone am-zone">
     <datalist id="am-clubs">${clubs.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
     <datalist id="am-equipes">${equipes.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
@@ -11745,7 +11764,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       const saisies = new Set(tous.filter(m => !/^fal-/.test(String(m.id || ""))).map(cleCat));
       return tous.filter(m => !/^fal-/.test(String(m.id || "")) || !saisies.has(cleCat(m))).sort(tri).slice(0, MAX).map(m => {
         const adv = (m.adversaires && m.adversaires.length ? m.adversaires : (m.participants || []).map(q => q && q.nom)).filter(a => a && !nous(a));
-        return { dom: !!m.dom, equipe: String(m.equipe || CATS_FAL[0]), comp: /brassage/i.test(m.comp || "") ? "Brassage" : "Plateau",
+        return { dom: !!m.dom, equipe: catSimple(m.equipe), equipes: "1", numero: t.res ? numeroEquipe(m.equipe) : "", comp: /brassage/i.test(m.comp || "") ? "Brassage" : "Plateau",
           adv: m.dom ? "" : String(m.adv || ""), date: m.date, heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""), bp: "", bc: "",
           adversaires: adv.join("\n"),
           resultats: (m.resultats || []).length ? m.resultats.map(r => ({ adv: String(r.adv || ""), bp: r.bp ?? "", bc: r.bc ?? "" })) : [{ adv: "", bp: "", bc: "" }] };
@@ -11766,11 +11785,12 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function versListe(m, t){
     const fam = TYPES[t].fam;
     const cat = String(m.equipe || "");
-    const o = { dom: !!m.dom, equipe: fam === "vet" ? "Vétérans" : fam === "fal" ? (CATS_FAL.find(c => c.toUpperCase() === cat.toUpperCase()) || cat || CATS_FAL[0]) : cat,
+    const o = { dom: !!m.dom, equipe: fam === "vet" ? "Vétérans" : fam === "fal" ? catSimple(cat) : cat,
       comp: fam === "fal" ? (/brassage/i.test(m.comp || "") ? "Brassage" : "Plateau") : String(m.comp || ""),
       adv: fam === "fal" && m.dom ? "" : String(m.adv || ""), date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""),
       bp: m.bp ?? "", bc: m.bc ?? "" };
     if (fam === "fal"){
+      o.equipes = "1"; o.numero = TYPES[t].res ? numeroEquipe(cat) : "";
       o.adversaires = (m.adversaires || []).filter(a => a && !nousMeme(a)).join("\n");
       o.resultats = (m.resultats || []).length ? m.resultats.map(r => ({ adv: String(r.adv || ""), bp: r.bp ?? "", bc: r.bc ?? "" })) : [{ adv: "", bp: "", bc: "" }];
       o.bp = o.bc = "";
@@ -11783,6 +11803,18 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const tri = [...l].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
     if (t === "score"){ const j = tri.filter(joue); return j.length ? [j[j.length - 1]] : tri.slice(-1); }
     const n = tri.filter(m => !joue(m)); return n.length ? [n[0]] : tri.slice(0, 1);
+  }
+  // plateaux d'une même catégorie, même jour, même heure, même endroit : une ligne, avec le nombre d'équipes
+  function regrouper(l){
+    const out = [], vu = new Map();
+    for (const m of l){
+      const k = [catSimple(m.equipe), m.date, m.heure, m.dom ? "d" : "e", slug(m.adv || ""), slug(m.adresse || "")].join("|");
+      const g = vu.get(k);
+      if (!g){ const c = { ...m, equipe: catSimple(m.equipe), equipes: "1" }; vu.set(k, c); out.push(c); continue; }
+      g.equipes = String(Math.min(MAX_EQUIPES, (+g.equipes || 1) + 1));
+      g.adversaires = [...new Set([...lignes(g.adversaires), ...lignes(m.adversaires)])].join("\n");
+    }
+    return out;
   }
   let autoJeton = 0;
   async function chargerAuto(demande){
@@ -11798,6 +11830,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     } catch(err){ source = "app"; l = depuisCalendrier(); }                 // serveur pas à jour ou hors ligne : données de l'app
     if (j !== autoJeton) return;
     if (TYPES[t].fam === "seul") l = choisirSeul(l, t);
+    if (t === "fal-rencontres") l = regrouper(l);
     e.listes[t] = l.slice(0, MAX); e.auto[t] = { samedi: sam, modifie: false, source };
     e.msgs[t] = { msg: "", libre: false };
     sauver();

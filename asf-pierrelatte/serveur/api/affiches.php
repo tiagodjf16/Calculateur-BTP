@@ -2348,7 +2348,11 @@ function afn_partenaires(array $A, bool $avec): void {
 
 /* ---------- données des matchs → blocs ---------- */
 function afn_cat(array $m, bool $fal): array {
-    if ($fal) { [$a, $b] = aff_cat_lignes($m); return [preg_replace('/^(U\s?\d{1,2})-(U\s?\d{1,2})$/u', '$1 · $2', $a), $b]; }
+    if ($fal) {
+        [$a, $b] = aff_cat_lignes($m);
+        if ((int) ($m['nb_equipes'] ?? 0) > 1) $b = (int) $m['nb_equipes'] . ' ÉQUIPES';            // saisi dans l'onglet Affiches matchs
+        return [preg_replace('/^(U\s?\d{1,2})-(U\s?\d{1,2})$/u', '$1 · $2', $a), $b];
+    }
     $sous = (string) ($m['sous'] ?? aff_sous_etiquette((string) ($m['comp'] ?? '')));
     return [aff_maj((string) ($m['equipe'] ?? '')), $sous !== '' ? $sous : aff_maj((string) ($m['comp'] ?? ''))];
 }
@@ -2494,6 +2498,11 @@ function afn_manuel_lire(array $d): array {
         if ($fal) {
             // « U10-U11 », « u10/u11 espoir » → « U10 · U11 ESPOIR », comme les fiches du foot animation
             $x['equipe'] = preg_replace('/^(U\s?\d{1,2})\s*[-\/·]\s*(U\s?\d{1,2})/u', '$1 · $2', aff_maj($x['equipe']));
+            // plusieurs équipes de la catégorie sur le plateau (rencontres), ou le numéro de l'équipe (résultats)
+            $nb = is_numeric($m['equipes'] ?? null) ? max(1, min(8, (int) $m['equipes'])) : 1;
+            $no = is_numeric($m['numero'] ?? null) ? max(1, min(8, (int) $m['numero'])) : 0;
+            if ($no && !preg_match('/ÉQUIPE\s*\d/u', $x['equipe'])) $x['equipe'] .= (str_contains($x['equipe'], '·') ? ' ' : ' · ') . "ÉQUIPE $no";
+            if ($nb > 1) { $x['nb_equipes'] = $nb; $x['equipeDetail'] = $x['equipe'] . " ($nb équipes)"; }
             if ($x['comp'] === '') $x['comp'] = preg_match('/U\s?13/i', $x['equipe']) ? 'Brassage' : 'Plateau';
             $x['adversaires'] = array_values(array_filter(array_map(fn($a) => aff_maj($txt($a, 60)), array_slice(is_array($m['adversaires'] ?? null) ? $m['adversaires'] : [], 0, 8)), 'strlen'));
             $x['resultats'] = [];
