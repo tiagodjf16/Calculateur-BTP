@@ -23,6 +23,8 @@ Conseil : avant de remplacer, télécharge les anciens `fond-domicile.jpg`, `fon
 Chaque annonce (rencontres, résultats, foot animation, vétérans) part en **deux publications séparées** : les matchs à domicile,
 puis ceux à l'extérieur, chacune avec son message. Quand un lieu a trop de matchs pour une seule page, sa publication en a
 **deux** (« page 1/2 », « page 2/2 ») ; sinon une seule. Les stories suivent : une par page.
+Foot animation : tout sur une ou deux affiches quand il y a peu de plateaux ; sinon une affiche par catégorie
+(U6 · U7, U8 · U9, U10 · U11, U13 en brassage), toutes dans la même annonce (domicile, et une autre pour l'extérieur).
 C'est vrai le lundi à 9 h (publication automatique) comme avec le bouton « Publier maintenant » de l'onglet Affiches.
 Les affiches d'événement (stage, loto, tournoi) ne changent pas.
 

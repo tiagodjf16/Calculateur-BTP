@@ -2666,10 +2666,9 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
     $lieu = in_array($opts['lieu'] ?? '', ['dom', 'ext'], true) ? $opts['lieu'] : null;
     if (!afn_actif($lieu)) return null;
     $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
-    $liste = [];
-    foreach ($plan as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
-    $pages = max(1, min(2, (int) ($opts['pages'] ?? 1))); $page = max(1, min($pages, (int) ($opts['page'] ?? 1)));
-    if ($pages > 1) { $par = (int) ceil(count($liste) / $pages); $liste = array_slice($liste, ($page - 1) * $par, $par); }   // page 1 : la 1re moitié
+    $liste = afn_liste_lieu($matchs, $samedi, $resultats, $lieu);
+    if (is_array($opts['indices'] ?? null)) $liste = array_values(array_intersect_key($liste, array_flip(array_map('intval', $opts['indices']))));   // une page de l'annonce
+    $suffixe = trim((string) ($opts['suffixe'] ?? ''));
     $fal = !empty($GLOBALS['aff_fal']); $vet = !empty($GLOBALS['aff_vet']);
     $quoi = $resultats ? 'Résultats' : 'Rencontres';
     [$sur, $t1, $t2] = $fal ? ['École de foot', 'Foot animation', "$quoi du week-end"]
@@ -2679,7 +2678,7 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
         if (preg_match('/week-?end/iu', $t1)) $t2 = $fal || $vet ? $quoi : '';
     }
     $A = afn_debut($lieu);
-    afn_titres($A, $sur, $t1, $t2, afn_date_weekend($plan, $samedi) . ($pages > 1 ? " · page $page/$pages" : ''));
+    afn_titres($A, $sur, $t1, $t2, afn_date_weekend($plan, $samedi) . ($suffixe !== '' ? " · $suffixe" : ''));
     $blocs = afn_blocs($liste, $resultats, $fal);
     if (!$blocs) { $blocs = [['t' => 'vide', 'texte' => $resultats ? 'Aucun résultat ce week-end' : 'Aucun match programmé ce week-end']]; $zm = 1.1; }
     elseif (count($blocs) === 1 && !$fal) { $blocs[0]['t'] = 'duo'; $zm = 1.15; }
@@ -2706,13 +2705,62 @@ function afn_zoom_pour(array $blocs, string $fmt): float {
     }
     return $k;
 }
-/* nombre de pages d'une annonce pour un lieu (genre déjà posé) : 2 quand la liste serait trop serrée sur la publication 4:5 */
-function aff_nb_pages(array $matchs, string $samedi, bool $res, string $lieu): int {
-    if (!afn_actif($lieu)) return 1;
-    $liste = [];
-    foreach (aff_plan_weekend($matchs, $samedi, $res, $lieu) as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
-    if (count($liste) < 2) return 1;
-    return afn_zoom_pour(afn_blocs($liste, $res, !empty($GLOBALS['aff_fal'])), 'insta') < .8 ? 2 : 1;
+/* foot animation : les catégories dans l'ordre, des U6 · U7 aux U13 (brassage) */
+function afn_rang_cat(string $eq): int {
+    if (!preg_match('/U\s?(\d{1,2})/u', $eq, $x)) return 9;
+    $n = (int) $x[1];
+    return $n <= 7 ? 1 : ($n <= 9 ? 2 : ($n <= 11 ? 3 : ($n <= 13 ? 4 : 5)));
+}
+function afn_groupe_cat(string $eq): string { return [1 => 'U6 · U7', 2 => 'U8 · U9', 3 => 'U10 · U11', 4 => 'U13'][afn_rang_cat($eq)] ?? 'Autres'; }
+/* la liste d'une annonce pour un lieu (genre déjà posé) : celle des affiches ; foot animation rangé par catégorie */
+function afn_liste_lieu(array $matchs, string $samedi, bool $res, ?string $lieu): array {
+    $l = [];
+    foreach (aff_plan_weekend($matchs, $samedi, $res, $lieu) as $j) foreach ($j['matchs'] as $m) $l[] = $m;
+    if (!empty($GLOBALS['aff_fal'])) {
+        foreach ($l as $i => &$m) $m['_ordre'] = $i;
+        unset($m);
+        usort($l, fn($a, $b) => (afn_rang_cat((string) ($a['equipe'] ?? '')) <=> afn_rang_cat((string) ($b['equipe'] ?? ''))) ?: $a['_ordre'] <=> $b['_ordre']);
+    }
+    return $l;
+}
+/* les pages d'une annonce pour un lieu (genre déjà posé) → [['i' => indices dans la liste, 'suffixe' => …], …]
+   Tout tient (agrandissement ≥ 0,8 sur la publication 4:5) : une page. Sinon deux pages. Foot animation trop chargé même
+   sur deux pages : une affiche par catégorie (U6 · U7, U8 · U9, U10 · U11, U13), toutes dans la même annonce.
+   Championnats très chargés : trois ou quatre pages. */
+function aff_decoupage(array $matchs, string $samedi, bool $res, string $lieu): array {
+    $l = afn_liste_lieu($matchs, $samedi, $res, $lieu); $n = count($l);
+    if (!afn_actif($lieu) || $n < 2) return [['i' => range(0, max(0, $n - 1)), 'suffixe' => '']];
+    $fal = !empty($GLOBALS['aff_fal']);
+    $tient = fn(array $ix) => afn_zoom_pour(afn_blocs(array_map(fn($i) => $l[$i], $ix), $res, $fal), 'insta') >= .8;
+    $tout = range(0, $n - 1);
+    if ($tient($tout)) return [['i' => $tout, 'suffixe' => '']];
+    $coupe = (int) ceil($n / 2);
+    if ($fal) {                                                         // foot animation : coupé au changement de catégorie le plus proche du milieu
+        $bords = array_filter(range(1, $n - 1), fn($k) => afn_groupe_cat((string) ($l[$k]['equipe'] ?? '')) !== afn_groupe_cat((string) ($l[$k - 1]['equipe'] ?? '')));
+        if ($bords) { usort($bords, fn($a, $b) => abs($a - $n / 2) <=> abs($b - $n / 2)); $coupe = $bords[0]; }
+    }
+    $p1 = range(0, $coupe - 1); $p2 = range($coupe, $n - 1);
+    if ($tient($p1) && $tient($p2)) return [['i' => $p1, 'suffixe' => 'page 1/2'], ['i' => $p2, 'suffixe' => 'page 2/2']];
+    if ($fal) {
+        $groupes = [];
+        foreach ($l as $i => $m) $groupes[afn_groupe_cat((string) ($m['equipe'] ?? ''))][] = $i;
+        $pages = [];
+        foreach ($groupes as $g => $ix) {
+            if (count($ix) > 1 && !$tient($ix)) {                       // une catégorie elle-même trop chargée : en deux
+                $c = (int) ceil(count($ix) / 2);
+                $pages[] = ['i' => array_slice($ix, 0, $c), 'suffixe' => "$g · 1/2"]; $pages[] = ['i' => array_slice($ix, $c), 'suffixe' => "$g · 2/2"];
+            } else $pages[] = ['i' => $ix, 'suffixe' => $g];
+        }
+        return array_slice($pages, 0, 10);                                // un carrousel Instagram : 10 images au plus
+    }
+    for ($p = 3; $p <= 4; $p++) {
+        $morceaux = array_chunk($tout, (int) ceil($n / $p));
+        if ($p === 4 || !array_filter($morceaux, fn($ix) => !$tient($ix))) {
+            $q = count($morceaux);
+            return array_map(fn($ix, $k) => ['i' => $ix, 'suffixe' => 'page ' . ($k + 1) . "/$q"], $morceaux, array_keys($morceaux));
+        }
+    }
+    return [['i' => $tout, 'suffixe' => '']];
 }
 function aff_lieux(array $matchs, string $samedi, bool $res, string $genre): array {
     aff_genre($genre);
@@ -2720,14 +2768,14 @@ function aff_lieux(array $matchs, string $samedi, bool $res, string $genre): arr
     aff_genre('');
     return $l;
 }
-/* les images d'une annonce pour un lieu : pN_story, pN_carre, et pN_fb quand il y a deux pages */
+/* les images d'une annonce pour un lieu : pN_story, pN_carre, et pN_fb quand il y a exactement deux pages */
 function aff_feuilles_lieu(array $matchs, string $samedi, bool $res, string $lieu, string $genre, string $nom, array $fmts = ['story', 'carre', 'fb']): array {
     aff_genre($genre);
-    $n = aff_nb_pages($matchs, $samedi, $res, $lieu); $f = [];
-    for ($p = 1; $p <= $n; $p++) foreach ($fmts as $fmt) {
-        if ($fmt === 'fb' && $n < 2) continue;                                       // une page seule part en 4:5 sur Facebook
-        aff_format($fmt);
-        $f["p{$p}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $lieu, 'sponsors' => true, 'partie' => $lieu === 'dom' ? 1 : 2, 'page' => $p, 'pages' => $n]),
+    $pages = aff_decoupage($matchs, $samedi, $res, $lieu); $n = count($pages); $f = [];
+    foreach ($pages as $k => $pg) foreach ($fmts as $fmt) {
+        if ($fmt === 'fb' && $n !== 2) continue;                                     // Facebook : 1:2 seulement pour deux pages côte à côte
+        aff_format($fmt); $p = $k + 1;
+        $f["p{$p}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $lieu, 'sponsors' => true, 'partie' => $lieu === 'dom' ? 1 : 2, 'indices' => $pg['i'], 'suffixe' => $pg['suffixe']]),
             "$nom-$lieu" . ($n > 1 ? "-p$p" : '') . ($fmt === 'story' ? '' : "-$fmt"));
     }
     aff_format('story'); aff_genre('');
@@ -2735,10 +2783,11 @@ function aff_feuilles_lieu(array $matchs, string $samedi, bool $res, string $lie
 }
 function aff_pages(array $f, string $fmt): array {
     $l = [];
-    for ($p = 1; $p <= 2; $p++) if (!empty($f["p{$p}_$fmt"])) $l[] = $f["p{$p}_$fmt"];
+    for ($p = 1; $p <= 10; $p++) if (!empty($f["p{$p}_$fmt"])) $l[] = $f["p{$p}_$fmt"];
     return $l;
 }
-function aff_images_fb_lieu(array $f): array { $fb = aff_pages($f, 'fb'); return count($fb) > 1 ? $fb : array_slice(aff_pages($f, 'carre'), 0, 1); }
+/* Facebook : une page en 4:5 ; deux pages côte à côte en 1:2 ; plus (une affiche par catégorie) : toutes en 4:5 */
+function aff_images_fb_lieu(array $f): array { $fb = aff_pages($f, 'fb'); return count($fb) === 2 ? $fb : aff_pages($f, 'carre'); }
 function aff_message_lieu(string $genre, array $matchs, string $samedi, bool $res, string $lieu): string {
     if ($genre === 'fal') return aff_message_plateaux($matchs, $samedi, $res, $lieu);
     if ($genre === 'vet') return aff_message_veterans($matchs, $samedi, $res, $lieu);
@@ -3626,9 +3675,10 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
             exit;
         }
         $lieuAp = in_array($_GET['lieu'] ?? '', ['dom', 'ext'], true) ? $_GET['lieu'] : null;
-        $pagesAp = $lieuAp ? aff_nb_pages($matchs, $sam, $type === 'resultats', $lieuAp) : 1;
-        $im = aff_liste($matchs, $sam, $type === 'resultats', $opts + ['lieu' => $_GET['lieu'] ?? null, 'partie' => in_array($_GET['partie'] ?? '', ['1', '2'], true) ? (int) $_GET['partie'] : null,
-            'pages' => $pagesAp, 'page' => in_array($_GET['page'] ?? '', ['1', '2'], true) ? (int) $_GET['page'] : 1]);
+        $pagesAp = $lieuAp ? aff_decoupage($matchs, $sam, $type === 'resultats', $lieuAp) : [];
+        $pgAp = $pagesAp[max(0, min(count($pagesAp) - 1, (int) ($_GET['page'] ?? 1) - 1))] ?? null;   // ?page=2… : les autres pages de l'annonce
+        $im = aff_liste($matchs, $sam, $type === 'resultats', $opts + ['lieu' => $_GET['lieu'] ?? null, 'partie' => in_array($_GET['partie'] ?? '', ['1', '2'], true) ? (int) $_GET['partie'] : null]
+            + ($pgAp && count($pagesAp) > 1 ? ['indices' => $pgAp['i'], 'suffixe' => $pgAp['suffixe']] : []));
         $nom = ($type === 'resultats' ? 'resultats-' : 'rencontres-') . $sam;
     }
     if (!aff_polices_ok()) {   // on l'écrit sur l'image avec la police de secours de GD
