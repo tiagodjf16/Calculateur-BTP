@@ -11442,7 +11442,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const parCat = new Map();
     liste.forEach((m, i) => { const c = catSimple(m.equipe); if (!parCat.has(c)) parCat.set(c, []); parCat.get(c).push(i); });
     for (const idx of parCat.values()){
-      const n = i => t.res ? 1 : Math.max(1, Math.min(MAX_EQUIPES, +liste[i].equipes || 1));
+      const n = i => Math.max(1, Math.min(MAX_EQUIPES, +liste[i].equipes || 1));
       const fixes = i => String(liste[i].numeros || "").split(/[^\d]+/).filter(Boolean).map(Number).filter(x => x > 0);
       const pris = new Set(idx.flatMap(i => fixes(i).length === n(i) ? fixes(i) : []));
       let k = 1;
@@ -11452,6 +11452,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       idx.forEach(i => { res[i].total = total; });
     }
     return res;
+  }
+  /* foot animation : chaque équipe de Pierrelatte du plateau a sa poule (A, B…) et ses matchs (heure, adversaire, score).
+     Les anciens brouillons et les matchs automatiques (« contre » et scores sans poule) deviennent les matchs de la 1re équipe. */
+  const POULES = ["A", "B", "C", "D", "E", "F", "G", "H"], MAX_RENC = 8;
+  function det(m){
+    if (!Array.isArray(m.equipesDet)){
+      const ms = (m.resultats || []).filter(r => r && String(r.adv || "").trim()).map(r => ({ heure: "", adv: String(r.adv).trim(), bp: r.bp ?? "", bc: r.bc ?? "" }));
+      lignes(m.adversaires).forEach(a => { if (!ms.some(p => memeClub(p.adv, a))) ms.push({ heure: "", adv: a, bp: "", bc: "" }); });
+      m.equipesDet = [{ poule: "", matchs: ms.slice(0, MAX_RENC) }];
+    }
+    const n = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
+    m.equipesDet = m.equipesDet.filter(q => q && typeof q === "object").slice(0, n).map(q => ({ poule: POULES.includes(q.poule) ? q.poule : "",
+      matchs: (Array.isArray(q.matchs) ? q.matchs : []).filter(p => p && typeof p === "object").slice(0, MAX_RENC)
+        .map(p => ({ heure: /^\d{2}:\d{2}$/.test(p.heure || "") ? p.heure : "", adv: String(p.adv ?? ""), bp: p.bp ?? "", bc: p.bc ?? "" })) }));
+    while (m.equipesDet.length < n) m.equipesDet.push({ poule: "", matchs: [] });
+    return m.equipesDet;
   }
   const libelleEquipes = r => r.total < 2 ? "" : r.nums.length === 1 ? `équipe ${r.nums[0]}` : `équipes ${r.nums.length <= 3 ? r.nums.join(", ").replace(/, (\d+)$/, " et $1") : r.nums[0] + " à " + r.nums[r.nums.length - 1]}`;
   /* même club plusieurs fois (plusieurs de ses équipes) : Donzère 1, Donzère 2… */
@@ -11474,7 +11490,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function nouveau(t, samedi){
     const fam = TYPES[t].fam;
     const m = { dom: true, equipe: fam === "vet" ? "Vétérans" : "", comp: fam === "fal" ? "Plateau" : "", adv: "", date: samedi, heure: "", adresse: "", bp: "", bc: "" };
-    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.equipes = "1"; m.numeros = ""; m.adversaires = ""; m.resultats = [{ adv: "", bp: "", bc: "" }]; }
+    if (fam === "fal"){ m.equipe = CATS_FAL[0]; m.equipes = "1"; m.numeros = ""; m.equipesDet = [{ poule: "", matchs: [] }]; }
     return m;
   }
   function charger(){
@@ -11527,12 +11543,17 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       dom: !!m.dom, date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : net(m.adresse) };
     if (t.fam === "fal"){
       o.equipe = catSimple(o.equipe);
-      if (!t.res) o.equipes = Math.max(1, Math.min(MAX_EQUIPES, +m.equipes || 1));
+      const d = det(m);
+      o.equipes = d.length;
       if (num && num.total > 1) o.numeros = num.nums;
-      o.adversaires = numeroterClubs(lignes(sansEmoji(m.adversaires)));
-      const rs = (m.resultats || []).map(r => ({ adv: net(r.adv), bp: nombre(r.bp), bc: nombre(r.bc) })).filter(r => r.adv);
-      const noms = numeroterClubs(rs.map(r => r.adv)); rs.forEach((r, k) => { r.adv = noms[k]; });
-      o.resultats = rs;
+      o.poules = d.map((q, k) => {
+        const ms = q.matchs.map(p => ({ heure: p.heure || "", adv: net(p.adv), bp: nombre(p.bp), bc: nombre(p.bc) })).filter(p => p.adv);
+        const noms = numeroterClubs(ms.map(p => p.adv)); ms.forEach((p, j) => { p.adv = noms[j]; });
+        return { numero: num && num.total > 1 ? num.nums[k] || 0 : 0, poule: q.poule, matchs: ms };
+      });
+      // les mêmes matchs à l'ancienne (serveur d'avant les poules)
+      o.adversaires = o.poules.flatMap(q => q.matchs.map(p => p.adv));
+      o.resultats = o.poules.flatMap(q => q.matchs.filter(p => p.bp !== null && p.bc !== null).map(p => ({ adv: p.adv, bp: p.bp, bc: p.bc })));
     } else if (t.res){ o.bp = nombre(m.bp); o.bc = nombre(m.bc); }
     return o;
   }
@@ -11546,7 +11567,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (!m.date) x.push("la date");
     if (t.fam === "fal"){
       if (!m.dom && !String(m.adv || "").trim() && !String(m.adresse || "").trim()) x.push("le club qui reçoit");
-      if (t.res && !(m.resultats || []).some(r => String(r.adv || "").trim() && nombre(r.bp) !== null && nombre(r.bc) !== null)) x.push("au moins un score");
+      if (t.res && !det(m).some(q => q.matchs.some(p => String(p.adv || "").trim() && nombre(p.bp) !== null && nombre(p.bc) !== null))) x.push("au moins un score");
     } else if (!String(m.adv || "").trim()) x.push("l'adversaire");
     return x;
   }
@@ -11641,7 +11662,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const garde = n => { const k = slug(n).replace(/-/g, ""); return mots.every(w => k.includes(w)); };
     const deja = CLUBS.deja.filter(garde), tous = CLUBS.tous.filter(garde).slice(0, tape ? 80 : 400);
     const exact = tape && [...CLUBS.deja, ...CLUBS.tous].find(n => cleClub(n) === cleClub(tape));
-    const deDans = ajout ? lignes((L()[+inp.dataset.i] || {}).adversaires || "") : [];
+    const deDans = ajout ? ((det(L()[+inp.dataset.i] || {})[+inp.dataset.k] || {}).matchs || []).map(p => p.adv) : [];
     let k = 0;
     const opt = (v, lib, cl = "") => `<span class="am-club-opt${cl}" role="option" id="${boite.id}-${k++}" data-v="${esc(v)}" aria-selected="false">${lib}</span>`;
     const surl = n => { let t = esc(joli(n)); if (!mots.length) return t;
@@ -11683,8 +11704,9 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     v = String(v || "").trim(); if (!v) return;
     const i = +inp.dataset.i, m = L()[i]; if (!m) return;
     if (inp.dataset.amClub === "ajout"){
-      const l = lignes(m.adversaires); if (l.length >= 8){ toast("8 clubs au plus par plateau", true); return; }
-      l.push(v); m.adversaires = l.join("\n");                     // le même club deux fois : deux de ses équipes (Donzère 1, Donzère 2)
+      const q = det(m)[+inp.dataset.k]; if (!q) return;
+      if (q.matchs.length >= MAX_RENC){ toast(`${MAX_RENC} matchs au plus par équipe`, true); return; }
+      q.matchs.push({ heure: "", adv: v, bp: "", bc: "" });            // le même club deux fois : deux de ses équipes (Donzère 1, Donzère 2)
       inp.value = ""; fermerClubs(inp); inp.blur();
       marquer(); sauver(); majMessage(); rendrePanneau();
       return;
@@ -11741,6 +11763,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 
   /* ---------- le panneau ---------- */
   const champ = (i, k, l, val, attrs = "", type = "text") => `<label>${l}<input type="${type}" data-am="${k}" data-i="${i}" value="${esc(val ?? "")}" ${attrs}></label>`;
+  /* une équipe de Pierrelatte sur le plateau : sa poule, puis ses matchs (heure, adversaire, score) */
+  function blocEquipe(i, k, q, num, t){
+    const titre = num && num.total > 1 ? `Équipe ${num.nums[k] || k + 1}` : "Notre équipe";
+    const at = j => `data-i="${i}" data-k="${k}"${j === undefined ? "" : ` data-j="${j}"`}`;
+    return `<div class="am-eq">
+      <div class="am-eq-tete"><b>${esc(titre)}</b>
+        <label class="am-poule">Poule<select data-am="p-poule" ${at()}><option value="" ${q.poule ? "" : "selected"}>Aucune</option>${POULES.map(p => `<option ${q.poule === p ? "selected" : ""}>${p}</option>`).join("")}</select></label></div>
+      ${q.matchs.map((p, j) => `<div class="am-rencontre${t.res ? " am-rencontre-res" : ""}">
+        ${t.res ? "" : `<span class="am-rh"><input type="time" data-am="p-heure" ${at(j)} value="${esc(p.heure)}" aria-label="Heure du match"></span>`}
+        ${champClub(`data-am="p-adv" ${at(j)} aria-label="Adversaire"`, p.adv, "Adversaire : chercher ou taper…")}
+        ${t.res ? `<span class="am-sc"><input type="number" min="0" max="99" inputmode="numeric" data-am="p-bp" ${at(j)} value="${esc(p.bp)}" aria-label="Buts de Pierrelatte" placeholder="Nous"><span>–</span><input type="number" min="0" max="99" inputmode="numeric" data-am="p-bc" ${at(j)} value="${esc(p.bc)}" aria-label="Buts de l'adversaire" placeholder="Eux"></span>` : ""}
+        <button type="button" class="btn contour petit" data-am-a="p-suppr" ${at(j)} aria-label="Retirer ce match">✕</button></div>`).join("")
+        || `<p class="quoi am-eq-vide">Pas encore de match : ajoute les adversaires ci-dessous${t.res ? "" : ", puis l'heure de chaque match"}.</p>`}
+      ${q.matchs.length < MAX_RENC ? champClub(`${at()} aria-label="Ajouter un match : ${esc(titre)}"`, "", "+ Un match : chercher ou taper l'adversaire…", true) : ""}
+    </div>`;
+  }
   function carteMatch(m, i, n, num){
     const t = T(), fal = t.fam === "fal", seul = t.fam === "seul";
     const eqLib = fal && num ? libelleEquipes(num) : "";
@@ -11751,22 +11789,14 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     let corps;
     if (fal){
       const cat = catSimple(m.equipe);
+      const d = det(m);
       corps = `<label>Catégorie<select data-am="equipe" data-i="${i}">${CATS_FAL.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
-        ${t.res ? "" : `<label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${String(m.equipes || 1) === String(k + 1) ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>`}
+        <label>Nombre d'équipes<select data-am="equipes" data-i="${i}">${Array.from({ length: MAX_EQUIPES }, (_, k) => `<option value="${k + 1}" ${d.length === k + 1 ? "selected" : ""}>${k + 1} équipe${k ? "s" : ""}</option>`).join("")}</select></label>
         <label>Type<select data-am="comp" data-i="${i}">${["Plateau", "Brassage"].map(c => `<option ${c === m.comp ? "selected" : ""}>${c}</option>`).join("")}</select></label>
-        ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", "Heure", m.heure, "", "time")}
+        ${champ(i, "date", "Date", m.date, "", "date")}${champ(i, "heure", t.res ? "Heure" : "Heure du plateau", m.heure, "", "time")}
         ${m.dom ? "" : `<label>Chez (club qui reçoit)${champClub(`data-am="adv" data-i="${i}"`, m.adv, "Rechercher ou taper un club…")}</label>`}
         ${m.dom ? "" : champ(i, "adresse", "Stade, ville", m.adresse, `maxlength="120" placeholder="Stade Marcel Pagnol, Donzère"`)}
-        ${t.res ? `<div class="am-plein"><b class="ps-lab">Les matchs du plateau</b>${(m.resultats || []).map((r, j) => `<div class="am-score">
-            ${champClub(`data-am="r-adv" data-i="${i}" data-j="${j}" aria-label="Adversaire"`, r.adv, "Adversaire : chercher ou taper…")}
-            <input type="number" min="0" max="99" inputmode="numeric" data-am="r-bp" data-i="${i}" data-j="${j}" value="${esc(r.bp)}" aria-label="Buts de Pierrelatte" placeholder="Nous">
-            <span>–</span>
-            <input type="number" min="0" max="99" inputmode="numeric" data-am="r-bc" data-i="${i}" data-j="${j}" value="${esc(r.bc)}" aria-label="Buts de l'adversaire" placeholder="Eux">
-            <button type="button" class="btn contour petit" data-am-a="r-suppr" data-i="${i}" data-j="${j}" aria-label="Retirer ce match">✕</button></div>`).join("")}
-            ${(m.resultats || []).length < 6 ? `<button type="button" class="btn contour petit" data-am-a="r-ajout" data-i="${i}">+ Un match du plateau</button>` : ""}</div>`
-          : `<div class="am-plein"><b class="ps-lab">Contre</b>
-              <div class="am-puces">${numeroterClubs(lignes(m.adversaires)).map((a, j) => `<span class="am-puce">${esc(joli(a))}<button type="button" data-am-a="adv-suppr" data-i="${i}" data-j="${j}" aria-label="Retirer ${esc(joli(a))}">✕</button></span>`).join("") || `<span class="quoi">Aucun club pour l'instant</span>`}</div>
-              ${lignes(m.adversaires).length < 8 ? champClub(`data-i="${i}" aria-label="Ajouter un club"`, "", "+ Ajouter un club : chercher ou taper…", true) : ""}</div>`}`;
+        <div class="am-plein am-eqs">${d.map((q, k) => blocEquipe(i, k, q, num, t)).join("")}</div>`;
     } else {
       corps = `${t.fam === "vet" ? "" : champ(i, "equipe", "Équipe", m.equipe, `maxlength="40" list="am-equipes" placeholder="Seniors 1"`)}
         ${champ(i, "comp", "Compétition", m.comp, `maxlength="40" placeholder="D1, Régional 2, Coupe de la Drôme…"`)}
@@ -11899,8 +11929,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (!a || !a.matches || !a.matches("#panneau [data-am], #panneau [data-am-g], #panneau [data-am-msg], #panneau [data-am-club]")) return null;
     const ajout = a.dataset.amClub === "ajout";
     const sel = a.dataset.amMsg !== undefined ? "[data-am-msg]" : a.dataset.amG ? `[data-am-g="${a.dataset.amG}"]`
-      : ajout ? `[data-am-club="ajout"][data-i="${a.dataset.i}"]`
-      : `[data-am="${a.dataset.am}"][data-i="${a.dataset.i}"]${a.dataset.j !== undefined ? `[data-j="${a.dataset.j}"]` : ""}`;
+      : ajout ? `[data-am-club="ajout"][data-i="${a.dataset.i}"][data-k="${a.dataset.k}"]`
+      : `[data-am="${a.dataset.am}"][data-i="${a.dataset.i}"]${a.dataset.k !== undefined ? `[data-k="${a.dataset.k}"]` : ""}${a.dataset.j !== undefined ? `[data-j="${a.dataset.j}"]` : ""}`;
     let d = null, f = null; try { d = a.selectionStart; f = a.selectionEnd; } catch(err){}
     return { sel, d, f, v: ajout ? a.value : null };
   }
@@ -11980,10 +12010,11 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     for (const m of l){
       const k = [catSimple(m.equipe), m.date, m.heure, m.dom ? "d" : "e", slug(m.adv || ""), slug(m.adresse || "")].join("|");
       const g = vu.get(k);
-      if (!g){ const c = { ...m, equipe: catSimple(m.equipe), equipes: "1" }; vu.set(k, c); out.push(c); continue; }
-      g.equipes = String(Math.min(MAX_EQUIPES, (+g.equipes || 1) + 1));
+      if (!g){ const c = { ...m, equipe: catSimple(m.equipe), equipes: "1", equipesDet: undefined }; det(c); vu.set(k, c); out.push(c); continue; }
+      if (g.equipesDet.length >= MAX_EQUIPES) continue;
+      g.equipesDet.push(det({ ...m, equipes: "1", equipesDet: undefined })[0]);
+      g.equipes = String(g.equipesDet.length);
       g.numeros = g.numeros && m.numeros ? g.numeros + "," + m.numeros : "";
-      g.adversaires = [...new Set([...lignes(g.adversaires), ...lignes(m.adversaires)])].join("\n");
     }
     return out;
   }
@@ -12001,7 +12032,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     } catch(err){ source = "app"; l = depuisCalendrier(); }                 // serveur pas à jour ou hors ligne : données de l'app
     if (j !== autoJeton) return;
     if (TYPES[t].fam === "seul") l = choisirSeul(l, t);
-    if (t === "fal-rencontres") l = regrouper(l);
+    if (TYPES[t].fam === "fal") l = regrouper(l);
     e.listes[t] = l.slice(0, MAX); e.auto[t] = { samedi: sam, modifie: false, source };
     e.msgs[t] = { msg: "", libre: false };
     sauver();
@@ -12112,8 +12143,17 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const m = L()[+t.dataset.i]; if (!m) return;
     marquer();
     const k = t.dataset.am;
-    if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; r[kk] = t.value; }
-    else { if (m[k] === t.value) return; m[k] = t.value; }
+    if (/^p-/.test(k)){
+      const q = det(m)[+t.dataset.k]; if (!q) return; const kk = k.slice(2);
+      if (kk === "poule"){ if (q.poule === t.value) return; q.poule = t.value; }
+      else { const p = q.matchs[+t.dataset.j]; if (!p || p[kk] === t.value) return; p[kk] = t.value; }
+    }
+    else if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; r[kk] = t.value; }
+    else {
+      if (m[k] === t.value) return;
+      if (k === "equipes" && det(m).slice(+t.value).some(q => q.matchs.length || q.poule) && !confirm("Retirer les équipes en trop, avec leur poule et leurs matchs ?")){ t.value = String(det(m).length); return; }
+      m[k] = t.value;
+    }
     if (T().fam === "fal" && (k === "equipes" || k === "equipe")){ m.numeros = ""; sauver(); rendrePanneau(); majMessage(); return; }
     apresSaisie();
   }
@@ -12144,7 +12184,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     }
     if (a === "suppr"){
       const m = l[i]; if (!m) return;
-      const vide = !String(m.adv || "").trim() && !String(m.adversaires || "").trim() && !(m.resultats || []).some(r => String(r.adv || "").trim());
+      const vide = !String(m.adv || "").trim() && !(T().fam === "fal" && det(m).some(q => q.matchs.some(p => String(p.adv || "").trim())));
       if (!vide && !confirm("Supprimer ce match de l'affiche ?")) return;
       l.splice(i, 1); marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
@@ -12153,9 +12193,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       [l[i], l[j]] = [l[j], l[i]]; marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
     if (a === "dom"){ const m = l[i]; if (!m) return; m.dom = b.dataset.k === "1"; marquer(); sauver(); rendrePanneau(); majMessage(); return; }
-    if (a === "adv-suppr"){ const m = l[i]; if (!m) return; const x = lignes(m.adversaires); x.splice(+b.dataset.j, 1); m.adversaires = x.join("\n"); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
-    if (a === "r-ajout"){ const m = l[i]; if (!m) return; (m.resultats = m.resultats || []).push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); return; }
-    if (a === "r-suppr"){ const m = l[i]; if (!m) return; (m.resultats || []).splice(+b.dataset.j, 1); if (!m.resultats.length) m.resultats.push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
+    if (a === "p-suppr"){ const m = l[i]; if (!m) return; const q = det(m)[+b.dataset.k]; if (!q) return; q.matchs.splice(+b.dataset.j, 1); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
     if (a === "reprendre"){
       const au = e.auto[e.type];
       if (l.length && (!au || au.modifie) && !confirm("Remplacer ta liste par les matchs automatiques du week-end ?")) return;
@@ -12201,6 +12239,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 .am-score input[type=number]{width:64px;text-align:center;font-weight:800}
 .am-score input:not([type]){flex:1 1 160px;min-width:0}
 .am-score-match span{font-weight:700}
+.am-eqs{display:grid;gap:10px}
+.am-eq{border:1px solid var(--ligne);border-radius:12px;padding:10px 10px 4px;background:rgba(143,168,240,.06)}
+.am-eq-tete{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.am-eq-tete > b{font:800 15px var(--corps);margin-right:auto}
+.am-champs .am-poule{flex-direction:row;align-items:center;gap:8px;font:700 14px var(--corps)}
+.am-poule select{width:auto;min-width:96px}
+.am-rencontre{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.am-rh{flex:0 0 auto}
+.am-rh .tp-champ{width:auto;min-width:118px}
+.am-rh .tp-champ.vide span:last-child{font-size:0}
+.am-rh .tp-champ.vide span:last-child::after{content:"Heure";font-size:15px}
+.am-rencontre .am-club{flex:1 1 170px}
+.am-sc{display:flex;align-items:center;gap:6px}
+.am-sc input{width:60px;text-align:center;font-weight:800}
+.am-eq-vide{margin:0 0 8px;font-size:14px}
+.am-eq > .am-club{margin-bottom:8px}
 .am-eqnum{font:700 14px var(--corps);color:var(--texte-doux)}
 .am-puces{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px}
 .am-puce{display:inline-flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;border-radius:999px;border:1px solid var(--ligne);background:rgba(28,99,196,.16);font:700 14px var(--corps)}
