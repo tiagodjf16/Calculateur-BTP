@@ -18,6 +18,14 @@ Le dossier `apercus/` ne va pas sur l'hébergeur : ce sont des exemples d'affich
 
 Conseil : avant de remplacer, télécharge les anciens `fond-domicile.jpg`, `fond-exterieur.jpg` et `affiches.php` sur ton ordinateur.
 
+## Publications : une pour le domicile, une pour l'extérieur
+
+Chaque annonce (rencontres, résultats, foot animation, vétérans) part en **deux publications séparées** : les matchs à domicile,
+puis ceux à l'extérieur, chacune avec son message. Quand un lieu a trop de matchs pour une seule page, sa publication en a
+**deux** (« page 1/2 », « page 2/2 ») ; sinon une seule. Les stories suivent : une par page.
+C'est vrai le lundi à 9 h (publication automatique) comme avec le bouton « Publier maintenant » de l'onglet Affiches.
+Les affiches d'événement (stage, loto, tournoi) ne changent pas.
+
 ## Domicile, extérieur, et chaque format
 
 Chaque annonce a toujours sa feuille **domicile** (fond doré, maison) et sa feuille **extérieur** (fond argent bleuté, avion).
@@ -27,7 +35,7 @@ Chaque feuille est faite pour chaque format, sans bande vide ni affiche réduite
 |---|---|---|
 | Story | 1080 × 1920 | story Facebook et story Instagram |
 | Publication Instagram | 1080 × 1350 | annonce (carrousel domicile + extérieur) dans le fil Instagram |
-| Publication Facebook | 1080 × 2160 | annonce dans le fil Facebook quand il y a les deux feuilles (montrées en entier côte à côte) ; une feuille seule part en 1080 × 1350, sinon Facebook la coupe |
+| Publication Facebook | 1080 × 1350, ou 1080 × 2160 pour deux pages | une page seule part en 1080 × 1350 ; deux pages partent côte à côte en 1080 × 2160, montrées en entier |
 
 Une seule image de fond par lieu suffit : le serveur y prend la bonne partie pour chaque format, le ballon toujours à sa place.
 

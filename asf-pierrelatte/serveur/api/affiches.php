@@ -2643,6 +2643,8 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
     $plan = aff_plan_weekend($matchs, $samedi, $resultats, $lieu);
     $liste = [];
     foreach ($plan as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
+    $pages = max(1, min(2, (int) ($opts['pages'] ?? 1))); $page = max(1, min($pages, (int) ($opts['page'] ?? 1)));
+    if ($pages > 1) { $par = (int) ceil(count($liste) / $pages); $liste = array_slice($liste, ($page - 1) * $par, $par); }   // page 1 : la 1re moitié
     $fal = !empty($GLOBALS['aff_fal']); $vet = !empty($GLOBALS['aff_vet']);
     $quoi = $resultats ? 'Résultats' : 'Rencontres';
     [$sur, $t1, $t2] = $fal ? ['École de foot', 'Foot animation', "$quoi du week-end"]
@@ -2652,7 +2654,7 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
         if (preg_match('/week-?end/iu', $t1)) $t2 = $fal || $vet ? $quoi : '';
     }
     $A = afn_debut($lieu);
-    afn_titres($A, $sur, $t1, $t2, afn_date_weekend($plan, $samedi));
+    afn_titres($A, $sur, $t1, $t2, afn_date_weekend($plan, $samedi) . ($pages > 1 ? " · page $page/$pages" : ''));
     $blocs = afn_blocs($liste, $resultats, $fal);
     if (!$blocs) { $blocs = [['t' => 'vide', 'texte' => $resultats ? 'Aucun résultat ce week-end' : 'Aucun match programmé ce week-end']]; $zm = 1.1; }
     elseif (count($blocs) === 1 && !$fal) { $blocs[0]['t'] = 'duo'; $zm = 1.15; }
@@ -2662,6 +2664,81 @@ function afn_liste(array $matchs, string $samedi, bool $resultats, array $opts) 
     afn_partenaires($A, (bool) ($opts['sponsors'] ?? true));
     $GLOBALS['aff_sp_partie'] = null;
     return $A['im'];
+}
+
+/* ================= Publication : une annonce pour le domicile, une pour l'extérieur =================
+   Chaque annonce (rencontres, résultats, foot animation, vétérans) part en deux publications séparées : les matchs à
+   domicile, puis ceux à l'extérieur, chacune avec son message. Une liste trop chargée passe sur deux pages (deux images
+   dans la même publication) ; sinon une seule. Facebook : une page en 4:5, deux pages côte à côte en 1:2 (montrées en
+   entier) ; Instagram : carrousel en 4:5 ; une story par page. */
+function aff_genre(string $g): void { $GLOBALS['aff_fal'] = $g === 'fal'; $GLOBALS['aff_vet'] = $g === 'vet'; }
+/* facteur d'agrandissement de la liste sur un format (comme afn_zone) : sous 0,8 elle devient trop serrée */
+function afn_zoom_pour(array $blocs, string $fmt): float {
+    [$z0, $z1] = AFN_FORMATS[$fmt]['zone']; $zh = $z1 - $z0; $zw = AFF_W - 60; $n = count($blocs);
+    for ($k = afn_zoom_max($n); $k > .3; $k -= .01) {
+        $wc = $zw / $k;
+        if ((array_sum(array_map(fn($b) => afn_hauteur($b, $wc), $blocs)) + 12 * ($n - 1)) * $k <= $zh) break;
+    }
+    return $k;
+}
+/* nombre de pages d'une annonce pour un lieu (genre déjà posé) : 2 quand la liste serait trop serrée sur la publication 4:5 */
+function aff_nb_pages(array $matchs, string $samedi, bool $res, string $lieu): int {
+    if (!afn_actif($lieu)) return 1;
+    $liste = [];
+    foreach (aff_plan_weekend($matchs, $samedi, $res, $lieu) as $j) foreach ($j['matchs'] as $m) $liste[] = $m;
+    if (count($liste) < 2) return 1;
+    return afn_zoom_pour(afn_blocs($liste, $res, !empty($GLOBALS['aff_fal'])), 'insta') < .8 ? 2 : 1;
+}
+function aff_lieux(array $matchs, string $samedi, bool $res, string $genre): array {
+    aff_genre($genre);
+    $l = array_values(array_filter(['dom', 'ext'], fn($x) => (bool) aff_plan_weekend($matchs, $samedi, $res, $x)));
+    aff_genre('');
+    return $l;
+}
+/* les images d'une annonce pour un lieu : pN_story, pN_carre, et pN_fb quand il y a deux pages */
+function aff_feuilles_lieu(array $matchs, string $samedi, bool $res, string $lieu, string $genre, string $nom, array $fmts = ['story', 'carre', 'fb']): array {
+    aff_genre($genre);
+    $n = aff_nb_pages($matchs, $samedi, $res, $lieu); $f = [];
+    for ($p = 1; $p <= $n; $p++) foreach ($fmts as $fmt) {
+        if ($fmt === 'fb' && $n < 2) continue;                                       // une page seule part en 4:5 sur Facebook
+        aff_format($fmt);
+        $f["p{$p}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $lieu, 'sponsors' => true, 'partie' => $lieu === 'dom' ? 1 : 2, 'page' => $p, 'pages' => $n]),
+            "$nom-$lieu" . ($n > 1 ? "-p$p" : '') . ($fmt === 'story' ? '' : "-$fmt"));
+    }
+    aff_format('story'); aff_genre('');
+    return $f;
+}
+function aff_pages(array $f, string $fmt): array {
+    $l = [];
+    for ($p = 1; $p <= 2; $p++) if (!empty($f["p{$p}_$fmt"])) $l[] = $f["p{$p}_$fmt"];
+    return $l;
+}
+function aff_images_fb_lieu(array $f): array { $fb = aff_pages($f, 'fb'); return count($fb) > 1 ? $fb : array_slice(aff_pages($f, 'carre'), 0, 1); }
+function aff_message_lieu(string $genre, array $matchs, string $samedi, bool $res, string $lieu): string {
+    if ($genre === 'fal') return aff_message_plateaux($matchs, $samedi, $res, $lieu);
+    if ($genre === 'vet') return aff_message_veterans($matchs, $samedi, $res, $lieu);
+    return $res ? aff_message_resultats($matchs, $samedi, $lieu) : aff_message_rencontres($matchs, $samedi, $lieu);
+}
+function aff_nom_annonce(string $genre, bool $res, string $lieu): string {
+    return ($genre === 'fal' ? 'Foot animation · ' : ($genre === 'vet' ? 'Vétérans · ' : '')) . ($res ? 'résultats' : 'rencontres') . ' · ' . ($lieu === 'dom' ? 'à domicile' : "à l'extérieur");
+}
+/* publication automatique (cron) d'une annonce pour un lieu ; chaque lieu a sa clé : un échec ne republie pas l'autre */
+function aff_traiter_lieu(string $cle, array $matchs, string $samedi, bool $res, string $lieu, string $genre, string $nom, array &$journal): void {
+    $texte = null; $msg = function () use (&$texte, $genre, $matchs, $samedi, $res, $lieu) { return $texte ??= aff_message_lieu($genre, $matchs, $samedi, $res, $lieu); };
+    aff_traiter("$cle-$lieu", ucfirst(aff_nom_annonce($genre, $res, $lieu)), fn() => aff_feuilles_lieu($matchs, $samedi, $res, $lieu, $genre, $nom), [
+        'Facebook' => function (array $f) use ($msg) {
+            foreach (aff_pages($f, 'story') as $st) fb_story($st);
+            if ($imgs = aff_images_fb_lieu($f)) fb_publication($imgs, $msg());
+        },
+        'Instagram' => function (array $f) use ($msg) {
+            foreach (aff_pages($f, 'story') as $st) ig_story($st);
+            if ($imgs = aff_pages($f, 'carre')) ig_publication($imgs, $msg());
+        },
+    ], $journal);
+}
+/* déjà publiée par l'ancienne version (domicile et extérieur dans la même annonce) : pas de doublon le jour de la mise à jour */
+function aff_deja_publie(string $cle): bool {
+    return reglage("pub_$cle") === 'fait' || reglage("pub_facebook_$cle") === 'fait' || reglage("pub_instagram_$cle") === 'fait';
 }
 
 /* ---------- affiches de matchs saisis à la main (onglet « Affiches matchs » de l'espace club) ----------
@@ -3183,13 +3260,13 @@ function aff_message_plateaux(array $matchs, string $samedi, bool $resultats = f
     return "⚽ Foot animation : les résultats du week-end" . ($lieu === 'dom' ? ' à domicile' : ($lieu === 'ext' ? " à l'extérieur" : '')) . "\n\n$intro\n\n" . implode("\n\n", $blocs)
         . "\n\nBravo à nos joueurs et à leurs éducateurs ! 👏\n#ASFPierrelatte #FootAnimation";
 }
-function aff_message_veterans(array $matchs, string $samedi, bool $resultats): string {
+function aff_message_veterans(array $matchs, string $samedi, bool $resultats, ?string $lieu = null): string {
     $GLOBALS['aff_vet'] = true;
-    $t = $resultats ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi);
+    $t = $resultats ? aff_message_resultats($matchs, $samedi, $lieu) : aff_message_rencontres($matchs, $samedi, $lieu);
     $GLOBALS['aff_vet'] = false;
     if (trim($t) === '') return '';
     $t = preg_replace("/^[^\n]*\n/u", '', $t, 1);                        // on remplace la phrase d'introduction générale
-    $GLOBALS['aff_vet'] = true; $nb = array_sum(array_map(fn($j) => count($j['matchs']), aff_plan_weekend($matchs, $samedi, $resultats))); $GLOBALS['aff_vet'] = false;
+    $GLOBALS['aff_vet'] = true; $nb = array_sum(array_map(fn($j) => count($j['matchs']), aff_plan_weekend($matchs, $samedi, $resultats, $lieu))); $GLOBALS['aff_vet'] = false;
     return ($resultats ? ($nb > 1 ? "⚽ Vétérans : les résultats du week-end\n" : "⚽ Vétérans : le résultat du week-end\n")
         : ($nb > 1 ? "⚽ Vétérans : les matchs du week-end\n" : "⚽ Vétérans : le match du week-end\n")) . $t;
 }
@@ -3261,90 +3338,61 @@ function aff_publier_annonce(string $quoi, array &$journal): void {
     $lundi = date('Y-m-d', strtotime('monday this week'));
     $res = $quoi === 'resultats';
     $samedi = $res ? date('Y-m-d', strtotime("$lundi -2 days")) : date('Y-m-d', strtotime("$lundi +5 days"));
-    foreach ([false, true] as $fal) {
-        $GLOBALS['aff_fal'] = $fal;
-        $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
-        $nom = ($fal ? 'Foot animation · ' : '') . ($res ? 'résultats' : 'rencontres');
-        if (!$lieux) { $GLOBALS['aff_fal'] = false; $journal[] = "$nom : rien à publier"; continue; }
-        $f = [];
-        foreach ($lieux as $l) {
-            foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
-                aff_format($fmt);
-                $f["{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]),
-                    ($fal ? 'fal-' : '') . ($res ? 'resultats' : 'rencontres') . "-$l-$samedi-manuel$suf");
+    foreach (['', 'fal'] as $genre) {
+        $lieux = aff_lieux($matchs, $samedi, $res, $genre);
+        if (!$lieux) { $journal[] = ucfirst(($genre === 'fal' ? 'Foot animation · ' : '') . ($res ? 'résultats' : 'rencontres')) . ' : rien à publier'; continue; }
+        foreach ($lieux as $l) {                                                  // une publication par lieu
+            $f = aff_feuilles_lieu($matchs, $samedi, $res, $l, $genre, ($genre === 'fal' ? 'fal-' : '') . ($res ? 'resultats' : 'rencontres') . "-$samedi-manuel");
+            $texte = aff_message_lieu($genre, $matchs, $samedi, $res, $l);
+            $etats = [];
+            if (fb_pret()) {
+                try { foreach (aff_pages($f, 'story') as $st) fb_story($st); fb_publication(aff_images_fb_lieu($f), $texte); $etats[] = 'Facebook : publié'; }
+                catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
             }
+            if (ig_pret()) {
+                try { foreach (aff_pages($f, 'story') as $st) ig_story($st); ig_publication(aff_pages($f, 'carre'), $texte); $etats[] = 'Instagram : publié'; }
+                catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
+            }
+            $journal[] = ucfirst(aff_nom_annonce($genre, $res, $l)) . ' : ' . ($etats ? implode(', ', $etats) : 'aucun réseau relié');
         }
-        aff_format('story');
-        $texte = $fal ? aff_message_plateaux($matchs, $samedi, $res) : ($res ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi));
-        $GLOBALS['aff_fal'] = false;
-        $carres = array_values(array_filter([$f['dom_carre'] ?? null, $f['ext_carre'] ?? null]));
-        $stories = array_values(array_filter([$f['dom_story'] ?? null, $f['ext_story'] ?? null]));
-        $etats = [];
-        if (fb_pret()) {
-            try {
-                fb_publication(aff_images_fb($f), $texte);   // les deux feuilles dans la même annonce (une seule : en 4:5)
-                foreach ($stories as $st) fb_story($st);
-                $etats[] = 'Facebook : publié';
-            } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
-        }
-        if (ig_pret()) {
-            try { ig_publication($carres, $texte); foreach ($stories as $st) ig_story($st); $etats[] = 'Instagram : publié'; }
-            catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
-        }
-        $journal[] = "$nom : " . ($etats ? implode(', ', $etats) : 'aucun réseau relié');
     }
 }
 function aff_publier_choix(array $annonces, array $o, array &$journal): void {
     if (!aff_polices_ok()) throw new RuntimeException('polices introuvables dans api/polices');
     $matchs = aff_matchs();
     $lundi = date('Y-m-d', strtotime('monday this week'));
-    $types = [
-        'resultats' => [true, false, false], 'rencontres' => [false, false, false],
-        'fal-resultats' => [true, true, false], 'fal-rencontres' => [false, true, false],
-        'vet-resultats' => [true, false, true], 'vet-rencontres' => [false, false, true],
-    ];
-    $noms = ['resultats' => 'Résultats', 'rencontres' => 'Rencontres', 'fal-resultats' => 'Foot animation · résultats',
-             'fal-rencontres' => 'Foot animation · rencontres', 'vet-resultats' => 'Vétérans · résultats', 'vet-rencontres' => 'Vétérans · rencontres'];
+    $types = ['resultats' => [true, ''], 'rencontres' => [false, ''], 'fal-resultats' => [true, 'fal'], 'fal-rencontres' => [false, 'fal'],
+              'vet-resultats' => [true, 'vet'], 'vet-rencontres' => [false, 'vet']];
     $fbPub = !empty($o['fb_pub']); $fbSt = !empty($o['fb_story']); $igPub = !empty($o['ig_pub']); $igSt = !empty($o['ig_story']);
+    $fmts = array_keys(array_filter(['story' => $fbSt || $igSt, 'carre' => $igPub || $fbPub, 'fb' => $fbPub]));
     foreach ($annonces as $cle) {
         if (!isset($types[$cle])) continue;
-        [$res, $fal, $vet] = $types[$cle];
+        [$res, $genre] = $types[$cle];
         $samedi = $res ? date('Y-m-d', strtotime("$lundi -2 days")) : date('Y-m-d', strtotime("$lundi +5 days"));
-        $GLOBALS['aff_fal'] = $fal; $GLOBALS['aff_vet'] = $vet;
-        $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
-        if (!$lieux) { $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false; $journal[] = $noms[$cle] . ' : rien à publier'; continue; }
-        $f = [];
-        foreach ($lieux as $l) {
-            $formats = array_filter(['story' => $fbSt || $igSt, 'carre' => $igPub || ($fbPub && count($lieux) === 1), 'fb' => $fbPub && count($lieux) > 1]);
-            foreach (array_keys($formats) as $fmt) {
-                aff_format($fmt);
-                $f["{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]),
-                    "$cle-$l-$samedi-choix-$fmt");
+        $lieux = aff_lieux($matchs, $samedi, $res, $genre);
+        if (!$lieux) { $journal[] = ucfirst(($genre === 'fal' ? 'Foot animation · ' : ($genre === 'vet' ? 'Vétérans · ' : '')) . ($res ? 'résultats' : 'rencontres')) . ' : rien à publier'; continue; }
+        foreach ($lieux as $l) {                                                  // une publication à domicile, une à l'extérieur
+            $f = aff_feuilles_lieu($matchs, $samedi, $res, $l, $genre, "$cle-$samedi-choix", $fmts);
+            $texte = aff_message_lieu($genre, $matchs, $samedi, $res, $l);
+            $etats = [];
+            if ($fbPub || $fbSt) {
+                if (!fb_pret()) $etats[] = 'Facebook : non relié ou en pause';
+                else try {
+                    if ($fbSt) foreach (aff_pages($f, 'story') as $st) fb_story($st);
+                    if ($fbPub && ($imgs = aff_images_fb_lieu($f))) fb_publication($imgs, $texte);
+                    $etats[] = 'Facebook : ' . implode(' + ', array_filter([$fbPub ? 'publication' : '', $fbSt ? 'story' : '']));
+                } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
             }
+            if ($igPub || $igSt) {
+                if (!ig_pret()) $etats[] = 'Instagram : non relié ou en pause';
+                else try {
+                    if ($igSt) foreach (aff_pages($f, 'story') as $st) ig_story($st);
+                    if ($igPub && ($imgs = aff_pages($f, 'carre'))) ig_publication($imgs, $texte);
+                    $etats[] = 'Instagram : ' . implode(' + ', array_filter([$igPub ? 'publication' : '', $igSt ? 'story' : '']));
+                } catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
+            }
+            $journal[] = ucfirst(aff_nom_annonce($genre, $res, $l)) . ' → ' . ($etats ? implode(', ', $etats) : 'aucun réseau choisi');
         }
-        aff_format('story');
-        $texte = $fal ? aff_message_plateaux($matchs, $samedi, $res) : ($vet ? aff_message_veterans($matchs, $samedi, $res)
-            : ($res ? aff_message_resultats($matchs, $samedi) : aff_message_rencontres($matchs, $samedi)));
-        $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false;
-        $pris = fn($fmt) => array_values(array_filter([$f["dom_$fmt"] ?? null, $f["ext_$fmt"] ?? null]));
-        $etats = [];
-        if ($fbPub || $fbSt) {
-            if (!fb_pret()) $etats[] = 'Facebook : non relié ou en pause';
-            else try {
-                if ($fbPub && aff_images_fb($f)) fb_publication(aff_images_fb($f), $texte);
-                if ($fbSt) foreach ($pris('story') as $st) fb_story($st);
-                $etats[] = 'Facebook : ' . implode(' + ', array_filter([$fbPub ? 'publication' : '', $fbSt ? 'story' : '']));
-            } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
-        }
-        if ($igPub || $igSt) {
-            if (!ig_pret()) $etats[] = 'Instagram : non relié ou en pause';
-            else try {
-                if ($igPub && $pris('carre')) ig_publication($pris('carre'), $texte);
-                if ($igSt) foreach ($pris('story') as $st) ig_story($st);
-                $etats[] = 'Instagram : ' . implode(' + ', array_filter([$igPub ? 'publication' : '', $igSt ? 'story' : '']));
-            } catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
-        }
-        $journal[] = $noms[$cle] . ' → ' . ($etats ? implode(', ', $etats) : 'aucun réseau choisi');
     }
 }
 function affiches_cron(array &$journal, bool $force = false): void {
@@ -3354,111 +3402,22 @@ function affiches_cron(array &$journal, bool $force = false): void {
     $auj = date('Y-m-d', $maintenant);
     $matchs = aff_matchs();
 
-    // lundi : résultats + rencontres
+    // lundi : résultats + rencontres, championnats, vétérans et foot animation ; une publication à domicile, une à l'extérieur
     if ((int) date('N', $maintenant) === 1 || $force) {
         $lundi = date('Y-m-d', strtotime('monday this week', $maintenant));
         $sam = date('Y-m-d', strtotime($lundi . ' +5 days'));
         $samPasse = date('Y-m-d', strtotime($lundi . ' -2 days'));
-        aff_traiter("lundi-$lundi", 'Résultats et rencontres du week-end', function () use ($matchs, $sam, $samPasse, $lundi) {
-            $f = [];
-            // pour chaque annonce : une affiche à domicile, une à l'extérieur ; en story (9:16) et en carré pour la publication
-            foreach (['resultats' => [$samPasse, true], 'programme' => [$sam, false]] as $type => [$samedi, $res]) {
-                $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
-                foreach ($lieux as $i => $l) {
-                    $partie = $l === 'dom' ? 1 : 2;                   // toujours 15 partenaires sur la feuille domicile, 15 sur l'extérieur
-                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suffixe) {
-                        aff_format($fmt);
-                        $f["{$type}_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $partie]),
-                            ($type === 'resultats' ? 'resultats' : 'rencontres') . "-$l-$lundi$suffixe");
-                    }
-                }
+        if (!aff_deja_publie("lundi-$lundi"))
+            foreach (['resultats' => [$samPasse, true], 'programme' => [$sam, false]] as $type => [$samedi, $res])
+                foreach (aff_lieux($matchs, $samedi, $res, '') as $l)
+                    aff_traiter_lieu("lundi-$lundi-$type", $matchs, $samedi, $res, $l, '', ($res ? 'resultats' : 'rencontres') . "-$lundi", $journal);
+        // vétérans : seulement quand un match a été saisi (et son score pour les résultats) ; foot animation : rencontres et résultats
+        foreach (['vet', 'fal'] as $genre)
+            foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
+                if (aff_deja_publie("$genre-$quoi-$samedi")) continue;
+                foreach (aff_lieux($matchs, $samedi, $res, $genre) as $l)
+                    aff_traiter_lieu("$genre-$quoi-$samedi", $matchs, $samedi, $res, $l, $genre, "$genre-$quoi-$samedi", $journal);
             }
-            aff_format('story');
-            return $f;
-        }, [
-            'Facebook' => function (array $f) use ($matchs, $samPasse, $sam) {
-                foreach ($f as $k => $fichier) if (str_ends_with($k, '_story')) fb_story($fichier);
-                // une annonce = une publication : feuille domicile + feuille extérieur, au format 1:2 que Facebook montre en entier côte à côte
-                $res = aff_images_fb($f, 'resultats_');
-                if ($res) fb_publication($res, aff_message_resultats($matchs, $samPasse));
-                $ren = aff_images_fb($f, 'programme_');
-                if ($ren) fb_publication($ren, aff_message_rencontres($matchs, $sam));
-            },
-            'Instagram' => function (array $f) use ($matchs, $samPasse, $sam) {
-                foreach ($f as $k => $fichier) if (str_ends_with($k, '_story')) ig_story($fichier);
-                // mêmes annonces que sur Facebook, en carrousel dans le fil Instagram
-                ig_publication([$f['resultats_dom_carre'] ?? null, $f['resultats_ext_carre'] ?? null], aff_message_resultats($matchs, $samPasse));
-                ig_publication([$f['programme_dom_carre'] ?? null, $f['programme_ext_carre'] ?? null], aff_message_rencontres($matchs, $sam));
-            },
-        ], $journal);
-    }
-
-    // vétérans : deux annonces à part, seulement quand un match a été saisi (et son score pour les résultats)
-    if ((int) date('N') === 1 || $force) {
-        foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
-            $GLOBALS['aff_vet'] = true;
-            $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
-            $GLOBALS['aff_vet'] = false;
-            if (!$lieux) continue;
-            aff_traiter("vet-$quoi-$samedi", 'Vétérans · ' . $quoi, function () use ($matchs, $samedi, $res, $quoi, $lieux) {
-                $f = [];
-                $GLOBALS['aff_vet'] = true;
-                foreach ($lieux as $l) {
-                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
-                        aff_format($fmt);
-                        $f["vet_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $l === 'dom' ? 1 : 2]), "vet-$quoi-$l-$samedi$suf");
-                    }
-                }
-                aff_format('story');
-                $GLOBALS['aff_vet'] = false;
-                return $f;
-            }, [
-                'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
-                    $imgs = aff_images_fb($f, 'vet_');
-                    if ($imgs) fb_publication($imgs, aff_message_veterans($matchs, $samedi, $res));
-                    foreach (['vet_dom_story', 'vet_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
-                },
-                'Instagram' => function (array $f) use ($matchs, $samedi, $res) {
-                    ig_publication([$f['vet_dom_carre'] ?? null, $f['vet_ext_carre'] ?? null], aff_message_veterans($matchs, $samedi, $res));
-                    foreach (['vet_dom_story', 'vet_ext_story'] as $k) if (!empty($f[$k])) ig_story($f[$k]);
-                },
-            ], $journal);
-        }
-    }
-
-    // foot animation : deux annonces à part (rencontres et résultats), chacune avec sa feuille domicile et sa feuille extérieur
-    if ((int) date('N') === 1 || $force) {
-        foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
-            $GLOBALS['aff_fal'] = true;
-            $lieux = array_values(array_filter(['dom', 'ext'], fn($l) => aff_plan_weekend($matchs, $samedi, $res, $l)));
-            $liste = aff_plan_weekend($matchs, $samedi, $res);
-            $GLOBALS['aff_fal'] = false;
-            if (!$lieux) continue;
-            aff_traiter("fal-$quoi-$samedi", 'Foot animation · ' . $quoi, function () use ($matchs, $samedi, $res, $quoi, $lieux) {
-                $f = [];
-                $GLOBALS['aff_fal'] = true;
-                foreach ($lieux as $i => $l) {
-                    $partie = $l === 'dom' ? 1 : 2;                     // toujours 15 partenaires sur la feuille domicile, 15 sur l'extérieur
-                    foreach (['story' => '', 'carre' => '-carre', 'fb' => '-fb'] as $fmt => $suf) {
-                        aff_format($fmt);
-                        $f["fal_{$l}_$fmt"] = aff_enregistrer(aff_liste($matchs, $samedi, $res, ['lieu' => $l, 'sponsors' => true, 'partie' => $partie]), "fal-$quoi-$l-$samedi$suf");
-                    }
-                }
-                aff_format('story');
-                $GLOBALS['aff_fal'] = false;
-                return $f;
-            }, [
-                'Facebook' => function (array $f) use ($matchs, $samedi, $res) {
-                    $imgs = aff_images_fb($f, 'fal_');
-                    if ($imgs) fb_publication($imgs, aff_message_plateaux($matchs, $samedi, $res));       // les deux feuilles dans la même annonce
-                    foreach (['fal_dom_story', 'fal_ext_story'] as $k) if (!empty($f[$k])) fb_story($f[$k]);
-                },
-                'Instagram' => function (array $f) use ($matchs, $samedi, $res) {
-                    ig_publication([$f['fal_dom_carre'] ?? null, $f['fal_ext_carre'] ?? null], aff_message_plateaux($matchs, $samedi, $res));
-                    foreach (['fal_dom_story', 'fal_ext_story'] as $k) if (!empty($f[$k])) ig_story($f[$k]);
-                },
-            ], $journal);
-        }
     }
 
     // jour de match : une story par équipe
@@ -3604,7 +3563,10 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
             else echo $type === 'resultats' ? aff_message_resultats($matchs, $sam) : aff_message_rencontres($matchs, $sam);
             exit;
         }
-        $im = aff_liste($matchs, $sam, $type === 'resultats', $opts + ['lieu' => $_GET['lieu'] ?? null, 'partie' => in_array($_GET['partie'] ?? '', ['1', '2'], true) ? (int) $_GET['partie'] : null]);
+        $lieuAp = in_array($_GET['lieu'] ?? '', ['dom', 'ext'], true) ? $_GET['lieu'] : null;
+        $pagesAp = $lieuAp ? aff_nb_pages($matchs, $sam, $type === 'resultats', $lieuAp) : 1;
+        $im = aff_liste($matchs, $sam, $type === 'resultats', $opts + ['lieu' => $_GET['lieu'] ?? null, 'partie' => in_array($_GET['partie'] ?? '', ['1', '2'], true) ? (int) $_GET['partie'] : null,
+            'pages' => $pagesAp, 'page' => in_array($_GET['page'] ?? '', ['1', '2'], true) ? (int) $_GET['page'] : 1]);
         $nom = ($type === 'resultats' ? 'resultats-' : 'rencontres-') . $sam;
     }
     if (!aff_polices_ok()) {   // on l'écrit sur l'image avec la police de secours de GD
