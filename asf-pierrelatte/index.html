@@ -11436,12 +11436,13 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   function charger(){
     let d = null;
     try { d = JSON.parse(localStorage.getItem(CLE) || "null"); } catch(e){}
-    const E = { type: "rencontres", fmt: "carre", samedi: samediDe(), titre: "", sponsors: true, listes: {}, msgs: {},
+    const E = { type: "rencontres", fmt: "carre", samedis: {}, auto: {}, titre: "", sponsors: true, listes: {}, msgs: {},
       pub: { fb_pub: true, ig_pub: true, fb_story: false, ig_story: false }, etat: "", enCours: "" };
     if (d && typeof d === "object"){
       if (TYPES[d.type]) E.type = d.type;
       if (FORMATS.some(f => f[0] === d.fmt)) E.fmt = d.fmt;
-      if (typeof d.samedi === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.samedi)) E.samedi = d.samedi;
+      if (d.samedis && typeof d.samedis === "object") for (const t of Object.keys(TYPES)) if (typeof d.samedis[t] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.samedis[t])) E.samedis[t] = d.samedis[t];
+      if (d.auto && typeof d.auto === "object") for (const t of Object.keys(TYPES)) if (d.auto[t] && typeof d.auto[t].samedi === "string") E.auto[t] = { samedi: d.auto[t].samedi, modifie: !!d.auto[t].modifie, source: d.auto[t].source || "" };
       if (typeof d.titre === "string") E.titre = d.titre;
       if (typeof d.sponsors === "boolean") E.sponsors = d.sponsors;
       if (d.pub && typeof d.pub === "object") for (const k of Object.keys(E.pub)) if (typeof d.pub[k] === "boolean") E.pub[k] = d.pub[k];
@@ -11453,13 +11454,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   }
   const E = () => S.ui.affMatchs || (S.ui.affMatchs = charger());
   const L = () => E().listes[E().type];
+  /* week-end par défaut : le prochain pour les rencontres, le dernier commencé pour les résultats */
+  function samediParDefaut(t){
+    if (!TYPES[t].res) return samediDe();
+    const d = new Date(); d.setHours(12, 0, 0, 0); const j = d.getDay();
+    d.setDate(d.getDate() - (j === 6 ? 0 : j === 0 ? 1 : j + 1));
+    return iso(d);
+  }
+  const SAM = () => E().samedis[E().type] || samediParDefaut(E().type);
+  const marquer = () => { const a = E().auto[E().type]; if (a) a.modifie = true; };
   const T = () => TYPES[E().type];
   let saveT;
   function sauver(){
     clearTimeout(saveT);
     saveT = setTimeout(() => {
       const e = E();
-      try { localStorage.setItem(CLE, JSON.stringify({ type: e.type, fmt: e.fmt, samedi: e.samedi, titre: e.titre, sponsors: e.sponsors, pub: e.pub, listes: e.listes, msgs: e.msgs })); } catch(err){}
+      try { localStorage.setItem(CLE, JSON.stringify({ type: e.type, fmt: e.fmt, samedis: e.samedis, auto: e.auto, titre: e.titre, sponsors: e.sponsors, pub: e.pub, listes: e.listes, msgs: e.msgs })); } catch(err){}
     }, 300);
   }
 
@@ -11478,7 +11488,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     return o;
   }
   // instantané de l'affiche : ce qui part à la publication ne bouge plus si on continue à taper pendant l'envoi
-  const instantane = () => JSON.parse(JSON.stringify({ type: E().type, titre: E().titre, sponsors: E().sponsors, samedi: E().samedi, liste: L() }));
+  const instantane = () => JSON.parse(JSON.stringify({ type: E().type, titre: E().titre, sponsors: E().sponsors, samedi: SAM(), liste: L() }));
   const donnees = (lieu, fmt, s = instantane()) => ({ type: s.type, lieu: lieu || "", format: fmt, titre: net(s.titre), sponsors: s.sponsors, samedi: s.samedi,
     matchs: s.liste.map(m => matchServeur(m, TYPES[s.type])) });
   /* ce qui manque à un match pour être sur l'affiche (le serveur l'ignore sinon) */
@@ -11604,17 +11614,22 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     <datalist id="am-clubs">${clubs.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
     <datalist id="am-equipes">${equipes.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
     <div class="carte af-carte">
-      <div class="af-tete"><h2>Affiches matchs</h2><small>Tape les matchs toi-même : les affiches se dessinent avec le fond du stade</small></div>
+      <div class="af-tete"><h2>Affiches matchs</h2><small>Les matchs du week-end se mettent tout seuls : ajoute ou corrige ce qui manque</small></div>
       <div class="am-types" role="group" aria-label="Type d'affiche">${Object.entries(TYPES).map(([k, x]) => `<button type="button" class="ev-type" aria-pressed="${k === e.type}" data-am-a="type" data-k="${k}"><span>${x.ico}</span>${esc(x.nom)}<small>${esc(x.sous)}</small></button>`).join("")}</div>
     </div>
     <div class="ev-grille">
       <section class="carte af-carte ev-ecrire" aria-labelledby="am-h-ecrire">
         <div class="af-tete"><h2 id="am-h-ecrire">✏️ ${seul ? "Le match" : "Les matchs de l'affiche"}</h2><small>${esc(t.nom + " · " + t.sous)}</small></div>
         <div class="am-haut">
-          <label>Week-end du<input type="date" data-am-g="samedi" value="${esc(e.samedi)}"></label>
-          <button type="button" class="btn contour" data-am-a="reprendre">📥 Reprendre les matchs du calendrier</button>
+          <label>Week-end du<input type="date" data-am-g="samedi" value="${esc(SAM())}"></label>
+          <button type="button" class="btn contour" data-am-a="reprendre">↺ Reprendre les matchs automatiques</button>
         </div>
-        <div class="am-liste">${l.map((m, i) => carteMatch(m, i, l.length)).join("") || `<p class="quoi am-vide">Aucun match pour l'instant : ajoute-les ou reprends ceux du calendrier.</p>`}</div>
+        ${(() => { const a = e.auto[e.type];
+          if (a && a.charge) return `<p class="am-source">⏳ Chargement des matchs automatiques du week-end…</p>`;
+          if (a && a.samedi === SAM() && !a.modifie) return `<p class="am-source">✅ Matchs automatiques du week-end${a.source === "app" ? " (repris du calendrier de l'app)" : ", comme les affiches du lundi"}. Ajoute ou corrige ce qui manque : matchs, scores, plateaux…</p>`;
+          if (a && a.modifie) return `<p class="am-source">✏️ Liste modifiée à la main. « ↺ Reprendre les matchs automatiques » pour revenir à celle du calendrier.</p>`;
+          return ""; })()}
+        <div class="am-liste">${l.map((m, i) => carteMatch(m, i, l.length)).join("") || ((e.auto[e.type] || {}).charge ? "" : `<p class="quoi am-vide">Aucun match automatique pour ce week-end : ajoute-les à la main.</p>`)}</div>
         ${seul && l.length ? "" : l.length < MAX ? `<button type="button" class="btn bleu am-ajout" data-am-a="ajout">+ Ajouter un match</button>` : `<p class="quoi">${MAX} matchs au plus : fais deux affiches.</p>`}
         <div class="am-options">
           <label>Titre (facultatif)<input data-am-g="titre" maxlength="80" value="${esc(e.titre)}" placeholder="${esc(t.nom)}"></label>
@@ -11710,7 +11725,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 
   /* ---------- reprendre les matchs connus de l'application pour ce week-end ---------- */
   function depuisCalendrier(){
-    const e = E(), t = T(), sam = e.samedi;
+    const e = E(), t = T(), sam = SAM();
     let jours;
     try { jours = typeof plage === "function" ? plage(sam) : null; } catch(err){ jours = null; }
     if (!Array.isArray(jours) || jours.length < 3){
@@ -11744,6 +11759,50 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     return l.slice(0, MAX).map(m => ({ dom: !!m.dom, equipe: t.fam === "vet" ? "Vétérans" : (typeof eqDe === "function" ? eqDe(m) : m.equipe),
       comp: String(m.comp || ""), adv: String(m.adv || ""), date: m.date, heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""),
       bp: joueM(m) ? m.bp : "", bc: joueM(m) ? m.bc : "" }));
+  }
+
+  /* ---------- matchs automatiques : ceux des affiches du lundi, donnés par le serveur ---------- */
+  const nousMeme = a => /pierrelatte|atom'?\s*sports?/i.test(String(a || ""));
+  function versListe(m, t){
+    const fam = TYPES[t].fam;
+    const cat = String(m.equipe || "");
+    const o = { dom: !!m.dom, equipe: fam === "vet" ? "Vétérans" : fam === "fal" ? (CATS_FAL.find(c => c.toUpperCase() === cat.toUpperCase()) || cat || CATS_FAL[0]) : cat,
+      comp: fam === "fal" ? (/brassage/i.test(m.comp || "") ? "Brassage" : "Plateau") : String(m.comp || ""),
+      adv: fam === "fal" && m.dom ? "" : String(m.adv || ""), date: m.date || "", heure: m.heure || "", adresse: m.dom ? "" : String(m.adresse || ""),
+      bp: m.bp ?? "", bc: m.bc ?? "" };
+    if (fam === "fal"){
+      o.adversaires = (m.adversaires || []).filter(a => a && !nousMeme(a)).join("\n");
+      o.resultats = (m.resultats || []).length ? m.resultats.map(r => ({ adv: String(r.adv || ""), bp: r.bp ?? "", bc: r.bc ?? "" })) : [{ adv: "", bp: "", bc: "" }];
+      o.bp = o.bc = "";
+    }
+    return o;
+  }
+  // un seul match : le prochain à jouer (jour de match) ou le dernier joué (résultat)
+  function choisirSeul(l, t){
+    const joue = m => m.bp !== "" && m.bp !== null && m.bc !== "" && m.bc !== null;
+    const tri = [...l].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
+    if (t === "score"){ const j = tri.filter(joue); return j.length ? [j[j.length - 1]] : tri.slice(-1); }
+    const n = tri.filter(m => !joue(m)); return n.length ? [n[0]] : tri.slice(0, 1);
+  }
+  let autoJeton = 0;
+  async function chargerAuto(demande){
+    const e = E(), t = e.type, sam = SAM(), j = ++autoJeton;
+    e.auto[t] = { samedi: sam, modifie: false, charge: true };
+    if (S.ui.onglet === "affmatchs") rendrePanneau();
+    let l, source = "serveur";
+    try {
+      const r = await fetch(api() + "/affiches.php?plan=1&type=" + encodeURIComponent(t) + "&date=" + encodeURIComponent(sam), { credentials: "same-origin", cache: "no-store" });
+      const d = r.ok ? await r.json() : null;
+      if (!d || !Array.isArray(d.matchs)) throw new Error("réponse " + r.status);
+      l = d.matchs.map(m => versListe(m, t));
+    } catch(err){ source = "app"; l = depuisCalendrier(); }                 // serveur pas à jour ou hors ligne : données de l'app
+    if (j !== autoJeton) return;
+    if (TYPES[t].fam === "seul") l = choisirSeul(l, t);
+    e.listes[t] = l.slice(0, MAX); e.auto[t] = { samedi: sam, modifie: false, source };
+    e.msgs[t] = { msg: "", libre: false };
+    sauver();
+    if (S.ui.onglet === "affmatchs" && e.type === t){ rendrePanneau(); majMessage(true); }
+    if (demande) toast(l.length ? `${l.length} match${l.length > 1 ? "s" : ""} automatique${l.length > 1 ? "s" : ""} : ajoute ou corrige ce qui manque.` : "Aucun match automatique ce week-end : ajoute-les à la main.");
   }
 
   /* ---------- publication : chaque format part au bon endroit ---------- */
@@ -11815,15 +11874,17 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     try { const ec = typeof encartCle === "function" && encartCle(); if (ec) p.insertAdjacentHTML("afterbegin", ec); } catch(err){}
     requestAnimationFrame(() => window.scrollTo(0, y));
     rendreFocus(m);
+    const e = E(), au = e.auto[e.type];
+    if (!(au && (au.charge || au.samedi === SAM())) && (!L().length || (au && !au.modifie))){ chargerAuto(false); return; }
     majApercus(true);
-    if (!E().msgs[E().type].libre && !E().msgs[E().type].msg) majMessage(true);
+    if (!e.msgs[e.type].libre && !e.msgs[e.type].msg) majMessage(true);
   };
   if (typeof window.panAffiches === "function"){
     const affichesAvant = window.panAffiches;
     window.panAffiches = function(){
       const h = affichesAvant.apply(this, arguments);
       if (!S.heberge || !peutVoir()) return h;
-      return `<button type="button" class="carte af-reglages ev-raccourci" data-am-a="aller"><span>🖊️</span><div><b>Affiches matchs à la main</b><small>Rencontres, résultats, foot animation, vétérans : tape les matchs, l'affiche se dessine · onglet Affiches matchs</small></div><span class="af-fl">›</span></button>` + h;
+      return `<button type="button" class="carte af-reglages ev-raccourci" data-am-a="aller"><span>🖊️</span><div><b>Affiches matchs</b><small>Rencontres, résultats, foot animation, vétérans : les matchs se mettent tout seuls, tu ajoutes ce qui manque · onglet Affiches matchs</small></div><span class="af-fl">›</span></button>` + h;
     };
   }
 
@@ -11832,12 +11893,20 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     const e = E();
     if (t.dataset.amG){
       const k = t.dataset.amG, v = t.type === "checkbox" ? t.checked : t.value;
+      if (k === "samedi"){
+        if (!v || v === SAM()) return;
+        e.samedis[e.type] = v; sauver();
+        const a = e.auto[e.type];
+        if (!L().length || !a || !a.modifie) chargerAuto(false);          // pas encore touchée : les matchs du nouveau week-end
+        else { L().forEach(m => { if (!m.date) m.date = v; }); rendrePanneau(); }
+        return;
+      }
       if (e[k] === v) return;
       e[k] = v;
-      if (k === "samedi") L().forEach(m => { if (!m.date) m.date = v; });
       apresSaisie(); return;
     }
     const m = L()[+t.dataset.i]; if (!m) return;
+    marquer();
     const k = t.dataset.am;
     if (/^r-/.test(k)){ const r = (m.resultats || [])[+t.dataset.j]; if (!r) return; const kk = k.slice(2); if (r[kk] === t.value) return; r[kk] = t.value; }
     else { if (m[k] === t.value) return; m[k] = t.value; }
@@ -11862,7 +11931,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (a === "fmt"){ e.fmt = b.dataset.k; sauver(); rendrePanneau(); return; }
     if (a === "ajout"){
       const der = l[l.length - 1];
-      const m = nouveau(e.type, e.samedi);
+      const m = nouveau(e.type, SAM()); marquer();
       if (der){ m.date = der.date || m.date; if (T().fam === "fal") m.equipe = der.equipe; }
       l.push(m); sauver(); rendrePanneau(); majMessage();
       setTimeout(() => { const c = document.querySelector(`[data-am-carte="${l.length - 1}"]`); if (c){ c.scrollIntoView({ behavior: "smooth", block: "center" }); const f = c.querySelector("input:not([type=date]):not([type=time]), select"); if (f) f.focus({ preventScroll: true }); } }, 60);
@@ -11872,26 +11941,23 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
       const m = l[i]; if (!m) return;
       const vide = !String(m.adv || "").trim() && !String(m.adversaires || "").trim() && !(m.resultats || []).some(r => String(r.adv || "").trim());
       if (!vide && !confirm("Supprimer ce match de l'affiche ?")) return;
-      l.splice(i, 1); sauver(); rendrePanneau(); majMessage(); return;
+      l.splice(i, 1); marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
     if (a === "haut" || a === "bas"){
       const j = a === "haut" ? i - 1 : i + 1; if (j < 0 || j >= l.length) return;
-      [l[i], l[j]] = [l[j], l[i]]; sauver(); rendrePanneau(); majMessage(); return;
+      [l[i], l[j]] = [l[j], l[i]]; marquer(); sauver(); rendrePanneau(); majMessage(); return;
     }
-    if (a === "dom"){ const m = l[i]; if (!m) return; m.dom = b.dataset.k === "1"; sauver(); rendrePanneau(); majMessage(); return; }
-    if (a === "r-ajout"){ const m = l[i]; if (!m) return; (m.resultats = m.resultats || []).push({ adv: "", bp: "", bc: "" }); sauver(); rendrePanneau(); return; }
-    if (a === "r-suppr"){ const m = l[i]; if (!m) return; (m.resultats || []).splice(+b.dataset.j, 1); if (!m.resultats.length) m.resultats.push({ adv: "", bp: "", bc: "" }); sauver(); rendrePanneau(); majMessage(); return; }
+    if (a === "dom"){ const m = l[i]; if (!m) return; m.dom = b.dataset.k === "1"; marquer(); sauver(); rendrePanneau(); majMessage(); return; }
+    if (a === "r-ajout"){ const m = l[i]; if (!m) return; (m.resultats = m.resultats || []).push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); return; }
+    if (a === "r-suppr"){ const m = l[i]; if (!m) return; (m.resultats || []).splice(+b.dataset.j, 1); if (!m.resultats.length) m.resultats.push({ adv: "", bp: "", bc: "" }); marquer(); sauver(); rendrePanneau(); majMessage(); return; }
     if (a === "reprendre"){
-      const r = depuisCalendrier();
-      if (!r.length){ toast("Aucun match de ce type dans le calendrier pour ce week-end : ajoute-les à la main.", true); return; }
-      if (l.length && !confirm(`Remplacer les ${l.length} match${l.length > 1 ? "s" : ""} de la liste par les ${r.length} du calendrier ?`)) return;
-      e.listes[e.type] = r; e.msgs[e.type].libre = false; sauver(); rendrePanneau(); majMessage(true);
-      toast(`${r.length} match${r.length > 1 ? "s" : ""} repris : vérifie et complète.`);
-      return;
+      const au = e.auto[e.type];
+      if (l.length && (!au || au.modifie) && !confirm("Remplacer ta liste par les matchs automatiques du week-end ?")) return;
+      await chargerAuto(true); return;
     }
     if (a === "vider"){
       if (!confirm("Effacer tous les matchs de cette affiche ?")) return;
-      e.listes[e.type] = []; e.msgs[e.type] = { msg: "", libre: false }; e.etat = ""; sauver(); rendrePanneau(); return;
+      e.listes[e.type] = []; e.msgs[e.type] = { msg: "", libre: false }; e.etat = ""; marquer(); sauver(); rendrePanneau(); return;
     }
     if (a === "msg-auto"){
       if (e.msgs[e.type].libre && !confirm("Remplacer le message écrit à la main par un message refait à partir des matchs ?")) return;
@@ -11916,6 +11982,7 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 .am-haut label{display:flex;flex-direction:column;gap:6px}
 .am-liste{display:grid;gap:12px}
 .am-vide{margin:0}
+.am-source{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:rgba(143,168,240,.1);font:600 14px var(--corps)}
 .am-match{border:1px solid var(--ligne);border-radius:14px;padding:12px;background:var(--fond)}
 .am-match-tete{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .am-match-tete > b{font:800 16px var(--corps);margin-right:auto}

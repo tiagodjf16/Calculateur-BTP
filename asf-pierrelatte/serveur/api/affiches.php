@@ -2565,6 +2565,32 @@ function afn_manuel_route(): void {
     imagejpeg($im, null, 92);
     exit;
 }
+/* GET /api/affiches.php?plan=1&type=…&date=AAAA-MM-JJ : les matchs automatiques du week-end pour ce type d'affiche
+   (exactement ceux des affiches du lundi : base, plateaux, vétérans, scores), pour remplir l'onglet « Affiches matchs » */
+function afn_plan_route(): void {
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
+    $type = (string) ($_GET['type'] ?? '');
+    if (!in_array($type, AFN_TYPES_MANUEL, true)) { http_response_code(400); echo '{"erreur":"type inconnu"}'; exit; }
+    $res = in_array($type, ['resultats', 'fal-resultats', 'vet-resultats', 'score'], true);
+    $d0 = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['date'] ?? '')) ? (string) $_GET['date'] : date('Y-m-d');
+    $t = strtotime($d0 . ' 12:00'); $w = (int) date('w', $t);
+    $sam = date('Y-m-d', $t + (($w === 0 ? -1 : 6 - $w) * 86400));
+    $GLOBALS['aff_fal'] = str_starts_with($type, 'fal-'); $GLOBALS['aff_vet'] = str_starts_with($type, 'vet-');
+    $plan = aff_plan_weekend(aff_matchs(), $sam, $res);
+    $GLOBALS['aff_fal'] = $GLOBALS['aff_vet'] = false;
+    $num = fn($v) => is_numeric($v) ? (int) $v : null;
+    $l = [];
+    foreach ($plan as $j) foreach ($j['matchs'] as $m) $l[] = [
+        'equipe' => (string) ($m['equipe'] ?? ''), 'comp' => (string) ($m['comp'] ?? ''), 'adv' => (string) ($m['adv'] ?? ''), 'dom' => !empty($m['dom']),
+        'date' => (string) ($m['date'] ?? ''), 'heure' => (string) ($m['heure'] ?? ''), 'adresse' => (string) ($m['adresse'] ?? ''),
+        'bp' => $num($m['bp'] ?? null), 'bc' => $num($m['bc'] ?? null),
+        'adversaires' => array_values(array_map('strval', array_filter((array) ($m['adversaires'] ?? []), 'is_scalar'))),
+        'resultats' => array_values(array_map(fn($r) => ['adv' => (string) ($r['adv'] ?? ''), 'bp' => $num($r['bp'] ?? null), 'bc' => $num($r['bc'] ?? null)],
+            array_filter((array) ($m['resultats'] ?? []), 'is_array'))),
+    ];
+    echo json_encode(['samedi' => $sam, 'matchs' => $l], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 /* ---------- Facebook ---------- */
 /* images d'une annonce Facebook : les deux feuilles en 1080 x 2160 (Facebook les montre en entier côte à côte) ;
@@ -3239,6 +3265,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
         exit;
     }
     if (isset($_GET['manuel'])) afn_manuel_route();                     // affiches de matchs saisis à la main (POST JSON)
+    if (isset($_GET['plan'])) afn_plan_route();                         // matchs automatiques du week-end (onglet Affiches matchs)
     $matchs = aff_matchs(); $type = $_GET['apercu'] ?? 'programme';
     $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date'] ?? '') ? $_GET['date'] : null;
     $opts = ['titre' => mb_substr((string) ($_GET['titre'] ?? ''), 0, 80), 'sponsors' => ($_GET['sponsors'] ?? '1') !== '0'];
