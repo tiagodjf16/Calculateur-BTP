@@ -324,7 +324,11 @@
     const inp = ev.target; if (!inp.matches || !inp.matches("#panneau [data-am-club]") || focusRendu) return;
     listeClubs(inp, inp.dataset.amClub === "ajout" ? inp.value : "");
     if (!tactile() && inp.dataset.amClub === "un") inp.select();
-    else if (tactile()) setTimeout(() => { if (document.activeElement === inp) inp.scrollIntoView({ block: "start", behavior: "smooth" }); }, 350);
+    else if (tactile()) setTimeout(() => {                             // champ en bas de l'écran : on le remonte pour que la liste ne soit pas sous le clavier
+      if (document.activeElement !== inp) return;
+      const h = (window.visualViewport && visualViewport.height) || innerHeight;
+      if (inp.getBoundingClientRect().top > h * .45) inp.scrollIntoView({ block: "start" });
+    }, 300);
   });
   document.addEventListener("focusout", ev => {
     const inp = ev.target; if (!inp.matches || !inp.matches("[data-am-club]")) return;
@@ -849,12 +853,15 @@
 .am-eq-tete > b{font:800 15px var(--corps);margin-right:auto}
 .am-champs .am-poule{flex-direction:row;align-items:center;gap:8px;font:700 14px var(--corps)}
 .am-poule select{width:auto;min-width:96px}
-.am-rencontre{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-.am-rh{flex:0 0 auto}
-.am-rh .tp-champ{width:auto;min-width:118px}
+.am-rencontre{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:8px}
+.am-rencontre-res{display:flex;flex-wrap:wrap}
+.am-rh{min-width:0}
+.am-champs .am-rh .tp-champ{width:auto;min-width:0;min-height:44px;height:44px;padding:6px 10px;gap:6px;border-style:solid;font-size:15px;white-space:nowrap}
 .am-rh .tp-champ.vide span:last-child{font-size:0}
 .am-rh .tp-champ.vide span:last-child::after{content:"Heure";font-size:15px}
 .am-rencontre .am-club{flex:1 1 170px}
+.am-rencontre .am-club-x{display:none}
+.am-champs .am-rencontre .am-club input{padding-right:11px}
 .am-sc{display:flex;align-items:center;gap:6px}
 .am-sc input{width:60px;text-align:center;font-weight:800}
 .am-eq-vide{margin:0 0 8px;font-size:14px}
