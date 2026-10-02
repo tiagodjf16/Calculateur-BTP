@@ -10858,6 +10858,401 @@ void main(){
   if (ballon) ballon.addEventListener("pointerdown", () => { const i = ballon.querySelector(".hero-indice"); if (i) i.style.display = "none"; }, { once: true });
 })();
 </script>
+<script id="evenements-js">
+/* Onglet « Événements » (rubrique Communication) : affiches stage, loto, tournoi.
+   Le dirigeant écrit ce qui doit être sur l'affiche et le message de l'annonce ; le serveur dessine l'affiche
+   (api/affiches.php?apercu=evenement) au format story 1080 × 1920, publication Instagram 1080 × 1350 ou publication
+   Facebook 1080 × 2160. On la télécharge pour la poster soi-même, ou on la publie : story Facebook, story Instagram
+   ou les deux, annonce Facebook, annonce Instagram ou les deux (envoi à api/publier.php, comme « Publier une affiche
+   déjà faite »). Ajouté sans modifier le script de l'application : nouvel onglet, rendu de son panneau, raccourci depuis
+   l'onglet Affiches et bouton « Créer l'affiche » sur chaque stage. Les brouillons restent dans ce navigateur. */
+(function(){
+  "use strict";
+  if (typeof S === "undefined" || typeof ONGLETS === "undefined" || typeof RUBRIQUES === "undefined" || typeof rendrePanneau !== "function") return;
+
+  /* ---------- types d'événement ---------- */
+  const STADE = "Stade Gustave Jaume, Pierrelatte";
+  const TYPES = {
+    stage:   { ico: "⚽", nom: "Stage",   titre: "Stage de foot", tags: "#StageFoot", lieu: STADE,
+               ex: { titre: "Stage de la Toussaint", sous: "Du 19 au 23 octobre 2026", lieu: STADE,
+                     texte: "Le matin de 9h à 12h\nL'après-midi de 13h30 à 16h30\nRepas du midi à apporter" } },
+    loto:    { ico: "🎟️", nom: "Loto",    titre: "Grand loto du club", tags: "#Loto", lieu: "",
+               ex: { titre: "Grand loto du club", sous: "Plus de 3 000 € de lots", lieu: "Salle des fêtes, Pierrelatte",
+                     texte: "Ouverture des portes à 18h30\nBuvette et petite restauration sur place\n3 € le carton · 15 € les 6" } },
+    tournoi: { ico: "🏆", nom: "Tournoi", titre: "Tournoi du club", tags: "#Tournoi", lieu: STADE,
+               ex: { titre: "Tournoi de Pâques U11", sous: "24 équipes · 2 terrains", lieu: STADE,
+                     texte: "Remise des récompenses à 17h\nBuvette et grillades toute la journée" } },
+    autre:   { ico: "📣", nom: "Autre",   titre: "Événement du club", tags: "", lieu: "",
+               ex: { titre: "Repas du club", sous: "Ouvert à tous", lieu: "Club-house du stade",
+                     texte: "Apéritif offert à 19h\nRéservations auprès des dirigeants" } },
+  };
+  const FORMATS = [["story", "Story", "1080 × 1920", "9/16"], ["carre", "Instagram", "1080 × 1350", "4/5"], ["fb", "Facebook", "1080 × 2160", "1/2"]];
+  const MAX_LIGNES = 8;
+
+  /* ---------- état (gardé dans ce navigateur) ---------- */
+  const CLE = "asfp-evenements";
+  const vierge = t => ({ titre: "", sous: "", date: "", heure: "", lieu: TYPES[t].lieu, texte: "", sponsors: true, msg: "", msgLibre: false });
+  function charger(){
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(CLE) || "null"); } catch(e){}
+    const E = { type: "stage", fmt: "carre", pub: { fb_pub: true, ig_pub: true, fb_story: false, ig_story: false }, brouillons: {}, etat: "" };
+    if (d && typeof d === "object"){
+      if (TYPES[d.type]) E.type = d.type;
+      if (FORMATS.some(f => f[0] === d.fmt)) E.fmt = d.fmt;
+      if (d.pub && typeof d.pub === "object") for (const k of Object.keys(E.pub)) if (typeof d.pub[k] === "boolean") E.pub[k] = d.pub[k];
+      if (d.brouillons && typeof d.brouillons === "object") for (const t of Object.keys(TYPES)) if (d.brouillons[t]) E.brouillons[t] = { ...vierge(t), ...d.brouillons[t] };
+    }
+    for (const t of Object.keys(TYPES)) if (!E.brouillons[t]) E.brouillons[t] = vierge(t);
+    return E;
+  }
+  const E = () => S.ui.evenements || (S.ui.evenements = charger());
+  const B = () => E().brouillons[E().type];
+  let saveT;
+  function sauver(){
+    clearTimeout(saveT);
+    saveT = setTimeout(() => {
+      const e = E();
+      try { localStorage.setItem(CLE, JSON.stringify({ type: e.type, fmt: e.fmt, pub: e.pub, brouillons: e.brouillons })); } catch(err){}
+    }, 300);
+  }
+
+  /* ---------- l'affiche (dessinée par le serveur) et le message ---------- */
+  const api = () => (window.ASFP_API || "/api");
+  const titreDe = (b, t) => (b.titre || "").trim() || TYPES[t].titre;
+  function urlAffiche(b, t, fmt, telecharger){
+    const p = new URLSearchParams({ apercu: "evenement", titre: titreDe(b, t), sous: (b.sous || "").trim(), texte: lignes(b.texte).join("\n"),
+      date: b.date || "", heure: b.heure || "", lieu: (b.lieu || "").trim() });
+    if (fmt && fmt !== "story") p.set("format", fmt);
+    if (!b.sponsors) p.set("sponsors", "0");
+    if (telecharger) p.set("telecharger", "1");
+    p.set("v", Date.now().toString(36));
+    return api() + "/affiches.php?" + p.toString();
+  }
+  const lignes = txt => String(txt || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const maj1 = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  function messageAuto(b, t){
+    const T = TYPES[t];
+    const quand = [b.date ? maj1(dateLongue(b.date)) + " " + jd(b.date).getFullYear() : "", b.heure ? hFr(b.heure) : ""].filter(Boolean).join(" · ");
+    const l = [`${T.ico} ${titreDe(b, t)}`];
+    if ((b.sous || "").trim()) l.push(b.sous.trim());
+    l.push("");
+    if (quand) l.push("📅 " + quand);
+    if ((b.lieu || "").trim()) l.push("📍 " + b.lieu.trim());
+    const infos = lignes(b.texte);
+    if (infos.length){ l.push(""); infos.forEach(x => l.push("▪️ " + x)); }
+    l.push("", `Venez nombreux ! 💙🤍`, ("#ASFPierrelatte " + T.tags).trim());
+    return l.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  const message = b => b.msgLibre ? (b.msg || "") : messageAuto(b, E().type);
+
+  /* ---------- le panneau ---------- */
+  function panEvenements(){
+    const e = E(), t = e.type, T = TYPES[t], b = B();
+    if (!S.heberge) return `<div class="carte af-carte"><div class="af-tete"><h2>Affiches d'événement</h2></div>
+      <p class="quoi">Les affiches stage, loto et tournoi sont dessinées par le serveur du club : ouvre l'espace club depuis le site en ligne (asf-pierrelatte.fr).</p></div>`;
+    const F = FORMATS.find(f => f[0] === e.fmt) || FORMATS[1];
+    const n = lignes(b.texte).length;
+    const opt = (k, l) => `<label class="af-choix ${e.pub[k] ? "on" : ""}"><input type="checkbox" data-ev-pub="${k}" ${e.pub[k] ? "checked" : ""}>${l}</label>`;
+    return `<div class="ev-zone">
+    <div class="carte af-carte ev-tete-carte">
+      <div class="af-tete"><h2>Affiches d'événement</h2><small>Tu écris, l'affiche se dessine toute seule avec le fond du stade</small></div>
+      <div class="ev-types" role="tablist">${Object.entries(TYPES).map(([k, x]) => `<button type="button" class="ev-type" role="tab" aria-pressed="${k === t}" data-ev-a="type" data-k="${k}"><span>${x.ico}</span>${esc(x.nom)}</button>`).join("")}</div>
+    </div>
+    <div class="ev-grille">
+      <section class="carte af-carte ev-ecrire" aria-labelledby="ev-h-ecrire">
+        <div class="af-tete"><h2 id="ev-h-ecrire">✏️ Ce qui sera écrit sur l'affiche</h2><small>${esc(T.nom)}</small></div>
+        <div class="ev-champs">
+          <label class="ev-plein">Titre (en grand)<input data-ev="titre" maxlength="80" value="${esc(b.titre)}" placeholder="${esc(T.ex.titre)}"></label>
+          <label class="ev-plein">Sous-titre (en doré)<input data-ev="sous" maxlength="80" value="${esc(b.sous)}" placeholder="${esc(T.ex.sous)}"></label>
+          <label>Date<input type="date" data-ev="date" value="${esc(b.date)}"></label>
+          <label>Heure<input type="time" data-ev="heure" value="${esc(b.heure)}"></label>
+          <label class="ev-plein">Lieu<input data-ev="lieu" maxlength="90" value="${esc(b.lieu)}" placeholder="${esc(T.ex.lieu)}"></label>
+          <label class="ev-plein">Informations, une par ligne
+            <textarea data-ev="texte" maxlength="600" rows="5" placeholder="${esc(T.ex.texte)}">${esc(b.texte)}</textarea>
+            <small class="ev-compte ${n > MAX_LIGNES ? "trop" : ""}" id="ev-compte">${n} ligne${n > 1 ? "s" : ""} sur ${MAX_LIGNES}${n > MAX_LIGNES ? " : seules les " + MAX_LIGNES + " premières seront sur l'affiche" : ""}</small></label>
+          <label class="ev-plein ev-case"><input type="checkbox" data-ev="sponsors" ${b.sponsors ? "checked" : ""}> Bandeau des partenaires en bas de l'affiche</label>
+        </div>
+        <div class="btns"><button type="button" class="btn contour petit" data-ev-a="vider">🗑️ Tout effacer</button></div>
+      </section>
+      <section class="carte af-carte ev-apercu" aria-labelledby="ev-h-apercu">
+        <div class="af-tete"><h2 id="ev-h-apercu">👀 L'affiche</h2></div>
+        <div class="ev-formats">${FORMATS.map(([k, l, d]) => `<button type="button" class="as-fmt ${k === e.fmt ? "on" : ""}" data-ev-a="fmt" data-k="${k}" title="${d}">${l}</button>`).join("")}</div>
+        <div class="ev-cadre" style="aspect-ratio:${F[3]}"><img id="ev-img" class="charge" alt="Aperçu de l'affiche" src="${esc(urlAffiche(b, t, e.fmt))}"></div>
+        <p class="ev-erreur" id="ev-erreur" hidden>Aperçu indisponible : connecte-toi avec un compte coach ou bureau, et vérifie que <b>api/affiches.php</b> est bien la nouvelle version.</p>
+        <p class="ev-taille" id="ev-taille">${F[1]} · ${F[2]}</p>
+      </section>
+      <section class="carte af-carte ev-message" aria-labelledby="ev-h-msg">
+        <div class="af-tete"><h2 id="ev-h-msg">💬 Message de l'annonce</h2><small>Le texte publié avec l'affiche</small></div>
+        <textarea id="ev-msg" data-ev-msg rows="10" maxlength="2000">${esc(message(b))}</textarea>
+        <div class="btns"><button type="button" class="btn contour petit" data-ev-a="msg-auto">↺ Refaire le message à partir de l'affiche</button>
+          <button type="button" class="btn contour petit" data-ev-a="msg-copier">📋 Copier</button></div>
+      </section>
+      <section class="carte af-carte ev-publier" aria-labelledby="ev-h-pub">
+        <div class="af-tete"><h2 id="ev-h-pub">📣 Publier</h2><small>Chaque format part au bon endroit</small></div>
+        <div class="ps-reseau"><span class="ps-reseau-nom">📘 Facebook</span><div class="af-choix-l">${opt("fb_pub", "Annonce")}${opt("fb_story", "Story")}</div></div>
+        <div class="ps-reseau"><span class="ps-reseau-nom">📸 Instagram</span><div class="af-choix-l">${opt("ig_pub", "Annonce")}${opt("ig_story", "Story")}</div></div>
+        <p class="ev-note">Story : affiche 1080 × 1920 · annonce Facebook : 1080 × 2160 · annonce Instagram : 1080 × 1350.</p>
+        <button type="button" class="btn bleu af-go" data-ev-a="publier">📣 Publier maintenant</button>
+        ${e.etat ? `<p class="af-etat" id="ev-etat">${esc(e.etat)}</p>` : `<p class="af-etat" id="ev-etat" hidden></p>`}
+        <b class="ps-lab ev-lab">Ou la poster toi-même</b>
+        <div class="ev-dl">${FORMATS.map(([k, l, d]) => `<a class="btn contour petit" data-ev-dl="${k}" href="${esc(urlAffiche(b, t, k, true))}">⬇️ ${l} <small>${d}</small></a>`).join("")}</div>
+      </section>
+    </div></div>`;
+  }
+
+  /* ---------- mises à jour sans redessiner le panneau (la saisie et le curseur restent en place) ---------- */
+  let apercuT;
+  function majApercu(tout){
+    clearTimeout(apercuT);
+    apercuT = setTimeout(() => {
+      const e = E(), b = B(), t = e.type;
+      const i = document.getElementById("ev-img");
+      if (i && tout !== "liens"){ i.classList.add("charge"); i.src = urlAffiche(b, t, e.fmt); }
+      document.querySelectorAll("[data-ev-dl]").forEach(a => { a.href = urlAffiche(b, t, a.dataset.evDl, true); });
+    }, tout === true ? 0 : 650);
+  }
+  function majCompte(){
+    const z = document.getElementById("ev-compte"); if (!z) return;
+    const n = lignes(B().texte).length;
+    z.textContent = `${n} ligne${n > 1 ? "s" : ""} sur ${MAX_LIGNES}${n > MAX_LIGNES ? " : seules les " + MAX_LIGNES + " premières seront sur l'affiche" : ""}`;
+    z.classList.toggle("trop", n > MAX_LIGNES);
+  }
+  function majMessage(){
+    const b = B(), z = document.getElementById("ev-msg");
+    if (z && !b.msgLibre && document.activeElement !== z) z.value = messageAuto(b, E().type);
+  }
+  function etat(txt){
+    const e = E(); e.etat = txt;
+    const z = document.getElementById("ev-etat"); if (z){ z.hidden = !txt; z.textContent = txt; }
+  }
+
+  /* garder le champ en cours de saisie quand le panneau est redessiné (relecture de la base, changement d'onglet…) */
+  function memoFocus(){
+    const a = document.activeElement;
+    if (!a || !a.matches || !a.matches("#panneau [data-ev], #panneau [data-ev-msg]")) return null;
+    return { sel: a.matches("[data-ev-msg]") ? "[data-ev-msg]" : `[data-ev="${a.dataset.ev}"]`, d: a.selectionStart, f: a.selectionEnd };
+  }
+  function rendreFocus(m){
+    if (!m) return;
+    const a = document.querySelector("#panneau " + m.sel); if (!a) return;
+    a.focus({ preventScroll: true });
+    try { if (m.d !== null && m.d !== undefined) a.setSelectionRange(m.d, m.f); } catch(err){}
+  }
+
+  /* ---------- branchement dans l'application ---------- */
+  if (!ONGLETS.some(o => o[0] === "evenements")){
+    const i = ONGLETS.findIndex(o => o[0] === "affiches");
+    ONGLETS.splice(i < 0 ? ONGLETS.length : i + 1, 0, ["evenements", "Événements", "bureau", "Publication", "Affiches stage, loto, tournoi et leur publication"]);
+  }
+  const com = RUBRIQUES.find(r => r[0] === "com");
+  if (com && !com[3].includes("evenements")){
+    const i = com[3].indexOf("affiches");
+    com[3].splice(i < 0 ? 0 : i + 1, 0, "evenements");
+    com[4] = "Affiches, événements, actualités du site et messages reçus";
+  }
+  if (typeof ICONES === "object" && ICONES) ICONES.evenements = "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M12 12.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z";
+
+  const peutVoir = () => { try { return typeof ongletsVisibles === "function" && ongletsVisibles().some(o => o[0] === "evenements"); } catch(err){ return false; } };
+  function allerEvenements(){
+    S.ui.onglet = "evenements"; S.ui.compo = null; S.ui.tournoi = null; S.ui.tirage = null;
+    try { S.ui.derniers = { ...(S.ui.derniers || {}), [rubriqueDe("evenements")[0]]: "evenements" }; } catch(err){}
+    S.ui.rubOuverte = null;
+    rendreEspace();
+    window.scrollTo(0, 0);
+  }
+
+  const rendreAvant = window.rendrePanneau;
+  window.rendrePanneau = function(){
+    if (S.ui.onglet !== "evenements") return rendreAvant.apply(this, arguments);
+    const p = document.getElementById("panneau"); if (!p) return;
+    const m = memoFocus(), y = window.scrollY;
+    p.innerHTML = panEvenements();
+    try { const ec = typeof encartCle === "function" && encartCle(); if (ec) p.insertAdjacentHTML("afterbegin", ec); } catch(err){}
+    requestAnimationFrame(() => window.scrollTo(0, y));
+    rendreFocus(m);
+  };
+
+  // onglet Affiches : un raccourci vers les affiches d'événement, en haut
+  if (typeof window.panAffiches === "function"){
+    const affichesAvant = window.panAffiches;
+    window.panAffiches = function(){
+      const h = affichesAvant.apply(this, arguments);
+      if (!S.heberge || !peutVoir()) return h;
+      return `<button type="button" class="carte af-reglages ev-raccourci" data-ev-a="aller"><span>🎉</span><div><b>Affiches stage, loto, tournoi</b><small>Écris les infos, l'affiche se dessine toute seule · onglet Événements</small></div><span class="af-fl">›</span></button>` + h;
+    };
+  }
+  // onglet Stages : « Créer l'affiche » sur chaque stage, avec ses infos déjà remplies
+  if (typeof window.panStages === "function"){
+    const stagesAvant = window.panStages;
+    window.panStages = function(){
+      const h = stagesAvant.apply(this, arguments);
+      if (!S.heberge || !peutVoir()) return h;
+      return h.split(`<button class="btn contour petit" data-a="stage-modifier">Modifier</button>`)
+        .join(`<button type="button" class="btn bleu petit" data-ev-a="depuis-stage">🎨 Créer l'affiche</button><button class="btn contour petit" data-a="stage-modifier">Modifier</button>`);
+    };
+  }
+  function brouillonDepuisStage(st){
+    const h = String(st.horaires || "").match(/(\d{1,2})\s*(?:h|:)\s*(\d{2})?/i);
+    const lieu = !st.lieu || st.lieu === (typeof ADRESSE_STADE === "string" ? ADRESSE_STADE : "") ? STADE : st.lieu;
+    const cats = (st.categories && st.categories.length ? st.categories : (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : [])).join(", ");
+    const infos = [st.horaires && "Horaires : " + st.horaires, cats && "Catégories : " + cats, st.tarif && "Tarif : " + st.tarif,
+      st.places && st.places + " places", st.limite && "Inscriptions jusqu'au " + dateLongue(st.limite), st.contact && "Contact : " + st.contact,
+      "Inscriptions sur asf-pierrelatte.fr"].filter(Boolean).slice(0, MAX_LIGNES);
+    const b = { ...vierge("stage"), titre: String(st.titre || "").slice(0, 80), sous: maj1(typeof datesStage === "function" ? datesStage(st) : "").slice(0, 80),
+      date: st.dateDebut || "", heure: h ? `${String(h[1]).padStart(2, "0")}:${h[2] || "00"}` : "", lieu: lieu.slice(0, 90), texte: infos.join("\n") };
+    try { const m = typeof messageSujet === "function" && messageSujet("s:" + st.id, ""); if (m){ b.msg = m; b.msgLibre = true; } } catch(err){}
+    return b;
+  }
+
+  /* ---------- publication : une affiche au bon format pour chaque envoi ---------- */
+  async function fichierAffiche(b, t, fmt){
+    const r = await fetch(urlAffiche(b, t, fmt), { credentials: "same-origin", cache: "no-store" });
+    const type = r.headers.get("Content-Type") || "";
+    if (!r.ok || !type.startsWith("image/")) throw new Error(((await r.text().catch(() => "")) || `erreur ${r.status}`).replace(/\s+/g, " ").trim().slice(0, 160));
+    return new File([await r.blob()], `asf-pierrelatte-${slug(titreDe(b, t))}-${fmt}.jpg`, { type: "image/jpeg" });
+  }
+  async function publier(bouton){
+    const e = E(), t = e.type, b = B(), c = e.pub;
+    const z = document.getElementById("ev-msg"); if (z){ b.msg = z.value; if (z.value !== messageAuto(b, t)) b.msgLibre = true; }
+    const texte = message(b);
+    if (!c.fb_pub && !c.ig_pub && !c.fb_story && !c.ig_story){ toast("Choisis où publier : annonce ou story, Facebook ou Instagram.", true); return; }
+    const envois = [];
+    if (c.fb_story || c.ig_story) envois.push({ fmt: "story", nom: "Story " + [c.fb_story && "Facebook", c.ig_story && "Instagram"].filter(Boolean).join(" et "), fb: c.fb_story, ig: c.ig_story, pub: false, story: true });
+    if (c.fb_pub) envois.push({ fmt: "fb", nom: "Annonce Facebook", fb: true, ig: false, pub: true, story: false });
+    if (c.ig_pub) envois.push({ fmt: "carre", nom: "Annonce Instagram", fb: false, ig: true, pub: true, story: false });
+    if (!confirm(`Publier maintenant l'affiche « ${titreDe(b, t)} » ?\n\n${envois.map(x => "• " + x.nom).join("\n")}`)) return;
+    sauver();
+    bouton.disabled = true;
+    const faits = [], etats = [];
+    try {
+      for (const [i, x] of envois.entries()){
+        const dire = m => { bouton.textContent = `${i + 1}/${envois.length} · ${m}`; };
+        dire(`${x.nom} : préparation de l'affiche…`);
+        const f = await fichierAffiche(b, t, x.fmt);
+        const fd = new FormData();
+        fd.append("medias[]", f); fd.append("texte", texte);
+        fd.append("facebook", x.fb ? "1" : "0"); fd.append("instagram", x.ig ? "1" : "0");
+        fd.append("publication", x.pub ? "1" : "0"); fd.append("story", x.story ? "1" : "0");
+        const r = await lancerPublication(api() + "/publier.php", { method: "POST", body: fd }, m => dire(`${x.nom} : ${m}`));
+        etats.push(...(r || [])); faits.push(x.nom);
+      }
+      const tout = etats.join(" · ") || "Publié.";
+      etat("✅ " + faits.join(", ") + " : " + tout);
+      toast(tout, /:(?! publié)/.test(tout) && !/publié/.test(tout));
+    } catch(err){
+      etat(`⚠️ ${faits.length ? "Déjà parti : " + faits.join(", ") + ". " : ""}Arrêté sur « ${envois[faits.length].nom} » : ${err.message}`);
+      toast("Publication impossible : " + err.message, true);
+    }
+    bouton.disabled = false; bouton.textContent = "📣 Publier maintenant";
+  }
+
+  /* ---------- écouteurs (attributs data-ev*, à part de ceux de l'application) ---------- */
+  document.addEventListener("input", ev => {
+    const t = ev.target;
+    if (t.matches && t.matches("[data-ev]")){
+      const b = B(), k = t.dataset.ev;
+      b[k] = t.type === "checkbox" ? t.checked : t.value;
+      sauver(); majApercu(); majMessage();
+      if (k === "texte") majCompte();
+      return;
+    }
+    if (t.matches && t.matches("[data-ev-msg]")){ const b = B(); b.msg = t.value; b.msgLibre = true; sauver(); }
+  });
+  document.addEventListener("change", ev => {
+    const t = ev.target;
+    if (t.matches && t.matches("[data-ev-pub]")){
+      E().pub[t.dataset.evPub] = t.checked;
+      const l = t.closest(".af-choix"); if (l) l.classList.toggle("on", t.checked);
+      sauver();
+    }
+  });
+  document.addEventListener("load", ev => {
+    if (ev.target && ev.target.id === "ev-img"){ ev.target.classList.remove("charge"); const z = document.getElementById("ev-erreur"); if (z) z.hidden = true; }
+  }, true);
+  document.addEventListener("error", ev => {
+    if (ev.target && ev.target.id === "ev-img"){ ev.target.classList.remove("charge"); const z = document.getElementById("ev-erreur"); if (z) z.hidden = false; }
+  }, true);
+  document.addEventListener("click", async ev => {
+    const btn = ev.target.closest && ev.target.closest("[data-ev-a]"); if (!btn) return;
+    const a = btn.dataset.evA, e = E();
+    if (a === "aller"){ allerEvenements(); return; }
+    if (a === "type"){ e.type = btn.dataset.k; e.etat = ""; sauver(); rendrePanneau(); return; }
+    if (a === "fmt"){
+      e.fmt = btn.dataset.k; sauver();
+      const F = FORMATS.find(f => f[0] === e.fmt);
+      document.querySelectorAll('[data-ev-a="fmt"]').forEach(x => x.classList.toggle("on", x === btn));
+      const cadre = document.querySelector(".ev-cadre"); if (cadre) cadre.style.aspectRatio = F[3];
+      const tl = document.getElementById("ev-taille"); if (tl) tl.textContent = `${F[1]} · ${F[2]}`;
+      majApercu(true); return;
+    }
+    if (a === "vider"){
+      if (!confirm(`Effacer tout ce qui est écrit pour l'affiche « ${TYPES[e.type].nom} » ?`)) return;
+      e.brouillons[e.type] = vierge(e.type); e.etat = ""; sauver(); rendrePanneau(); return;
+    }
+    if (a === "msg-auto"){
+      const b = B(); b.msgLibre = false; b.msg = "";
+      const z = document.getElementById("ev-msg"); if (z) z.value = messageAuto(b, e.type);
+      sauver(); return;
+    }
+    if (a === "msg-copier"){
+      const z = document.getElementById("ev-msg");
+      try { await navigator.clipboard.writeText(z ? z.value : message(B())); toast("Message copié"); } catch(err){ if (z){ z.select(); } toast("Sélectionne le texte et copie-le"); }
+      return;
+    }
+    if (a === "publier"){ await publier(btn); return; }
+    if (a === "depuis-stage"){
+      const carte = btn.closest("[data-st]"), st = carte && (S.stages || []).find(x => x.id === carte.dataset.st);
+      if (!st) return;
+      const ancien = e.brouillons.stage;
+      if ((ancien.titre || "").trim() && ancien.titre !== st.titre && !confirm(`Remplacer l'affiche stage en cours (« ${ancien.titre} ») par celle de « ${st.titre || "ce stage"} » ?`)) return;
+      e.brouillons.stage = brouillonDepuisStage(st); e.type = "stage"; e.etat = ""; sauver();
+      allerEvenements(); return;
+    }
+  });
+
+  /* ---------- styles du panneau ---------- */
+  const css = document.createElement("style");
+  css.id = "evenements-css";
+  css.textContent = `
+.ev-types{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ev-type{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;border:1px solid var(--ligne);border-radius:14px;background:var(--fond);color:var(--texte);font:800 16px var(--corps);cursor:pointer}
+.ev-type span{font-size:26px;line-height:1}
+.ev-type[aria-pressed="true"]{border-color:#1C63C4;background:rgba(28,99,196,.2);box-shadow:inset 0 0 0 1px #1C63C4}
+.ev-grille{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,380px);grid-template-areas:"ecrire apercu" "message apercu" "publier apercu";gap:0 18px;align-items:start}
+.ev-ecrire{grid-area:ecrire}.ev-message{grid-area:message}.ev-publier{grid-area:publier}
+.ev-apercu{grid-area:apercu;position:sticky;top:84px}
+.ev-champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ev-champs label{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ev-champs .ev-plein{grid-column:1/-1}
+.ev-champs textarea{min-height:130px;resize:vertical}
+.ev-case{flex-direction:row!important;align-items:center}
+.ev-compte{font-weight:600;color:var(--texte-doux)}.ev-compte.trop{color:#E8833A}
+.ev-formats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.ev-cadre{width:100%;max-width:380px;margin:0 auto;border-radius:12px;overflow:hidden;border:1px solid var(--ligne);background:#0A1430}
+.ev-cadre img{display:block;width:100%;height:100%;object-fit:contain;transition:opacity .2s}
+.ev-cadre img.charge{opacity:.45}
+.ev-taille{margin:8px 0 0;text-align:center;font-size:13px;color:var(--texte-doux)}
+.ev-erreur{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:rgba(232,131,58,.14);font-size:14px}
+.ev-erreur[hidden]{display:none}
+#ev-msg{width:100%;min-height:220px;font:15px/1.5 var(--corps);resize:vertical}
+.ev-publier .af-go{width:100%;margin:14px 0 10px}
+.ev-note{margin:10px 0 0;font-size:13px;color:var(--texte-doux)}
+.ev-lab{margin-top:16px}
+.ev-dl{display:flex;gap:8px;flex-wrap:wrap}
+.ev-dl small{opacity:.7;font-weight:600}
+.ev-raccourci{width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit}
+@media (max-width:860px){
+  .ev-grille{grid-template-columns:minmax(0,1fr);grid-template-areas:"ecrire" "apercu" "message" "publier"}
+  .ev-apercu{position:static}
+  .ev-cadre{max-width:320px}
+}
+@media (max-width:560px){
+  .ev-types{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ev-champs{grid-template-columns:minmax(0,1fr)}
+}`;
+  document.head.appendChild(css);
+})();
+</script>
 <!--/HABILLAGE-JS-->
 </body>
 </html>
