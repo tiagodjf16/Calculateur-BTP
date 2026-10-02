@@ -2232,7 +2232,8 @@ function afn_devise(array $A): void {
 }
 /* sur-titre, grand titre, sous-titre « métal », date */
 function afn_titres(array $A, string $sur, string $t1, string $t2, string $date, bool $deuxLignes = false): void {
-    $im = $A['im']; $F = $A['F']; $x = 46; $max = 640;
+    $im = $A['im']; $F = $A['F']; $x = 46;
+    [$bx, , $br] = AFN_BALLON[$A['fmt']]; $max = min(640, $bx - $br - $x - 60);   // les titres s'arrêtent avant le ballon
     $fs = $F['t2'] * .26; $y = $F['titre'];
     $sur = aff_maj($sur);
     afn_boite($im, $x, $y + (1.424 * $fs - 3) / 2, 40, 3, 0, ['v', $A['metal']]);
