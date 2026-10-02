@@ -10983,7 +10983,7 @@ void main(){
       </section>
       <section class="carte af-carte ev-message" aria-labelledby="ev-h-msg">
         <div class="af-tete"><h2 id="ev-h-msg">💬 Message de l'annonce</h2><small>Le texte publié avec l'affiche</small></div>
-        <textarea id="ev-msg" data-ev-msg rows="10" maxlength="2000">${esc(message(b))}</textarea>
+        <textarea id="ev-msg" data-ev-msg rows="${Math.max(12, message(b).split("\n").length + 2)}" maxlength="2000">${esc(message(b))}</textarea>
         <div class="btns"><button type="button" class="btn contour petit" data-ev-a="msg-auto">↺ Refaire le message à partir de l'affiche</button>
           <button type="button" class="btn contour petit" data-ev-a="msg-copier">📋 Copier</button></div>
       </section>
@@ -10992,7 +10992,7 @@ void main(){
         <div class="ps-reseau"><span class="ps-reseau-nom">📘 Facebook</span><div class="af-choix-l">${opt("fb_pub", "Annonce")}${opt("fb_story", "Story")}</div></div>
         <div class="ps-reseau"><span class="ps-reseau-nom">📸 Instagram</span><div class="af-choix-l">${opt("ig_pub", "Annonce")}${opt("ig_story", "Story")}</div></div>
         <p class="ev-note">Story : affiche 1080 × 1920 · annonce Facebook : 1080 × 2160 · annonce Instagram : 1080 × 1350.</p>
-        <button type="button" class="btn bleu af-go" data-ev-a="publier">📣 Publier maintenant</button>
+        <button type="button" class="btn bleu af-go" data-ev-a="publier" ${e.enCours ? "disabled" : ""}>${esc(e.enCours || "📣 Publier maintenant")}</button>
         ${e.etat ? `<p class="af-etat" id="ev-etat">${esc(e.etat)}</p>` : `<p class="af-etat" id="ev-etat" hidden></p>`}
         <b class="ps-lab ev-lab">Ou la poster toi-même</b>
         <div class="ev-dl">${FORMATS.map(([k, l, d]) => `<a class="btn contour petit" data-ev-dl="${k}" href="${esc(urlAffiche(b, t, k, true))}">⬇️ ${l} <small>${d}</small></a>`).join("")}</div>
@@ -11051,6 +11051,27 @@ void main(){
     com[4] = "Affiches, événements, actualités du site et messages reçus";
   }
   if (typeof ICONES === "object" && ICONES) ICONES.evenements = "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M12 12.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z";
+
+  /* comptes aux onglets choisis (Accès et rôles) : qui a les Affiches a aussi les Événements.
+     S.permissions est relu depuis la base : chaque nouvelle valeur passe par ici. */
+  const avecEvenements = p => {
+    if (!p || typeof p !== "object") return p;
+    let o = p;
+    for (const k of Object.keys(p)){
+      const v = p[k];
+      if (v && Array.isArray(v.onglets) && v.onglets.includes("affiches") && !v.onglets.includes("evenements")){
+        if (o === p) o = { ...p };
+        o[k] = { ...v, onglets: [...v.onglets, "evenements"] };
+      }
+    }
+    return o;
+  };
+  try {
+    let perms = avecEvenements(S.permissions);
+    const d = Object.getOwnPropertyDescriptor(S, "permissions");
+    if (!d || d.configurable) Object.defineProperty(S, "permissions", { configurable: true, enumerable: true,
+      get(){ return perms; }, set(v){ perms = avecEvenements(v); } });
+  } catch(err){}
 
   const peutVoir = () => { try { return typeof ongletsVisibles === "function" && ongletsVisibles().some(o => o[0] === "evenements"); } catch(err){ return false; } };
   function allerEvenements(){
@@ -11122,11 +11143,14 @@ void main(){
     if (c.ig_pub) envois.push({ fmt: "carre", nom: "Annonce Instagram", fb: false, ig: true, pub: true, story: false });
     if (!confirm(`Publier maintenant l'affiche « ${titreDe(b, t)} » ?\n\n${envois.map(x => "• " + x.nom).join("\n")}`)) return;
     sauver();
-    bouton.disabled = true;
+    // le panneau peut être redessiné pendant l'envoi (relecture de la base) : on retrouve toujours le bouton actuel
+    const bouton_ = () => document.querySelector('[data-ev-a="publier"]');
+    const dire = m => { e.enCours = m; const x = bouton_(); if (x){ x.disabled = true; x.textContent = m; } };
+    dire("Préparation…");
     const faits = [], etats = [];
     try {
       for (const [i, x] of envois.entries()){
-        const dire = m => { bouton.textContent = `${i + 1}/${envois.length} · ${m}`; };
+        const dire = m => { e.enCours = `${i + 1}/${envois.length} · ${m}`; const y = bouton_(); if (y){ y.disabled = true; y.textContent = e.enCours; } };
         dire(`${x.nom} : préparation de l'affiche…`);
         const f = await fichierAffiche(b, t, x.fmt);
         const fd = new FormData();
@@ -11143,23 +11167,27 @@ void main(){
       etat(`⚠️ ${faits.length ? "Déjà parti : " + faits.join(", ") + ". " : ""}Arrêté sur « ${envois[faits.length].nom} » : ${err.message}`);
       toast("Publication impossible : " + err.message, true);
     }
-    bouton.disabled = false; bouton.textContent = "📣 Publier maintenant";
+    e.enCours = "";
+    const x = bouton_(); if (x){ x.disabled = false; x.textContent = "📣 Publier maintenant"; }
   }
 
   /* ---------- écouteurs (attributs data-ev*, à part de ceux de l'application) ---------- */
+  // « input » et « change » : les sélecteurs de date et d'heure de l'application n'envoient parfois que « change » (bouton Effacer)
+  function champ(t){
+    const b = B(), k = t.dataset.ev, v = t.type === "checkbox" ? t.checked : t.value;
+    if (b[k] === v) return;
+    b[k] = v;
+    sauver(); majApercu(); majMessage();
+    if (k === "texte") majCompte();
+  }
   document.addEventListener("input", ev => {
     const t = ev.target;
-    if (t.matches && t.matches("[data-ev]")){
-      const b = B(), k = t.dataset.ev;
-      b[k] = t.type === "checkbox" ? t.checked : t.value;
-      sauver(); majApercu(); majMessage();
-      if (k === "texte") majCompte();
-      return;
-    }
+    if (t.matches && t.matches("[data-ev]")){ champ(t); return; }
     if (t.matches && t.matches("[data-ev-msg]")){ const b = B(); b.msg = t.value; b.msgLibre = true; sauver(); }
   });
   document.addEventListener("change", ev => {
     const t = ev.target;
+    if (t.matches && t.matches("[data-ev]")){ champ(t); return; }
     if (t.matches && t.matches("[data-ev-pub]")){
       E().pub[t.dataset.evPub] = t.checked;
       const l = t.closest(".af-choix"); if (l) l.classList.toggle("on", t.checked);
@@ -11199,7 +11227,7 @@ void main(){
       try { await navigator.clipboard.writeText(z ? z.value : message(B())); toast("Message copié"); } catch(err){ if (z){ z.select(); } toast("Sélectionne le texte et copie-le"); }
       return;
     }
-    if (a === "publier"){ await publier(btn); return; }
+    if (a === "publier"){ if (!e.enCours) await publier(btn); return; }
     if (a === "depuis-stage"){
       const carte = btn.closest("[data-st]"), st = carte && (S.stages || []).find(x => x.id === carte.dataset.st);
       if (!st) return;
@@ -11234,7 +11262,7 @@ void main(){
 .ev-taille{margin:8px 0 0;text-align:center;font-size:13px;color:var(--texte-doux)}
 .ev-erreur{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:rgba(232,131,58,.14);font-size:14px}
 .ev-erreur[hidden]{display:none}
-#ev-msg{width:100%;min-height:220px;font:15px/1.5 var(--corps);resize:vertical}
+#ev-msg{width:100%;min-height:300px;font:15px/1.5 var(--corps);resize:vertical}
 .ev-publier .af-go{width:100%;margin:14px 0 10px}
 .ev-note{margin:10px 0 0;font-size:13px;color:var(--texte-doux)}
 .ev-lab{margin-top:16px}
