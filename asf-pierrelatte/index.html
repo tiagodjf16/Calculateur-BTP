@@ -20,6 +20,7 @@
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SportsClub", "name": "ASF Pierrelatte", "alternateName": ["Atom'Sports Football Pierrelatte", "ASF Pierrelatte football", "Atom Sports Pierrelatte"], "url": "https://asf-pierrelatte.fr/", "logo": "https://asf-pierrelatte.fr/img/blason.png", "image": "https://asf-pierrelatte.fr/icone-512.png", "description": "Site officiel de l'Atom'Sports Football Pierrelatte, club de football fondé en 1923 : équipes, calendrier, résultats, classements, inscriptions.", "sport": "Football", "foundingDate": "1923", "address": {"@type": "PostalAddress", "streetAddress": "Stade Gustave Jaume, avenue Pierre de Coubertin", "postalCode": "26700", "addressLocality": "Pierrelatte", "addressRegion": "Drôme", "addressCountry": "FR"}, "memberOf": {"@type": "SportsOrganization", "name": "District Drôme-Ardèche de Football"}, "sameAs": ["https://www.instagram.com/asfp.officiel/"]}</script>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
+<meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" type="image/png" href="/icone-192.png">
@@ -2174,6 +2175,12 @@ tr.repeche td:first-child{box-shadow:inset 3px 0 0 #E3B64C}
 .ca-logo i{position:absolute;inset:auto 0 0 0;height:18px;background:rgba(5,11,31,.65);font-size:10px;font-style:normal;display:grid;place-items:center}
 .ca-nom{flex:1;min-width:0;font-size:16px}
 /*HABILLAGE-CSS*/
+/* Le site choisit lui-même ses couleurs (sombre par défaut, clair au choix) : on le dit au navigateur, pour que le mode
+   sombre forcé de Samsung Internet ou de Chrome Android ne le « fonce » pas une deuxième fois (or devenu rouge brun,
+   boutons ternes, contours abîmés). */
+:root{color-scheme:light dark}
+:root[data-theme="dark"]{color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light only}
 /* =====================================================================
    HABILLAGE « NUIT DE MATCH » : refonte visuelle du site public
    (tout ce qui suit se superpose au style d'origine, sans rien retirer)
@@ -2277,7 +2284,7 @@ tr.repeche td:first-child{box-shadow:inset 3px 0 0 #E3B64C}
 .hero.hero-stade .hero-texte > p:not(.hero-sur){font-size:18px;color:#D6E0FA;max-width:42ch;margin-top:16px;text-shadow:0 2px 12px rgba(0,0,0,.6)}
 .hero.hero-stade .btns{margin-top:24px;gap:12px}
 .hero.hero-stade .btn{font-size:20px;padding:13px 24px}
-.hero.hero-stade .btn.stage-bt{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.35);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.hero.hero-stade .btn.stage-bt{color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.35);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .hero-ballon{position:relative;justify-self:center;width:min(100%,560px,64vh);aspect-ratio:1;border-radius:50%;cursor:grab;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 .hero-ballon.saisi{cursor:grabbing}
 .hero-indice{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);white-space:nowrap;font:700 12.5px var(--corps);letter-spacing:.06em;color:#DCE5FA;
@@ -2607,6 +2614,12 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;back
   .stade3d{height:min(100%,calc(64px + min(70vw,290px,40svh) + 40px));-webkit-mask-image:linear-gradient(180deg,#000 74%,transparent);mask-image:linear-gradient(180deg,#000 74%,transparent)}
   .hero-voile{background:linear-gradient(180deg,rgba(3,8,23,.15) 0,transparent 50px,transparent 62%,var(--nuit-1) 100%)}
   .hero.hero-stade{background:var(--nuit-1)}
+}
+
+/* téléphones : les textes en dégradé restent nets (le halo « drop-shadow » sous un texte découpé floute sur certains navigateurs Android) */
+@media (max-width:760px){
+  .hero.hero-stade h1 em{filter:none}
+  .hero-stade .annee{-webkit-text-stroke-width:1.2px}
 }
 /*/HABILLAGE-CSS*/
 </style>
