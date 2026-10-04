@@ -180,6 +180,16 @@
   const compteTexte = n => `${n} ligne${n > 1 ? "s" : ""} d'informations sur ${MAX_LIGNES}${n > MAX_LIGNES ? " : seules les " + MAX_LIGNES + " premières seront sur l'affiche" : ""}`;
 
   /* ---------- le panneau ---------- */
+  // « Comment ça marche ? » replié en haut de l'onglet (briques communes ONG, chargées après ce fichier)
+  const AIDE = `<ol>
+      <li>Choisis l'événement : stage, loto, tournoi ou autre.</li>
+      <li>Remplis ce qui sera écrit sur l'affiche : l'aperçu se met à jour tout seul.</li>
+      <li>Relis le message de l'annonce : il s'écrit tout seul, tu peux le changer.</li>
+      <li>Touche <b>« Publier maintenant »</b>, ou télécharge l'affiche pour la poster toi-même.</li>
+    </ol>
+    <p class="ev-astuce">Pour un stage : dans l'onglet Stages, le bouton « 🎨 Créer l'affiche » remplit tout à partir de la fiche du stage. Ce que tu écris reste gardé sur cet appareil.</p>`;
+  const aide = () => typeof ONG === "object" && ONG && ONG.aide ? ONG.aide("ev-aide", "Comment ça marche ?", AIDE) : "";
+  const etape = (n, id, titre) => `<h2 id="${id}"><span class="ev-n" aria-hidden="true">${n}</span>${titre}</h2>`;
   function panEvenements(){
     const e = E(), t = e.type, T = TYPES[t], b = B();
     if (!S.heberge) return `<div class="carte af-carte"><div class="af-tete"><h2>Affiches d'événement</h2></div>
@@ -189,14 +199,15 @@
     const emo = aEmoji(b.titre) || aEmoji(b.sous) || aEmoji(b.lieu) || aEmoji(b.texte);
     const opt = (k, l, res) => `<label class="af-choix ${e.pub[k] ? "on" : ""}"><input type="checkbox" data-ev-pub="${k}" aria-label="${l} ${res}" ${e.pub[k] ? "checked" : ""}>${l}</label>`;
     const libre = b.msgLibre && b.msg !== messageAuto(b, t);
-    return `<div class="ev-zone">
+    return `<div class="ev-zone ong-ev">
+    ${aide()}
     <div class="carte af-carte ev-tete-carte">
-      <div class="af-tete"><h2>Affiches d'événement</h2><small>Tu écris, l'affiche se dessine toute seule avec le fond du stade</small></div>
+      <div class="af-tete"><h2>Quel événement ?</h2><small>Tu écris, l'affiche se dessine toute seule avec le fond du stade</small></div>
       <div class="ev-types" role="group" aria-label="Type d'événement">${Object.entries(TYPES).map(([k, x]) => `<button type="button" class="ev-type" aria-pressed="${k === t}" data-ev-a="type" data-k="${k}"><span>${x.ico}</span>${esc(x.nom)}</button>`).join("")}</div>
     </div>
     <div class="ev-grille">
       <section class="carte af-carte ev-ecrire" aria-labelledby="ev-h-ecrire">
-        <div class="af-tete"><h2 id="ev-h-ecrire">✏️ Ce qui sera écrit sur l'affiche</h2><small>${esc(T.nom)}</small></div>
+        <div class="af-tete">${etape(1, "ev-h-ecrire", "Ce qui sera écrit sur l'affiche")}<small class="ev-puce">${T.ico} ${esc(T.nom)}</small></div>
         <div class="ev-champs">
           <label class="ev-plein">Titre (en grand)<input data-ev="titre" maxlength="80" value="${esc(b.titre)}" placeholder="${esc(T.ex.titre)}"></label>
           <label class="ev-plein">Sous-titre (en doré)<input data-ev="sous" maxlength="80" value="${esc(b.sous)}" placeholder="${esc(T.ex.sous)}"></label>
@@ -209,31 +220,31 @@
           <p class="ev-plein ev-emoji" id="ev-emoji" ${emo ? "" : "hidden"}>Les émojis ne sont pas dessinés sur l'affiche : mets-les plutôt dans le message.</p>
           <label class="ev-plein ev-case"><input type="checkbox" data-ev="sponsors" ${b.sponsors ? "checked" : ""}> Bandeau des partenaires en bas de l'affiche</label>
         </div>
-        <div class="btns"><button type="button" class="btn contour petit" data-ev-a="vider">🗑️ Tout effacer</button></div>
+        <div class="ev-pied"><button type="button" class="btn danger petit" data-ev-a="vider">🗑️ Tout effacer</button></div>
       </section>
       <section class="carte af-carte ev-apercu" aria-labelledby="ev-h-apercu">
-        <div class="af-tete"><h2 id="ev-h-apercu">👀 L'affiche</h2></div>
-        <div class="ev-formats" role="group" aria-label="Format de l'aperçu">${FORMATS.map(([k, l, d]) => `<button type="button" class="as-fmt ${k === e.fmt ? "on" : ""}" aria-pressed="${k === e.fmt}" data-ev-a="fmt" data-k="${k}" title="${d}">${l}</button>`).join("")}</div>
+        <div class="af-tete"><h2 id="ev-h-apercu">L'aperçu</h2>
+          <div class="ev-formats" role="group" aria-label="Format de l'aperçu">${FORMATS.map(([k, l, d]) => `<button type="button" class="as-fmt ${k === e.fmt ? "on" : ""}" aria-pressed="${k === e.fmt}" data-ev-a="fmt" data-k="${k}" title="${d}">${l}</button>`).join("")}</div></div>
         <div class="ev-cadre" style="${styleCadre(F[3])}"><img id="ev-img" class="charge" alt="Aperçu de l'affiche" src="${esc(urlAffiche(b, t, e.fmt))}"></div>
         <div class="ev-erreur" id="ev-erreur" hidden><span>Aperçu indisponible pour le moment. Vérifie ta connexion puis réessaie ; si ça continue, préviens le responsable du site.</span> <button type="button" class="btn contour petit" data-ev-a="reessayer">Réessayer</button></div>
         <p class="ev-taille" id="ev-taille">${F[4]} · ${F[2]}</p>
       </section>
       <section class="carte af-carte ev-message" aria-labelledby="ev-h-msg">
-        <div class="af-tete"><h2 id="ev-h-msg">💬 Message de l'annonce</h2><small>Publié sous l'annonce · une story n'a pas de texte : tout doit être sur l'affiche</small></div>
-        <textarea id="ev-msg" data-ev-msg aria-labelledby="ev-h-msg" rows="${Math.max(12, message(b).split("\n").length + 2)}" maxlength="2000">${esc(message(b))}</textarea>
+        <div class="af-tete">${etape(2, "ev-h-msg", "Le message de l'annonce")}<small>Il s'écrit tout seul à partir de l'affiche · tu peux le changer</small></div>
+        <textarea id="ev-msg" data-ev-msg aria-labelledby="ev-h-msg" rows="${Math.max(8, message(b).split("\n").length + 1)}" maxlength="2000">${esc(message(b))}</textarea>
         <p class="ev-libre" id="ev-libre" ${libre ? "" : "hidden"}>✋ Message modifié à la main : il ne suit plus l'affiche. ↺ pour le refaire.</p>
-        <div class="btns"><button type="button" class="btn contour petit" data-ev-a="msg-auto">↺ Refaire le message à partir de l'affiche</button>
-          <button type="button" class="btn contour petit" data-ev-a="msg-copier">📋 Copier</button></div>
+        <div class="btns"><button type="button" class="btn contour petit" data-ev-a="msg-copier">📋 Copier le message</button>
+          <button type="button" class="btn contour petit" data-ev-a="msg-auto">↺ Refaire à partir de l'affiche</button></div>
       </section>
       <section class="carte af-carte ev-publier" aria-labelledby="ev-h-pub">
-        <div class="af-tete"><h2 id="ev-h-pub">📣 Publier</h2><small>La bonne taille est choisie toute seule</small></div>
+        <div class="af-tete">${etape(3, "ev-h-pub", "Publier")}<small>La bonne taille est choisie toute seule</small></div>
         <div class="ps-reseau" role="group" aria-label="Facebook"><span class="ps-reseau-nom">📘 Facebook</span><div class="af-choix-l">${opt("fb_pub", "Annonce", "Facebook")}${opt("fb_story", "Story", "Facebook")}</div></div>
         <div class="ps-reseau" role="group" aria-label="Instagram"><span class="ps-reseau-nom">📸 Instagram</span><div class="af-choix-l">${opt("ig_pub", "Annonce", "Instagram")}${opt("ig_story", "Story", "Instagram")}</div></div>
-        <p class="ev-note">Annonce : dans le fil de la page, avec le message, montrée en entier · Story : plein écran pendant 24 h, sans texte.</p>
+        <p class="ev-note">Annonce : dans le fil de la page, avec le message · Story : plein écran pendant 24 h, sans texte (tout doit être sur l'affiche).</p>
         <button type="button" class="btn bleu af-go" data-ev-a="publier" ${e.enCours ? "disabled" : ""}>${esc(e.enCours || "📣 Publier maintenant")}</button>
         ${e.etat ? `<p class="af-etat" id="ev-etat">${esc(e.etat)}</p>` : `<p class="af-etat" id="ev-etat" hidden></p>`}
-        <b class="ps-lab ev-lab">Ou la poster toi-même</b>
-        <div class="ev-dl">${FORMATS.map(([k, l, d, r, ou]) => `<button type="button" class="btn contour petit" data-ev-a="dl" data-k="${k}">⬇️ ${l} <small>${ou}</small></button>`).join("")}</div>
+        <div class="ev-soi"><b class="ps-lab ev-lab">Ou télécharge-la pour la poster toi-même</b>
+        <div class="ev-dl">${FORMATS.map(([k, l, d]) => `<button type="button" class="btn contour petit" data-ev-a="dl" data-k="${k}">⬇️ ${l} <small>${d}</small></button>`).join("")}</div></div>
       </section>
     </div></div>`;
   }
@@ -256,6 +267,7 @@
   function majMessage(){
     const b = B(), z = document.getElementById("ev-msg");
     if (z && !b.msgLibre && document.activeElement !== z) z.value = messageAuto(b, E().type);
+    if (z) z.rows = Math.max(8, z.value.split("\n").length + 1);       // le message grandit avec son texte : tout reste visible
     const l = document.getElementById("ev-libre"); if (l) l.hidden = !(b.msgLibre && b.msg !== messageAuto(b, E().type));
   }
   function etat(txt){
@@ -476,6 +488,7 @@
   /* ---------- styles (partagés avec l'onglet Affiches matchs) ---------- */
   const css = document.createElement("style");
   css.id = "evenements-css";
+  const R = "body.sur-espace #panneau .ong-ev";
   css.textContent = `
 .ev-types{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .ev-type{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;border:1px solid var(--ligne);border-radius:14px;background:var(--fond);color:var(--texte);font:800 16px var(--corps);cursor:pointer}
@@ -525,6 +538,40 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 @media (max-width:560px){
   .ev-types{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ev-champs{grid-template-columns:minmax(0,1fr)}
+}
+/* onglet Événements rangé : aide repliée en haut, étapes numérotées 1 · 2 · 3, « Tout effacer » en rouge et à part */
+${R} .ong-aide{margin-bottom:16px}
+${R} .ev-astuce{margin:10px 0 0;font-size:14.5px}
+${R} .af-tete{align-items:center}
+${R} .af-tete h2{display:flex;align-items:center;gap:12px;font-size:24px;line-height:1.15}
+${R} .ev-tete-carte{padding-bottom:20px}
+${R} .ev-tete-carte .af-tete h2{font-size:22px}
+${R} .ev-type{min-height:84px;transition:border-color .15s,background .15s}
+${R} .ev-type:hover{border-color:var(--bleu-texte)}
+${R} .ev-n{flex:none;width:32px;height:32px;border-radius:50%;display:inline-grid;place-items:center;background:linear-gradient(180deg,#F7D774,#C9A227);color:#0B1633;font:900 17px var(--corps)}
+${R} .ev-puce{padding:4px 12px;border-radius:999px;background:rgba(143,168,240,.16);color:#DCE5FF;font-weight:700;font-size:14px}
+${R} .ev-pied{display:flex;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--ligne)}
+${R} .ev-pied .btn{min-height:44px}
+${R} .ev-apercu .ev-formats{margin:0}
+${R} .ev-apercu .ev-formats .as-fmt{padding:8px 16px}
+${R} .ev-message textarea{min-height:220px}
+${R} .ev-message .btns{margin-top:12px}
+${R} .ev-publier .af-go{min-height:54px;margin:16px 0 10px}
+${R} .ev-soi{margin-top:16px;padding-top:14px;border-top:1px solid var(--ligne)}
+${R} .ev-soi .ev-lab{margin:0 0 10px}
+${R} .ev-dl .btn{min-height:44px}
+${R} .ev-dl small{margin-left:4px}
+:root[data-theme="light"] ${R} .ev-puce{background:rgba(28,79,214,.1);color:#1C4FD6}
+:root[data-theme="light"] ${R} .ev-type{background:#fff;border-color:#C9D4F2}
+:root[data-theme="light"] ${R} .ev-type[aria-pressed="true"]{background:rgba(28,99,196,.12);border-color:#1C63C4}
+/* thème clair : champs blancs bien lisibles (la règle sombre commune l'emporte sinon) et bouton rouge lisible */
+:root[data-theme="light"] ${R} input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]){background:#fff;border-color:#C9D4F2;color:var(--texte)}
+:root[data-theme="light"] ${R} .btn.danger{color:#B91C1C;border-color:rgba(220,38,38,.55);background:rgba(220,38,38,.06)}
+@media (max-width:700px){
+  ${R} .af-tete h2{font-size:21px}
+  ${R} .ev-tete-carte .af-tete h2{font-size:20px}
+  ${R} .ev-n{width:28px;height:28px;font-size:15px}
+  ${R} .ev-message .btns .btn,${R} .ev-dl .btn{flex:1 1 100%;text-align:center}
 }`;
   document.head.appendChild(css);
 
