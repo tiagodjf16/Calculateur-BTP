@@ -218,7 +218,7 @@ body.sur-espace .app-tete.esp-bandeau p{color:#D5DEFA;margin-top:6px;font-size:1
 .esp-accueil:hover{background:rgba(255,255,255,.22)}
 .esp-accueil:active{transform:scale(.97)}
 /* onglets de la rubrique : un sélecteur clair */
-body.sur-espace .rub-onglets{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 22px;padding:6px;
+body.sur-espace .rub-onglets{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 22px;padding:6px;
   background:rgba(10,20,48,.75);border:1px solid rgba(143,168,240,.2);border-radius:16px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 body.sur-espace .rub-onglets::-webkit-scrollbar{display:none}
 body.sur-espace .rub-onglets button{flex:1 0 auto;min-height:46px;padding:10px 18px;border-radius:12px;border:0;background:none;color:#C9D4F2;
