@@ -1,0 +1,43 @@
+# Adresses propres : /api/db et /api/sync
+RewriteEngine On
+
+# Tout le monde passe en https (cadenas), et www renvoie vers l'adresse principale
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://asf-pierrelatte.fr%{REQUEST_URI} [L,R=301]
+# Si le site est dans un sous-dossier, décommenter la ligne suivante en l'adaptant :
+# RewriteBase /foot/
+RewriteRule ^api/db/?$   api/db.php   [L]
+RewriteRule ^api/sync/?$ api/sync.php [L]
+RewriteRule ^api/push/?$ api/push.php [L]
+RewriteRule ^api/auth/?$ api/auth.php [L]
+RewriteRule ^api/upload/?$ api/upload.php [L]
+
+# Le fichier de configuration ne doit jamais être servi tel quel
+<Files "config.php">
+  Require all denied
+</Files>
+<Files "session.php">
+  Require all denied
+</Files>
+<Files "vapid.pem">
+  Require all denied
+</Files>
+
+# Les photos envoyées ne peuvent jamais être exécutées comme du code
+<IfModule mod_php.c>
+  <FilesMatch "^photos/.*\.php$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+
+# Les pages et le service worker : le navigateur revérifie à chaque visite (réponse « rien n'a changé » si c'est le cas),
+# pour que tout le monde ait la dernière version du site dès qu'elle est en ligne
+<IfModule mod_headers.c>
+  <FilesMatch "\.html?$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>

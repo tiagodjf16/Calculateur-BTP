@@ -1,0 +1,5 @@
+# Dossier des photos envoyées : aucun fichier de code ne peut y être lu ni exécuté
+<FilesMatch "\.(php[0-9]?|phtml|phar|pht|pl|py|cgi|sh|shtml)$">
+  Require all denied
+</FilesMatch>
+Options -ExecCGI -Indexes
