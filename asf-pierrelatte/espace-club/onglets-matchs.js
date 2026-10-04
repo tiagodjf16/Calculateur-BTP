@@ -127,8 +127,8 @@
           : "La FFF ne publie pas leurs matchs : c'est ici qu'on les saisit.";
         const section = (titre, n, cle, note) => `${ONG.titre(titre, n)}${note ? `<p class="ong-vet-mini">${note}</p>` : ""}<div class="ong-vet-liste" data-ong-place="${cle}"></div>`;
         const html = `<div class="ong-vet">
-          ${ONG.barre("Matchs des vétérans", sous, `<span data-ong-place="ajout"></span>`)}
           ${ONG.aide("vet-aide", "Comment ça marche ?", AIDE_VET + (l.length ? `<p class="ong-vet-astuce">La FFF ne publie pas les matchs des vétérans : c'est ici qu'on les saisit.</p>` : ""))}
+          ${ONG.barre("Matchs des vétérans", sous, `<span data-ong-place="ajout"></span>`)}
           ${l.length ? "" : ONG.vide("Aucun match des vétérans", "Ajoute le prochain match : il partira sur les affiches du lundi.")}
           ${prochain.length ? section("Prochain match", null, "prochain") : ""}
           ${aSaisir.length ? section("Scores à saisir", aSaisir.length, "saisir", "Touche un match pour mettre son score.") : ""}
@@ -246,8 +246,8 @@
       }
       const ouvertDefaut = !tous.length || fait1 || liste.length > 0;
       const html = `<div class="ong-tn ong-tn-liste">
-        ${ONG.barre("Tournois", "Tirage au sort des poules, puis scores et classements en direct sur le site.", "")}
         ${ONG.aide("tournois-aide", "Comment ça marche ?", AIDE_LISTE)}
+        ${ONG.barre("Tournois", "Tirage au sort des poules, puis scores et classements en direct sur le site.", "")}
         ${ONG.pli("tournois-creer", `Créer un tournoi<small class="ong-tn-pli-sous">Le tournoi, les équipes, puis le tirage au sort</small>`, `<span data-ong-place="form"></span>`, ouvertDefaut, "+")}
         ${tous.length ? `${ONG.titre("Tes tournois", tous.length)}<span data-ong-place="cartes"></span>`
           : ONG.vide("Aucun tournoi pour l'instant", "Ton tournoi apparaîtra ici dès que tu auras validé son tirage au sort.")}
@@ -402,6 +402,7 @@
     // « Lancer la phase finale » et « Afficher sur le site / Retirer du site » enregistrent sans redessiner l'onglet sur le site
     // en ligne (là, l'onglet ne se redessine pas tout seul) : on le redessine dès que l'enregistrement est revenu
     document.addEventListener("click", ev => {
+      if (window.ONG && ONG.suivi) return;                     // espace.js redessine déjà l'onglet ouvert quand ses données changent
       if (!(ev.target.closest && ev.target.closest('#panneau [data-a="lancer-finale"], #panneau [data-a="toggle-tournoi"]'))) return;
       const avant = S.tournois; let n = 0;
       const minuteur = setInterval(() => {
@@ -429,7 +430,7 @@
 /* ---------- commun ---------- */
 ${V} .ong-a-part,${T} .ong-a-part{margin-left:auto}
 ${V} .ong-titre,${T} .ong-titre{margin:26px 0 12px}
-${V} .ong-aide,${T} .ong-aide{margin-bottom:6px}
+${V} .ong-aide,${T} .ong-aide{margin-bottom:16px}
 /* ---------- Vétérans ---------- */
 ${V} .ong-barre p b.ong-vet-alerte{color:#F3C969}
 ${V} .ong-vet-ajout{min-height:50px;font-size:16px;padding:12px 22px}

@@ -16,6 +16,11 @@
      ACTUALITÉS
      ===================================================================== */
   const NB_ACCUEIL = 5;                       // l'accueil du site fait défiler les 5 plus récentes (voir rendreHeroActus)
+  // « Comment ça marche ? » en premier sous les onglets, comme dans tous les autres onglets de l'espace club
+  const AIDE_ACTUS = `<ol>
+      <li>Touche <b>« Nouvelle actualité »</b> : un titre, la date, quelques lignes (et une photo si tu veux), puis <b>« Publier l'actualité »</b>.</li>
+      <li>Elle est tout de suite sur le site ; les ${NB_ACCUEIL} plus récentes défilent en haut de la page d'accueil.</li>
+      <li>Une faute ? <b>« Modifier »</b> sur sa fiche. Elle n'a plus lieu d'être ? <b>« Supprimer »</b>, en rouge.</li></ol>`;
 
   function carteActu(a, i){
     if (S.ui.ongActuEdit === a.id) return carteEdition(a);
@@ -59,6 +64,7 @@
         form.classList.add("ong-actu-nouv");
         const bt = form.querySelector("button.btn.bleu"); if (bt) bt.closest("div").classList.add("ong-actu-btns");
         const html = `<div class="ong-actus">
+          ${ONG.aide("actu-aide", "Comment ça marche ?", AIDE_ACTUS)}
           ${ONG.pli("actu-nouvelle", "Nouvelle actualité", `<span data-ong-place="form"></span>`, !l.length, "+")}
           ${l.length ? `${ONG.titre("Publiées sur le site", l.length)}
             <p class="quoi ong-actu-astuce">Les ${NB_ACCUEIL} plus récentes défilent en haut de la page d'accueil du site.</p>
@@ -286,7 +292,7 @@
   css.textContent = `
 /* ---------- Actualités ---------- */
 ${A} .ong-pli{margin-bottom:16px}
-${A} .ong-pli>summary{font-size:17.5px;min-height:62px}
+${A} .ong-pli>summary{min-height:62px}
 ${A} .ong-pli>summary .plus{position:static;display:grid!important;flex:none;width:34px;height:34px;padding:0;border:0;border-radius:11px;background:linear-gradient(180deg,#2F6BFF,#1C4FD6);color:#fff;box-shadow:0 6px 14px rgba(47,107,255,.35)}
 ${A} .ong-actu-nouv .grille{grid-template-columns:minmax(0,2fr) minmax(220px,1fr)}
 ${A} .ong-actu-nouv textarea,${A} .ong-actu-form textarea{min-height:130px;line-height:1.5}

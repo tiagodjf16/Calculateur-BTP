@@ -112,6 +112,118 @@
     }, 0);
   }, true);
 
+  /* ================= L'ONGLET OUVERT SE MET À JOUR TOUT SEUL (site en ligne) =================
+     Sur le site hébergé, l'application ne redessine jamais l'onglet ouvert quand ses données changent (majAdmin ne le fait
+     que pour « l'éditeur ») : ce qu'on venait d'enregistrer (publier une compo, ajouter un joueur, un créneau, supprimer une
+     actualité…) ou ce qu'un autre dirigeant, un joueur ou un parent enregistrait n'apparaissait qu'en changeant d'onglet.
+     On redessine l'onglet ouvert comme l'application le fait pour l'éditeur, mais prudemment :
+     - seulement si les données que montre cet onglet ont vraiment changé depuis son dernier affichage ;
+     - jamais pendant une saisie : un champ de l'onglet a le curseur, un champ a été tapé sans être enregistré, l'éditeur
+       de compo est ouvert, ou une fenêtre (choix d'un club, d'une date…) est ouverte. On réessaie quand c'est fini
+       (champ quitté, formulaire envoyé, fenêtre fermée) ; les blocs dépliés restent dépliés.
+     Onglets suivis : ceux que l'application suit pour l'éditeur (effectifs, entraînements, compos, actualités, tournois,
+     réunions, bénévoles), plus Le club quand son brouillon n'a pas été touché. */
+  const VIVANTS = {
+    effectifs: () => [S.effectifs, C().equipes],
+    entrainements: () => [S.entrainements, S.presences, S.effectifs, S.matchs],
+    compos: () => S.ui.compo ? null : [S.compos, S.matchs, S.effectifs],
+    actus: () => [S.actus],
+    tournois: () => [S.tournois],
+    reunions: () => [S.reunions],
+    benevoles: () => [S.benevoles, S.engagements],
+    club: () => (S.ui.clubSection || "infos") === "clubs" ? null : [S.club],
+  };
+  const signature = () => { const f = VIVANTS[S.ui.onglet]; if (!f) return null; try { const d = f(); return d ? S.ui.onglet + "|" + JSON.stringify(d) : null; } catch(err){ return null; } };
+  let signeAffiche = null, enAttente = false, minuteur = 0;
+  const base = new WeakMap(), envoyes = new WeakMap();      // envoyes : formulaire → heure de l'envoi
+  const CHAMPS = "input:not([type=file]):not([type=button]):not([type=submit]):not([type=reset]):not([type=image]), select, textarea";
+  const valeur = c => (c.type === "checkbox" || c.type === "radio") ? (c.checked ? "1" : "0") : c.tagName === "SELECT" ? String(c.selectedIndex) : c.value;
+  const defaut = c => (c.type === "checkbox" || c.type === "radio") ? (c.defaultChecked ? "1" : "0")
+    : c.tagName === "SELECT" ? String(Math.max(0, [...c.options].map(o => o.defaultSelected).lastIndexOf(true))) : c.defaultValue;
+  // les champs de recherche (l'application les garde et les remet elle-même) ne comptent pas comme une saisie
+  const filtre = c => c.type === "search" || [...c.attributes].some(x => /^data-[a-z-]*cherche/.test(x.name));
+  // champs enregistrés tout de suite par l'application, ou gardés dans un brouillon qu'elle remet à chaque affichage
+  const ENREGISTRES = '[data-ent],[data-nt],[data-nt-rep],[data-t-num],[data-t-ajout],[data-import-cat],[data-a="choix-eq"],[data-statut],[data-recrute],[data-perm],[data-eq-perm],[data-r],[data-cpt-eq],[data-club],[data-champ],[data-club-num],[data-imp-c],[data-vc],[data-anc],[data-an-lieu],[data-vet-lieu],[data-logo-adv],[data-cl],[data-e],[data-c]';
+  const noterBase = () => { const p = document.getElementById("panneau"); if (p) p.querySelectorAll(CHAMPS).forEach(c => base.set(c, valeur(c))); };
+  function saisieEnCours(p){
+    for (const c of p.querySelectorAll(CHAMPS)){
+      if (filtre(c) || (c.form && Date.now() - (envoyes.get(c.form) || 0) < 5000)) continue;   // envoyé il y a moins de 5 s : il part à l'enregistrement
+      if (valeur(c) !== (base.has(c) ? base.get(c) : defaut(c))) return true;
+    }
+    return false;
+  }
+  function occupe(p){
+    const a = document.activeElement;
+    if (a && p.contains(a) && a.matches("input, select, textarea, [contenteditable]")) return true;
+    if (document.body.classList.contains("modale-ouverte") || document.querySelector(".modale-fond, .dp-fond")) return true;
+    return saisieEnCours(p);
+  }
+  // les blocs dépliés de l'application (« Voir les réponses »…) restent dépliés après le nouvel affichage
+  const cleBloc = d => { const s = d.querySelector(":scope > summary"); return (s ? s.textContent : "").replace(/\d+/g, "#").replace(/\s+/g, " ").trim(); };
+  function rafraichir(){
+    clearTimeout(minuteur); minuteur = 0;
+    const p = document.getElementById("panneau");
+    if (S.editeur || !p || !S.db){ enAttente = false; return; }            // l'éditeur : l'application s'en charge déjà
+    const s = signature();
+    if (!s || s === signeAffiche){ enAttente = false; return; }
+    if (location.hash !== "#espace"){ enAttente = true; return; }          // on redessinera en revenant dans l'espace
+    if (occupe(p)){ enAttente = true; minuteur = setTimeout(rafraichir, 2000); return; }
+    if (S.ui.onglet === "club"){
+      // Le club : on ne remplace le brouillon que s'il était à jour (barre « Tout est enregistré ») ; sinon on garde les changements
+      const barre = p.querySelector(".ong-reg-save");
+      if (!barre || barre.classList.contains("ong-reg-modifie")){ enAttente = false; signeAffiche = s; return; }
+      S.ui.club = null;
+    }
+    enAttente = false;
+    const vus = {}, ouverts = [...p.querySelectorAll("details[open]:not([data-ong-pli])")].map(d => { const k = cleBloc(d); vus[k] = (vus[k] || 0) + 1; return k + "|" + vus[k]; });
+    try { rendrePanneau(); } catch(err){ return; }
+    if (ouverts.length){
+      const vus2 = {};
+      p.querySelectorAll("details:not([data-ong-pli])").forEach(d => { const k = cleBloc(d); vus2[k] = (vus2[k] || 0) + 1; if (ouverts.includes(k + "|" + vus2[k])) d.open = true; });
+    }
+  }
+  if (typeof window.majAdmin === "function" && typeof window.rendrePanneau === "function"){
+    const majAvant = window.majAdmin;
+    window.majAdmin = function(){ const r = majAvant.apply(this, arguments); try { rafraichir(); } catch(err){} return r; };
+    // chaque affichage de l'onglet (par l'application ou par nous) : ce qu'il montre, et la valeur de départ de ses champs
+    const rendreAvant = window.rendrePanneau;
+    window.rendrePanneau = function(){
+      const r = rendreAvant.apply(this, arguments);
+      try { signeAffiche = signature(); enAttente = false; clearTimeout(minuteur); setTimeout(noterBase, 60); } catch(err){}
+      return r;
+    };
+    if (window.ONG) ONG.suivi = true;                                    // les onglets n'ont plus à se redessiner eux-mêmes
+    const reessayer = ms => { if (enAttente){ clearTimeout(minuteur); minuteur = setTimeout(rafraichir, ms); } };
+    document.addEventListener("focusout", () => reessayer(80));
+    document.addEventListener("click", () => reessayer(350));
+    window.addEventListener("hashchange", () => reessayer(120));
+    // un formulaire envoyé : ce qui y est tapé part à l'enregistrement, ce n'est plus une saisie en cours pendant 5 s
+    // (ou jusqu'à la prochaine frappe) ; s'il est refusé et garde son texte, il redevient une saisie en cours
+    document.addEventListener("submit", ev => { const f = ev.target; if (f && f.closest && f.closest("#panneau")) envoyes.set(f, Date.now()); reessayer(400); }, true);
+    document.addEventListener("input", ev => { const f = ev.target && ev.target.form; if (f) envoyes.delete(f); }, true);
+    // un champ enregistré tout de suite (créneau, statut…) n'est plus une saisie en cours une fois validé
+    document.addEventListener("change", ev => {
+      const c = ev.target, p = document.getElementById("panneau");
+      if (p && c && c.matches && p.contains(c) && c.matches(CHAMPS) && c.matches(ENREGISTRES)) base.set(c, valeur(c));
+    });
+  }
+
+  /* ================= CHOIX D'UN CLUB : LA LISTE COMPLÈTE QUAND LA RECHERCHE EST VIDE =================
+     L'application filtre avec slug(recherche), qui vaut « x » pour une recherche vide : à l'ouverture de la fenêtre, et quand
+     on efface ce qu'on a tapé, seuls les clubs contenant un « x » restaient. Sans lettre ni chiffre tapé, on montre tout. */
+  if (typeof window.listePickClub === "function" && typeof window.clubsPick === "function"){
+    const pickAvant = window.listePickClub;
+    const sansMot = q => !/[0-9a-z]/i.test(String(q || "").normalize("NFD").replace(/[̀-ͯ]/g, ""));
+    window.listePickClub = function(q){
+      if (!sansMot(q)) return pickAvant.apply(this, arguments);
+      try {
+        const l = clubsPick();
+        return l.slice(0, 80).map(([nom, n, district]) => `<button type="button" class="pick-club" data-club-choix="${esc(nom)}"${district ? ` data-district="${esc(district)}"` : ""}>
+      <span class="pick-logo">${srcLogoClub(n) ? `<img src="${esc(srcLogoClub(n))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${esc(String(nom).slice(0, 1))}'">` : (logoAdvSrc(nom) ? `<img src="${logoAdvSrc(nom)}" alt="" loading="lazy" onerror="this.remove()">` : esc(nom.slice(0, 1)))}</span><span><b>${esc(nom)}</b></span></button>`).join("");
+      } catch(err){ return pickAvant.apply(this, arguments); }
+    };
+  }
+
   /* cartes en relief : elles s'inclinent sous la souris (ordinateur) */
   if (matchMedia("(hover: hover) and (pointer: fine)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches){
     document.addEventListener("pointermove", ev => {
@@ -261,8 +373,8 @@ body.sur-espace #panneau .rangee:hover{border-color:rgba(143,168,240,.45)}
 body.sur-espace #panneau .rangee .txt{flex:1;min-width:200px}
 body.sur-espace #panneau .item{border-radius:18px;background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5));border:1px solid rgba(143,168,240,.18)}
 body.sur-espace #panneau .statut,body.sur-espace #panneau .etiq{border-radius:999px}
-/* messages vides : clairs et aérés */
-body.sur-espace #panneau .vide,body.sur-espace #panneau .etat-vide{border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
+/* messages vides : clairs et aérés (pas le champ de date encore vide, qui porte aussi la classe « vide ») */
+body.sur-espace #panneau .vide:not(.dp-champ),body.sur-espace #panneau .etat-vide{border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
 body.sur-espace #panneau .etat-vide b{color:#fff}
 /* tableaux */
 body.sur-espace #panneau table{border-collapse:separate;border-spacing:0;border:1px solid rgba(143,168,240,.2);border-radius:16px;overflow:hidden}
@@ -283,6 +395,9 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
 :root[data-theme="light"] body.sur-espace #panneau .btn.danger{background:#fff;color:#B91C1C;border-color:#F87171}
 :root[data-theme="light"] body.sur-espace #panneau .btn.danger:hover{background:#FEE2E2}
 :root[data-theme="light"] body.sur-espace #panneau .quoi{color:var(--texte-doux)}
+/* thème clair : les verts trop pâles sur fond blanc (présents, « Publiée », « Sur le site ») */
+:root[data-theme="light"] body.sur-espace #panneau .en-compte .v,:root[data-theme="light"] body.sur-espace #panneau .en-det b.v,
+:root[data-theme="light"] body.sur-espace #panneau .etiq.ok{color:#15803D}
 :root[data-theme="light"] body.sur-espace .rub-onglets{background:var(--carte)}
 :root[data-theme="light"] body.sur-espace .rub-onglets button{color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .rub-onglets button[aria-selected="true"]{color:#fff}
@@ -316,10 +431,21 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
   .esp-moi-bt{flex:1;justify-content:center}
   .esp-rubs{grid-template-columns:minmax(0,1fr);gap:14px}
   .esp-lanceur h2{font-size:24px}
-  .esp-accueil{padding:8px 13px;min-height:40px}
+  /* le bandeau garde la même hauteur d'un onglet à l'autre : « Accueil » toujours en haut à droite (il passait dessous
+     quand la phrase de l'onglet était longue, et les onglets de la rubrique sautaient), la phrase sur deux lignes au plus */
+  body.sur-espace .app-tete.esp-bandeau{display:block;position:relative}
+  body.sur-espace .app-tete.esp-bandeau h1{padding-right:112px;min-height:44px}
+  body.sur-espace .app-tete.esp-bandeau p{min-height:2.8em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .esp-accueil{position:absolute;top:16px;right:16px;padding:8px 13px;min-height:40px}
   body.sur-espace .rub-onglets button{padding:10px 14px;font-size:14.5px}
   body.sur-espace #panneau .carte{padding:16px}
   body.sur-espace #panneau .carte>div:last-child>.btn.bleu:only-child,body.sur-espace #panneau form.carte>div:last-child>.btn.bleu{width:100%}
+}
+/* petits téléphones : le nom de la rubrique un peu plus petit, pour ne pas passer sous « Accueil » */
+@media (max-width:380px){
+  body.sur-espace .app-tete.esp-bandeau h1{font-size:21px;gap:10px;padding-right:104px}
+  body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:40px;height:40px;font-size:21px}
+  .esp-accueil{padding:8px 11px}
 }`;
   document.head.appendChild(css);
   // l'espace est peut-être déjà affiché : on l'habille tout de suite

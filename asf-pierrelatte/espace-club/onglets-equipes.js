@@ -1,6 +1,6 @@
 /* Mes équipes › Compos, Entraînements, Effectifs : l'intérieur des onglets, rangé et simple à prendre en main.
-   - En haut de chaque onglet : l'équipe (bien visible, « Ton équipe » quand le coach n'en a qu'une), ses chiffres et l'action principale.
-   - Juste dessous : « 💡 Comment ça marche ? » replié, en quelques étapes.
+   - Tout en haut, comme dans tous les onglets : « 💡 Comment ça marche ? » replié, en quelques étapes.
+   - Juste dessous : l'équipe (bien visible, « Ton équipe » quand le coach n'en a qu'une), ses chiffres et l'action principale.
    - Entraînements : les créneaux dans un cadre clair (enregistrés tout seuls), puis la semaine et ses séances.
    - Effectifs : « Joueurs de … » avec la recherche juste au-dessus de la liste ; l'import Footclubs et l'ajout dans des cadres
      qu'on ferme ; « Peuvent aussi jouer » replié sous la liste.
@@ -63,7 +63,7 @@
       }
       if (cr.length) ordonnerActions(b, btPrev, [btCr]);
       else if (btPrev){ btPrev.classList.remove("bleu"); btPrev.classList.add("contour"); }   // d'abord ajouter un créneau (bouton bleu du cadre)
-      b.insertAdjacentHTML("afterend", ONG.aide("eq-ent-aide", "Comment ça marche ?", AIDE_ENT));
+      b.insertAdjacentHTML("beforebegin", ONG.aide("eq-ent-aide", "Comment ça marche ?", AIDE_ENT));      // l'aide en premier, comme dans tous les onglets
     }
 
     // le cadre des créneaux
@@ -121,7 +121,7 @@
       if (btImp){ btImp.innerHTML = `<span aria-hidden="true">📥</span> Importer depuis Footclubs`; btImp.setAttribute("aria-expanded", ouvert === "import" ? "true" : "false"); }
       if (btAj) btAj.setAttribute("aria-expanded", ouvert === "ajout" ? "true" : "false");
       ordonnerActions(b, btAj, [btImp]);
-      b.insertAdjacentHTML("afterend", ONG.aide("eq-eff-aide", "Comment ça marche ?", AIDE_EFF));
+      b.insertAdjacentHTML("beforebegin", ONG.aide("eq-eff-aide", "Comment ça marche ?", AIDE_EFF));      // l'aide en premier, comme dans tous les onglets
     }
     const cherche = w.querySelector("[data-cherche-eff]");
 
@@ -216,7 +216,7 @@
       [...chips.children].forEach(x => c.appendChild(x));
       w.appendChild(g);
     }
-    w.insertAdjacentHTML("beforeend", ONG.aide("eq-compos-aide", "Comment ça marche ?", AIDE_COMPOS));
+    w.insertAdjacentHTML("afterbegin", ONG.aide("eq-compos-aide", "Comment ça marche ?", AIDE_COMPOS));   // l'aide en premier, comme dans tous les onglets
     if (afaire){
       const n = afaire.querySelectorAll("[data-a='nouvelle-compo']").length;
       w.insertAdjacentHTML("beforeend", `${ONG.titre("À faire cette semaine", n)}<p class="quoi ong-cp-sous">Ces matchs n'ont pas encore de compo : touche-en un pour la commencer.</p>`);
@@ -227,10 +227,10 @@
     else if (vide) w.insertAdjacentHTML("beforeend", ONG.vide("Aucune compo à venir", "Touche « + Nouvelle compo » en haut pour préparer ton prochain match."));
     if (passees){
       const s = passees.querySelector("summary"), m = /\((\d+)\)/.exec(s ? s.textContent : "");
-      passees.classList.add("pli", "ong-pli");
+      passees.classList.add("pli", "ong-pli", "ong-archive");                // le même bloc « passé » que dans les autres onglets
       passees.dataset.ongPli = "eq-cp-passees";
       if (ONG.ouvert("eq-cp-passees", false)) passees.setAttribute("open", ""); else passees.removeAttribute("open");
-      if (s) s.innerHTML = `<span class="plus" aria-hidden="true">+</span><span class="ong-pli-t">Compos passées${m ? `<span class="ong-nb">${m[1]}</span>` : ""}</span><span class="ong-pli-fl" aria-hidden="true">▾</span>`;
+      if (s) s.innerHTML = `<span class="plus" aria-hidden="true">🗂</span><span class="ong-pli-t">Compos passées${m ? `<span class="ong-nb">${m[1]}</span>` : ""}</span><span class="ong-pli-fl" aria-hidden="true">▾</span>`;
       const corps = passees.querySelector(".cp-liste"); if (corps) corps.classList.add("pli-corps");
       w.appendChild(passees);
     }
@@ -406,7 +406,7 @@ ${S0} .ong-eq-eff .effl{gap:10px;grid-template-columns:repeat(auto-fill,minmax(3
 ${S0} .ong-eq-eff .effj{min-height:72px;border-radius:16px;border-color:rgba(143,168,240,.2);background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5))}
 ${S0} .ong-eq-eff .effj[data-j],:root[data-theme="light"] ${S0} .ong-eq-eff .effj[data-j]{border-left:4px solid var(--c)}   /* la couleur de la catégorie d'âge */
 ${S0} .ong-eq-eff .effj-av{align-content:center;justify-items:center;width:52px;height:52px}
-${S0} .ong-eq-eff .effj-av span{line-height:1}
+${S0} .ong-eq-eff .effj-av span{line-height:1;color:#fff}
 ${S0} .ong-eq-eff .effj-av.ong-sans-photo i{opacity:.9;height:17px}
 ${S0} .ong-eq-eff .effj-x{width:40px;height:40px;border-radius:12px;border:1px solid rgba(248,113,113,.45);color:#FCA5A5;background:rgba(220,38,38,.06);font-size:16px;margin-left:4px}
 ${S0} .ong-eq-eff .effj-x:hover{background:rgba(220,38,38,.2);border-color:#F87171;color:#FECACA}

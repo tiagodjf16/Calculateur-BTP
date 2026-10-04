@@ -5,7 +5,8 @@
    - Accès et rôles : recherche + « Nouveau coach ou dirigeant » en haut, filtres et « Actualiser » sur une ligne,
      comptes rangés par famille (bureau, coachs, joueurs), fiche d'un compte en blocs (son profil, ce qu'il peut ouvrir,
      code et compte à part) ; la fenêtre des accès range les onglets par rubrique ;
-   - Sauvegardes : l'état de la dernière copie et « Sauvegarder maintenant » en haut, l'explication repliée, la liste des copies.
+   - Sauvegardes : l'explication repliée (en premier, comme partout), l'état de la dernière copie et « Sauvegarder maintenant »,
+     puis la liste des copies.
    Ajouté sans modifier le script de l'application : tous les boutons gardent leurs data-a / data-k / data-*, les champs restent
    dans leur ligne [data-liste] ou leur fiche [data-cpt], le formulaire data-form="compte-staff" ne change pas. */
 (function(){
@@ -397,7 +398,7 @@
           identifiants: ["🪪", "Identifiants des joueurs", "Code commun, fiches à imprimer"],
         });
         sections.setAttribute("aria-label", "Partie à afficher");
-        // l'explication, repliée, juste sous le choix de la partie
+        // l'explication, repliée, en haut de l'onglet (juste au-dessus du choix de la partie, comme dans Le club)
         let aide;
         if (section === "comptes") aide = ONG.aide("reg-acces-aide", "Comment ça marche ?", AIDE_ACCES);
         else {
@@ -405,7 +406,7 @@
           aide = p ? ONG.aide("reg-ident-aide", "Comment un joueur se connecte la première fois ?", `<p>${p.innerHTML}</p>`) : "";
           if (det) det.remove();
         }
-        if (aide) sections.insertAdjacentHTML("afterend", aide);
+        if (aide) sections.insertAdjacentHTML("beforebegin", aide);        // en premier, comme dans tous les onglets
         const codes = racine.querySelector(".acc-codes");
         if (codes){ codes.classList.add("ong-reg-codes"); const t = codes.querySelector("h2"); if (t) t.insertAdjacentHTML("afterbegin", `<span aria-hidden="true">✅</span>`); }
         const w = envelopper(racine, "ong-reg-acces ong-reg-acces-" + section);
@@ -493,8 +494,8 @@
             ${i ? "" : `<span class="ong-reg-puce ok">La plus récente</span>`}
             <a class="btn contour petit" href="/api/sauvegarde.php?fichier=${encodeURIComponent(x.nom)}">⬇️ Télécharger</a></div>`).join("")}</div>`
         : ONG.vide("Aucune copie pour l'instant", "Elles apparaîtront ici, la plus récente en haut.", "");
-      return `<div class="ong-reg ong-reg-sv">${etat}
-        ${ONG.aide("reg-sv-aide", "Comment ça marche ?", AIDE_SV)}
+      return `<div class="ong-reg ong-reg-sv">${ONG.aide("reg-sv-aide", "Comment ça marche ?", AIDE_SV)}
+        ${etat}
         ${ONG.titre("Copies gardées", l.length)}
         ${liste}</div>`;
     };

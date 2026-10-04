@@ -50,7 +50,7 @@
   }
   // un bloc replié pour ce qui sert moins (le passé, les réglages rares)
   const archive = (cle, titre, html, defaut, icone) => ONG.pli(cle, titre, html, !!defaut, icone || "🗂")
-    .replace('class="pli ong-pli"', 'class="pli ong-pli ong-vie-archive"');
+    .replace('class="pli ong-pli"', 'class="pli ong-pli ong-archive ong-vie-archive"');      // ong-archive : même bloc « passé » que les autres onglets
 
   /* le formulaire se referme tout seul une fois l'élément créé (on retient le nombre d'éléments au moment d'envoyer) */
   const COMPTES = { reunion: () => (S.reunions || []).length, creneau: () => (S.benevoles || []).length, stage: () => (S.stages || []).length };
@@ -94,7 +94,7 @@
   const occupe = () => { const p = document.getElementById("panneau"), a = document.activeElement; return !!(p && a && p.contains(a) && a.matches("input,select,textarea")); };
   function suivre(){
     const k = S.ui.onglet, f = VIVANTS[k];
-    if (!f || S.editeur || !document.querySelector("#panneau .ong-vie")) return;
+    if (!f || S.editeur || (window.ONG && ONG.suivi) || !document.querySelector("#panneau .ong-vie")) return;   // ONG.suivi : espace.js s'en charge pour tous les onglets
     if (k + f() === signe) return;
     if (occupe() || sale){ attente = true; return; }
     try { rendrePanneau(); } catch(err){}
@@ -455,11 +455,11 @@
   css.textContent = `
 /* l'icône « + » des blocs dépliants : à sa place dans le titre (elle prenait la position fixe du menu « Plus » du site) */
 ${R} .pli>summary .plus{position:static;inset:auto;display:grid!important;flex:none;padding:0;border:0;box-shadow:none;z-index:auto;margin:0}
-${R} .ong-aide{margin-bottom:18px}
+${R} .ong-aide{margin-bottom:16px}
 ${R} .ong-titre{margin:26px 0 12px}
 ${R} .ong-barre{align-items:flex-start;margin-bottom:14px}
 ${R} .ong-barre-txt{flex:1 1 320px}
-${R} .ong-barre h2{font-size:28px}
+${R} .ong-barre h2{font-size:26px}
 ${R} .ovc-liste{display:grid;gap:12px}
 ${R} .ovc-astuce{margin:8px 0 0;font-size:14px;color:#AFC0EA;line-height:1.45}
 ${R} .ovc-rien{margin:0;padding:14px 18px;border-radius:14px;border:1px dashed rgba(143,168,240,.28);color:#AFC0EA}
@@ -614,6 +614,7 @@ ${R} .ovb-fl{color:#F3D48A}
 :root[data-theme="light"] ${R} .ovb-fl{color:#9A6B00}
 :root[data-theme="light"] ${R} .ovd-rem{background:rgba(28,79,214,.05)}
 :root[data-theme="light"] ${R} .ong-vie-archive{background:var(--carte)}
+:root[data-theme="light"] ${R} .ovs-sans{color:#4A5A86;border-color:rgba(28,63,158,.3)}
 :root[data-theme="light"] ${R} .ong-vie-creer[open]>summary::after{color:var(--texte);border-color:#C9D4F2}
 :root[data-theme="light"] ${R} .ong-vie-creer:not([open])>summary{color:#fff}
 :root[data-theme="light"] ${R} .ovc-menage b{color:#B91C1C}
@@ -631,7 +632,7 @@ ${R} .ovb-fl{color:#F3D48A}
   ${R} .ong-vie-g>.l2,${R} .ong-vie-g>.l3{grid-column:1/-1}
 }
 @media (max-width:700px){
-  ${R} .ong-barre h2{font-size:25px}
+  ${R} .ong-barre h2{font-size:24px}
   ${R} .ong-barre-act{width:100%}
   ${R} .ong-barre-act>.btn{flex:1}
   ${R} .ong-vie-creer{flex:1 1 100%}

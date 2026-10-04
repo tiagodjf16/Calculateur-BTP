@@ -109,7 +109,7 @@ ${R} .ong-anim-cat.on{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);border-
 ${R} .ong-anim-cat.on small{color:#E2EAFF}
 ${R} .ong-anim-ok{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#fff;color:#1C4FD6;font:900 11px var(--corps)}
 ${R} .ong-anim-tete{padding-top:4px}
-${R} .ong-anim-tete .ong-barre h2{font-size:28px}
+${R} .ong-anim-tete .ong-barre h2{font-size:26px}
 ${R} .ong-anim-ajout{min-height:50px;font-size:16px;padding:12px 22px}
 ${R} .ong-titre{margin-top:22px}
 ${R} .ong-anim-mini{margin:-4px 0 10px;font-size:14px}

@@ -7,6 +7,8 @@
    - ONG.ouvert(cle, defaut) : l'état retenu d'un bloc (pour ceux qui fabriquent leur propre <details data-ong-pli>).
    - ONG.vide(titre, texte, actionHtml) : liste vide.
    - ONG.groupe(libelle, html) : un groupe de pastilles ou de boutons avec son libellé.
+   Mêmes places partout : « 💡 Comment ça marche ? » en premier sous les onglets, puis la barre (titre + action principale).
+   Classe « ong-archive » sur un ONG.pli : le bloc replié des éléments passés (compos, stages, créneaux…), plus discret.
    Ajouté sans modifier le script de l'application. */
 (function(){
   "use strict";
@@ -41,9 +43,11 @@
 /* barre du haut d'un onglet : quoi à gauche, action principale à droite */
 body.sur-espace .ong-barre{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 16px}
 body.sur-espace .ong-barre-txt{min-width:0}
-body.sur-espace .ong-barre h2{font:800 24px var(--display);margin:0;letter-spacing:.2px}
+body.sur-espace .ong-barre h2{font:800 26px var(--display);margin:0;letter-spacing:.2px}
 body.sur-espace .ong-barre p{margin:4px 0 0;color:#AFC0EA;font-size:15px}
 body.sur-espace .ong-barre-act{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+/* l'action principale de la barre : la même taille dans tous les onglets */
+body.sur-espace #panneau .ong-barre-act>.btn.bleu{min-height:50px;font-size:16px;padding:12px 22px}
 /* titre de section avec compteur */
 body.sur-espace .ong-titre{display:flex;align-items:center;gap:10px;font:800 21px var(--display);margin:28px 0 12px}
 body.sur-espace .ong-titre::before{content:"";width:6px;height:22px;border-radius:3px;background:linear-gradient(180deg,#F7D774,#C9A227);flex:none}
@@ -65,6 +69,10 @@ body.sur-espace .ong-pli[open]>summary .plus{transform:none}
 /* le « + » des blocs dépliants : la règle générale .plus du site (bouton flottant du téléphone) le mettait en position fixe en bas à gauche, ou le cachait */
 body.sur-espace .pli>summary .plus{position:static!important;display:grid!important;inset:auto!important;width:30px;height:30px;padding:0;margin:0;border:0;box-shadow:none;z-index:auto;flex:none}
 body.sur-espace .ong-pli>summary{font-size:21px}
+/* bloc replié des éléments passés : plus discret, le même dans tous les onglets */
+body.sur-espace #panneau details.ong-pli.ong-archive{box-shadow:none;background:rgba(10,20,48,.35)}
+body.sur-espace #panneau details.ong-pli.ong-archive>summary{font:800 18px var(--display);padding:12px 18px;min-height:52px}
+body.sur-espace #panneau details.ong-pli.ong-archive>summary .plus{width:30px;height:30px;font-size:16px;border-radius:10px;background:rgba(143,168,240,.18);color:#DCE5FF;box-shadow:none}
 /* liste vide */
 body.sur-espace .ong-vide{display:grid;justify-items:center;gap:6px;text-align:center;padding:30px 20px;border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
 body.sur-espace .ong-vide b{font:800 20px var(--display);color:#fff}
@@ -80,12 +88,16 @@ body.sur-espace .ong-groupe-c{display:flex;flex-wrap:wrap;gap:8px}
 :root[data-theme="light"] body.sur-espace .ong-nb{background:rgba(28,63,158,.12);color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide-corps{color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide>summary{color:#7A5B00}
+:root[data-theme="light"] body.sur-espace #panneau details.ong-pli.ong-archive{background:var(--carte)}
+:root[data-theme="light"] body.sur-espace #panneau details.ong-pli.ong-archive>summary .plus{background:rgba(28,79,214,.12);color:#1C4FD6}
 @media (max-width:700px){
   body.sur-espace .ong-barre{align-items:stretch}
   body.sur-espace .ong-barre-act{width:100%}
   body.sur-espace .ong-barre-act>.btn{flex:1}
   body.sur-espace .ong-groupe{grid-template-columns:minmax(0,1fr);gap:6px}
   body.sur-espace .ong-groupe-l{padding-top:0}
+  body.sur-espace .ong-pli>summary{font-size:19px}
+  body.sur-espace .ong-barre h2{font-size:24px}
 }`;
   document.head.appendChild(css);
 })();

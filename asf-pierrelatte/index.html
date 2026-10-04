@@ -12581,6 +12581,8 @@ void main(){
    - ONG.ouvert(cle, defaut) : l'état retenu d'un bloc (pour ceux qui fabriquent leur propre <details data-ong-pli>).
    - ONG.vide(titre, texte, actionHtml) : liste vide.
    - ONG.groupe(libelle, html) : un groupe de pastilles ou de boutons avec son libellé.
+   Mêmes places partout : « 💡 Comment ça marche ? » en premier sous les onglets, puis la barre (titre + action principale).
+   Classe « ong-archive » sur un ONG.pli : le bloc replié des éléments passés (compos, stages, créneaux…), plus discret.
    Ajouté sans modifier le script de l'application. */
 (function(){
   "use strict";
@@ -12615,9 +12617,11 @@ void main(){
 /* barre du haut d'un onglet : quoi à gauche, action principale à droite */
 body.sur-espace .ong-barre{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 16px}
 body.sur-espace .ong-barre-txt{min-width:0}
-body.sur-espace .ong-barre h2{font:800 24px var(--display);margin:0;letter-spacing:.2px}
+body.sur-espace .ong-barre h2{font:800 26px var(--display);margin:0;letter-spacing:.2px}
 body.sur-espace .ong-barre p{margin:4px 0 0;color:#AFC0EA;font-size:15px}
 body.sur-espace .ong-barre-act{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+/* l'action principale de la barre : la même taille dans tous les onglets */
+body.sur-espace #panneau .ong-barre-act>.btn.bleu{min-height:50px;font-size:16px;padding:12px 22px}
 /* titre de section avec compteur */
 body.sur-espace .ong-titre{display:flex;align-items:center;gap:10px;font:800 21px var(--display);margin:28px 0 12px}
 body.sur-espace .ong-titre::before{content:"";width:6px;height:22px;border-radius:3px;background:linear-gradient(180deg,#F7D774,#C9A227);flex:none}
@@ -12639,6 +12643,10 @@ body.sur-espace .ong-pli[open]>summary .plus{transform:none}
 /* le « + » des blocs dépliants : la règle générale .plus du site (bouton flottant du téléphone) le mettait en position fixe en bas à gauche, ou le cachait */
 body.sur-espace .pli>summary .plus{position:static!important;display:grid!important;inset:auto!important;width:30px;height:30px;padding:0;margin:0;border:0;box-shadow:none;z-index:auto;flex:none}
 body.sur-espace .ong-pli>summary{font-size:21px}
+/* bloc replié des éléments passés : plus discret, le même dans tous les onglets */
+body.sur-espace #panneau details.ong-pli.ong-archive{box-shadow:none;background:rgba(10,20,48,.35)}
+body.sur-espace #panneau details.ong-pli.ong-archive>summary{font:800 18px var(--display);padding:12px 18px;min-height:52px}
+body.sur-espace #panneau details.ong-pli.ong-archive>summary .plus{width:30px;height:30px;font-size:16px;border-radius:10px;background:rgba(143,168,240,.18);color:#DCE5FF;box-shadow:none}
 /* liste vide */
 body.sur-espace .ong-vide{display:grid;justify-items:center;gap:6px;text-align:center;padding:30px 20px;border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
 body.sur-espace .ong-vide b{font:800 20px var(--display);color:#fff}
@@ -12654,12 +12662,16 @@ body.sur-espace .ong-groupe-c{display:flex;flex-wrap:wrap;gap:8px}
 :root[data-theme="light"] body.sur-espace .ong-nb{background:rgba(28,63,158,.12);color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide-corps{color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide>summary{color:#7A5B00}
+:root[data-theme="light"] body.sur-espace #panneau details.ong-pli.ong-archive{background:var(--carte)}
+:root[data-theme="light"] body.sur-espace #panneau details.ong-pli.ong-archive>summary .plus{background:rgba(28,79,214,.12);color:#1C4FD6}
 @media (max-width:700px){
   body.sur-espace .ong-barre{align-items:stretch}
   body.sur-espace .ong-barre-act{width:100%}
   body.sur-espace .ong-barre-act>.btn{flex:1}
   body.sur-espace .ong-groupe{grid-template-columns:minmax(0,1fr);gap:6px}
   body.sur-espace .ong-groupe-l{padding-top:0}
+  body.sur-espace .ong-pli>summary{font-size:19px}
+  body.sur-espace .ong-barre h2{font-size:24px}
 }`;
   document.head.appendChild(css);
 })();
@@ -13255,7 +13267,7 @@ ${R} .ong-anim-cat.on{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);border-
 ${R} .ong-anim-cat.on small{color:#E2EAFF}
 ${R} .ong-anim-ok{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#fff;color:#1C4FD6;font:900 11px var(--corps)}
 ${R} .ong-anim-tete{padding-top:4px}
-${R} .ong-anim-tete .ong-barre h2{font-size:28px}
+${R} .ong-anim-tete .ong-barre h2{font-size:26px}
 ${R} .ong-anim-ajout{min-height:50px;font-size:16px;padding:12px 22px}
 ${R} .ong-titre{margin-top:22px}
 ${R} .ong-anim-mini{margin:-4px 0 10px;font-size:14px}
@@ -13304,6 +13316,11 @@ ${R} .an-anciennes{margin:0 0 16px}
      ACTUALITÉS
      ===================================================================== */
   const NB_ACCUEIL = 5;                       // l'accueil du site fait défiler les 5 plus récentes (voir rendreHeroActus)
+  // « Comment ça marche ? » en premier sous les onglets, comme dans tous les autres onglets de l'espace club
+  const AIDE_ACTUS = `<ol>
+      <li>Touche <b>« Nouvelle actualité »</b> : un titre, la date, quelques lignes (et une photo si tu veux), puis <b>« Publier l'actualité »</b>.</li>
+      <li>Elle est tout de suite sur le site ; les ${NB_ACCUEIL} plus récentes défilent en haut de la page d'accueil.</li>
+      <li>Une faute ? <b>« Modifier »</b> sur sa fiche. Elle n'a plus lieu d'être ? <b>« Supprimer »</b>, en rouge.</li></ol>`;
 
   function carteActu(a, i){
     if (S.ui.ongActuEdit === a.id) return carteEdition(a);
@@ -13347,6 +13364,7 @@ ${R} .an-anciennes{margin:0 0 16px}
         form.classList.add("ong-actu-nouv");
         const bt = form.querySelector("button.btn.bleu"); if (bt) bt.closest("div").classList.add("ong-actu-btns");
         const html = `<div class="ong-actus">
+          ${ONG.aide("actu-aide", "Comment ça marche ?", AIDE_ACTUS)}
           ${ONG.pli("actu-nouvelle", "Nouvelle actualité", `<span data-ong-place="form"></span>`, !l.length, "+")}
           ${l.length ? `${ONG.titre("Publiées sur le site", l.length)}
             <p class="quoi ong-actu-astuce">Les ${NB_ACCUEIL} plus récentes défilent en haut de la page d'accueil du site.</p>
@@ -13574,7 +13592,7 @@ ${R} .an-anciennes{margin:0 0 16px}
   css.textContent = `
 /* ---------- Actualités ---------- */
 ${A} .ong-pli{margin-bottom:16px}
-${A} .ong-pli>summary{font-size:17.5px;min-height:62px}
+${A} .ong-pli>summary{min-height:62px}
 ${A} .ong-pli>summary .plus{position:static;display:grid!important;flex:none;width:34px;height:34px;padding:0;border:0;border-radius:11px;background:linear-gradient(180deg,#2F6BFF,#1C4FD6);color:#fff;box-shadow:0 6px 14px rgba(47,107,255,.35)}
 ${A} .ong-actu-nouv .grille{grid-template-columns:minmax(0,2fr) minmax(220px,1fr)}
 ${A} .ong-actu-nouv textarea,${A} .ong-actu-form textarea{min-height:130px;line-height:1.5}
@@ -13741,8 +13759,8 @@ ${L} ${M} .cv-it.on .cv-pas.f{color:#DCE5FF;background:rgba(255,255,255,.16)}
 </script>
 <script id="onglets-equipes-js">
 /* Mes équipes › Compos, Entraînements, Effectifs : l'intérieur des onglets, rangé et simple à prendre en main.
-   - En haut de chaque onglet : l'équipe (bien visible, « Ton équipe » quand le coach n'en a qu'une), ses chiffres et l'action principale.
-   - Juste dessous : « 💡 Comment ça marche ? » replié, en quelques étapes.
+   - Tout en haut, comme dans tous les onglets : « 💡 Comment ça marche ? » replié, en quelques étapes.
+   - Juste dessous : l'équipe (bien visible, « Ton équipe » quand le coach n'en a qu'une), ses chiffres et l'action principale.
    - Entraînements : les créneaux dans un cadre clair (enregistrés tout seuls), puis la semaine et ses séances.
    - Effectifs : « Joueurs de … » avec la recherche juste au-dessus de la liste ; l'import Footclubs et l'ajout dans des cadres
      qu'on ferme ; « Peuvent aussi jouer » replié sous la liste.
@@ -13805,7 +13823,7 @@ ${L} ${M} .cv-it.on .cv-pas.f{color:#DCE5FF;background:rgba(255,255,255,.16)}
       }
       if (cr.length) ordonnerActions(b, btPrev, [btCr]);
       else if (btPrev){ btPrev.classList.remove("bleu"); btPrev.classList.add("contour"); }   // d'abord ajouter un créneau (bouton bleu du cadre)
-      b.insertAdjacentHTML("afterend", ONG.aide("eq-ent-aide", "Comment ça marche ?", AIDE_ENT));
+      b.insertAdjacentHTML("beforebegin", ONG.aide("eq-ent-aide", "Comment ça marche ?", AIDE_ENT));      // l'aide en premier, comme dans tous les onglets
     }
 
     // le cadre des créneaux
@@ -13863,7 +13881,7 @@ ${L} ${M} .cv-it.on .cv-pas.f{color:#DCE5FF;background:rgba(255,255,255,.16)}
       if (btImp){ btImp.innerHTML = `<span aria-hidden="true">📥</span> Importer depuis Footclubs`; btImp.setAttribute("aria-expanded", ouvert === "import" ? "true" : "false"); }
       if (btAj) btAj.setAttribute("aria-expanded", ouvert === "ajout" ? "true" : "false");
       ordonnerActions(b, btAj, [btImp]);
-      b.insertAdjacentHTML("afterend", ONG.aide("eq-eff-aide", "Comment ça marche ?", AIDE_EFF));
+      b.insertAdjacentHTML("beforebegin", ONG.aide("eq-eff-aide", "Comment ça marche ?", AIDE_EFF));      // l'aide en premier, comme dans tous les onglets
     }
     const cherche = w.querySelector("[data-cherche-eff]");
 
@@ -13958,7 +13976,7 @@ ${L} ${M} .cv-it.on .cv-pas.f{color:#DCE5FF;background:rgba(255,255,255,.16)}
       [...chips.children].forEach(x => c.appendChild(x));
       w.appendChild(g);
     }
-    w.insertAdjacentHTML("beforeend", ONG.aide("eq-compos-aide", "Comment ça marche ?", AIDE_COMPOS));
+    w.insertAdjacentHTML("afterbegin", ONG.aide("eq-compos-aide", "Comment ça marche ?", AIDE_COMPOS));   // l'aide en premier, comme dans tous les onglets
     if (afaire){
       const n = afaire.querySelectorAll("[data-a='nouvelle-compo']").length;
       w.insertAdjacentHTML("beforeend", `${ONG.titre("À faire cette semaine", n)}<p class="quoi ong-cp-sous">Ces matchs n'ont pas encore de compo : touche-en un pour la commencer.</p>`);
@@ -13969,10 +13987,10 @@ ${L} ${M} .cv-it.on .cv-pas.f{color:#DCE5FF;background:rgba(255,255,255,.16)}
     else if (vide) w.insertAdjacentHTML("beforeend", ONG.vide("Aucune compo à venir", "Touche « + Nouvelle compo » en haut pour préparer ton prochain match."));
     if (passees){
       const s = passees.querySelector("summary"), m = /\((\d+)\)/.exec(s ? s.textContent : "");
-      passees.classList.add("pli", "ong-pli");
+      passees.classList.add("pli", "ong-pli", "ong-archive");                // le même bloc « passé » que dans les autres onglets
       passees.dataset.ongPli = "eq-cp-passees";
       if (ONG.ouvert("eq-cp-passees", false)) passees.setAttribute("open", ""); else passees.removeAttribute("open");
-      if (s) s.innerHTML = `<span class="plus" aria-hidden="true">+</span><span class="ong-pli-t">Compos passées${m ? `<span class="ong-nb">${m[1]}</span>` : ""}</span><span class="ong-pli-fl" aria-hidden="true">▾</span>`;
+      if (s) s.innerHTML = `<span class="plus" aria-hidden="true">🗂</span><span class="ong-pli-t">Compos passées${m ? `<span class="ong-nb">${m[1]}</span>` : ""}</span><span class="ong-pli-fl" aria-hidden="true">▾</span>`;
       const corps = passees.querySelector(".cp-liste"); if (corps) corps.classList.add("pli-corps");
       w.appendChild(passees);
     }
@@ -14148,7 +14166,7 @@ ${S0} .ong-eq-eff .effl{gap:10px;grid-template-columns:repeat(auto-fill,minmax(3
 ${S0} .ong-eq-eff .effj{min-height:72px;border-radius:16px;border-color:rgba(143,168,240,.2);background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5))}
 ${S0} .ong-eq-eff .effj[data-j],:root[data-theme="light"] ${S0} .ong-eq-eff .effj[data-j]{border-left:4px solid var(--c)}   /* la couleur de la catégorie d'âge */
 ${S0} .ong-eq-eff .effj-av{align-content:center;justify-items:center;width:52px;height:52px}
-${S0} .ong-eq-eff .effj-av span{line-height:1}
+${S0} .ong-eq-eff .effj-av span{line-height:1;color:#fff}
 ${S0} .ong-eq-eff .effj-av.ong-sans-photo i{opacity:.9;height:17px}
 ${S0} .ong-eq-eff .effj-x{width:40px;height:40px;border-radius:12px;border:1px solid rgba(248,113,113,.45);color:#FCA5A5;background:rgba(220,38,38,.06);font-size:16px;margin-left:4px}
 ${S0} .ong-eq-eff .effj-x:hover{background:rgba(220,38,38,.2);border-color:#F87171;color:#FECACA}
@@ -14417,8 +14435,8 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
           : "La FFF ne publie pas leurs matchs : c'est ici qu'on les saisit.";
         const section = (titre, n, cle, note) => `${ONG.titre(titre, n)}${note ? `<p class="ong-vet-mini">${note}</p>` : ""}<div class="ong-vet-liste" data-ong-place="${cle}"></div>`;
         const html = `<div class="ong-vet">
-          ${ONG.barre("Matchs des vétérans", sous, `<span data-ong-place="ajout"></span>`)}
           ${ONG.aide("vet-aide", "Comment ça marche ?", AIDE_VET + (l.length ? `<p class="ong-vet-astuce">La FFF ne publie pas les matchs des vétérans : c'est ici qu'on les saisit.</p>` : ""))}
+          ${ONG.barre("Matchs des vétérans", sous, `<span data-ong-place="ajout"></span>`)}
           ${l.length ? "" : ONG.vide("Aucun match des vétérans", "Ajoute le prochain match : il partira sur les affiches du lundi.")}
           ${prochain.length ? section("Prochain match", null, "prochain") : ""}
           ${aSaisir.length ? section("Scores à saisir", aSaisir.length, "saisir", "Touche un match pour mettre son score.") : ""}
@@ -14536,8 +14554,8 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
       }
       const ouvertDefaut = !tous.length || fait1 || liste.length > 0;
       const html = `<div class="ong-tn ong-tn-liste">
-        ${ONG.barre("Tournois", "Tirage au sort des poules, puis scores et classements en direct sur le site.", "")}
         ${ONG.aide("tournois-aide", "Comment ça marche ?", AIDE_LISTE)}
+        ${ONG.barre("Tournois", "Tirage au sort des poules, puis scores et classements en direct sur le site.", "")}
         ${ONG.pli("tournois-creer", `Créer un tournoi<small class="ong-tn-pli-sous">Le tournoi, les équipes, puis le tirage au sort</small>`, `<span data-ong-place="form"></span>`, ouvertDefaut, "+")}
         ${tous.length ? `${ONG.titre("Tes tournois", tous.length)}<span data-ong-place="cartes"></span>`
           : ONG.vide("Aucun tournoi pour l'instant", "Ton tournoi apparaîtra ici dès que tu auras validé son tirage au sort.")}
@@ -14692,6 +14710,7 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     // « Lancer la phase finale » et « Afficher sur le site / Retirer du site » enregistrent sans redessiner l'onglet sur le site
     // en ligne (là, l'onglet ne se redessine pas tout seul) : on le redessine dès que l'enregistrement est revenu
     document.addEventListener("click", ev => {
+      if (window.ONG && ONG.suivi) return;                     // espace.js redessine déjà l'onglet ouvert quand ses données changent
       if (!(ev.target.closest && ev.target.closest('#panneau [data-a="lancer-finale"], #panneau [data-a="toggle-tournoi"]'))) return;
       const avant = S.tournois; let n = 0;
       const minuteur = setInterval(() => {
@@ -14719,7 +14738,7 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
 /* ---------- commun ---------- */
 ${V} .ong-a-part,${T} .ong-a-part{margin-left:auto}
 ${V} .ong-titre,${T} .ong-titre{margin:26px 0 12px}
-${V} .ong-aide,${T} .ong-aide{margin-bottom:6px}
+${V} .ong-aide,${T} .ong-aide{margin-bottom:16px}
 /* ---------- Vétérans ---------- */
 ${V} .ong-barre p b.ong-vet-alerte{color:#F3C969}
 ${V} .ong-vet-ajout{min-height:50px;font-size:16px;padding:12px 22px}
@@ -15006,7 +15025,8 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
    - Accès et rôles : recherche + « Nouveau coach ou dirigeant » en haut, filtres et « Actualiser » sur une ligne,
      comptes rangés par famille (bureau, coachs, joueurs), fiche d'un compte en blocs (son profil, ce qu'il peut ouvrir,
      code et compte à part) ; la fenêtre des accès range les onglets par rubrique ;
-   - Sauvegardes : l'état de la dernière copie et « Sauvegarder maintenant » en haut, l'explication repliée, la liste des copies.
+   - Sauvegardes : l'explication repliée (en premier, comme partout), l'état de la dernière copie et « Sauvegarder maintenant »,
+     puis la liste des copies.
    Ajouté sans modifier le script de l'application : tous les boutons gardent leurs data-a / data-k / data-*, les champs restent
    dans leur ligne [data-liste] ou leur fiche [data-cpt], le formulaire data-form="compte-staff" ne change pas. */
 (function(){
@@ -15398,7 +15418,7 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
           identifiants: ["🪪", "Identifiants des joueurs", "Code commun, fiches à imprimer"],
         });
         sections.setAttribute("aria-label", "Partie à afficher");
-        // l'explication, repliée, juste sous le choix de la partie
+        // l'explication, repliée, en haut de l'onglet (juste au-dessus du choix de la partie, comme dans Le club)
         let aide;
         if (section === "comptes") aide = ONG.aide("reg-acces-aide", "Comment ça marche ?", AIDE_ACCES);
         else {
@@ -15406,7 +15426,7 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
           aide = p ? ONG.aide("reg-ident-aide", "Comment un joueur se connecte la première fois ?", `<p>${p.innerHTML}</p>`) : "";
           if (det) det.remove();
         }
-        if (aide) sections.insertAdjacentHTML("afterend", aide);
+        if (aide) sections.insertAdjacentHTML("beforebegin", aide);        // en premier, comme dans tous les onglets
         const codes = racine.querySelector(".acc-codes");
         if (codes){ codes.classList.add("ong-reg-codes"); const t = codes.querySelector("h2"); if (t) t.insertAdjacentHTML("afterbegin", `<span aria-hidden="true">✅</span>`); }
         const w = envelopper(racine, "ong-reg-acces ong-reg-acces-" + section);
@@ -15494,8 +15514,8 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
             ${i ? "" : `<span class="ong-reg-puce ok">La plus récente</span>`}
             <a class="btn contour petit" href="/api/sauvegarde.php?fichier=${encodeURIComponent(x.nom)}">⬇️ Télécharger</a></div>`).join("")}</div>`
         : ONG.vide("Aucune copie pour l'instant", "Elles apparaîtront ici, la plus récente en haut.", "");
-      return `<div class="ong-reg ong-reg-sv">${etat}
-        ${ONG.aide("reg-sv-aide", "Comment ça marche ?", AIDE_SV)}
+      return `<div class="ong-reg ong-reg-sv">${ONG.aide("reg-sv-aide", "Comment ça marche ?", AIDE_SV)}
+        ${etat}
         ${ONG.titre("Copies gardées", l.length)}
         ${liste}</div>`;
     };
@@ -15836,7 +15856,7 @@ body.sur-espace .modale.ong-reg-modale .ong-reg-mgroupe label.sw-ligne:last-chil
   }
   // un bloc replié pour ce qui sert moins (le passé, les réglages rares)
   const archive = (cle, titre, html, defaut, icone) => ONG.pli(cle, titre, html, !!defaut, icone || "🗂")
-    .replace('class="pli ong-pli"', 'class="pli ong-pli ong-vie-archive"');
+    .replace('class="pli ong-pli"', 'class="pli ong-pli ong-archive ong-vie-archive"');      // ong-archive : même bloc « passé » que les autres onglets
 
   /* le formulaire se referme tout seul une fois l'élément créé (on retient le nombre d'éléments au moment d'envoyer) */
   const COMPTES = { reunion: () => (S.reunions || []).length, creneau: () => (S.benevoles || []).length, stage: () => (S.stages || []).length };
@@ -15880,7 +15900,7 @@ body.sur-espace .modale.ong-reg-modale .ong-reg-mgroupe label.sw-ligne:last-chil
   const occupe = () => { const p = document.getElementById("panneau"), a = document.activeElement; return !!(p && a && p.contains(a) && a.matches("input,select,textarea")); };
   function suivre(){
     const k = S.ui.onglet, f = VIVANTS[k];
-    if (!f || S.editeur || !document.querySelector("#panneau .ong-vie")) return;
+    if (!f || S.editeur || (window.ONG && ONG.suivi) || !document.querySelector("#panneau .ong-vie")) return;   // ONG.suivi : espace.js s'en charge pour tous les onglets
     if (k + f() === signe) return;
     if (occupe() || sale){ attente = true; return; }
     try { rendrePanneau(); } catch(err){}
@@ -16241,11 +16261,11 @@ body.sur-espace .modale.ong-reg-modale .ong-reg-mgroupe label.sw-ligne:last-chil
   css.textContent = `
 /* l'icône « + » des blocs dépliants : à sa place dans le titre (elle prenait la position fixe du menu « Plus » du site) */
 ${R} .pli>summary .plus{position:static;inset:auto;display:grid!important;flex:none;padding:0;border:0;box-shadow:none;z-index:auto;margin:0}
-${R} .ong-aide{margin-bottom:18px}
+${R} .ong-aide{margin-bottom:16px}
 ${R} .ong-titre{margin:26px 0 12px}
 ${R} .ong-barre{align-items:flex-start;margin-bottom:14px}
 ${R} .ong-barre-txt{flex:1 1 320px}
-${R} .ong-barre h2{font-size:28px}
+${R} .ong-barre h2{font-size:26px}
 ${R} .ovc-liste{display:grid;gap:12px}
 ${R} .ovc-astuce{margin:8px 0 0;font-size:14px;color:#AFC0EA;line-height:1.45}
 ${R} .ovc-rien{margin:0;padding:14px 18px;border-radius:14px;border:1px dashed rgba(143,168,240,.28);color:#AFC0EA}
@@ -16400,6 +16420,7 @@ ${R} .ovb-fl{color:#F3D48A}
 :root[data-theme="light"] ${R} .ovb-fl{color:#9A6B00}
 :root[data-theme="light"] ${R} .ovd-rem{background:rgba(28,79,214,.05)}
 :root[data-theme="light"] ${R} .ong-vie-archive{background:var(--carte)}
+:root[data-theme="light"] ${R} .ovs-sans{color:#4A5A86;border-color:rgba(28,63,158,.3)}
 :root[data-theme="light"] ${R} .ong-vie-creer[open]>summary::after{color:var(--texte);border-color:#C9D4F2}
 :root[data-theme="light"] ${R} .ong-vie-creer:not([open])>summary{color:#fff}
 :root[data-theme="light"] ${R} .ovc-menage b{color:#B91C1C}
@@ -16417,7 +16438,7 @@ ${R} .ovb-fl{color:#F3D48A}
   ${R} .ong-vie-g>.l2,${R} .ong-vie-g>.l3{grid-column:1/-1}
 }
 @media (max-width:700px){
-  ${R} .ong-barre h2{font-size:25px}
+  ${R} .ong-barre h2{font-size:24px}
   ${R} .ong-barre-act{width:100%}
   ${R} .ong-barre-act>.btn{flex:1}
   ${R} .ong-vie-creer{flex:1 1 100%}
@@ -17075,6 +17096,118 @@ ${M} .modale-pied .scp-mini{margin-right:auto;color:var(--texte-doux);font-size:
     }, 0);
   }, true);
 
+  /* ================= L'ONGLET OUVERT SE MET À JOUR TOUT SEUL (site en ligne) =================
+     Sur le site hébergé, l'application ne redessine jamais l'onglet ouvert quand ses données changent (majAdmin ne le fait
+     que pour « l'éditeur ») : ce qu'on venait d'enregistrer (publier une compo, ajouter un joueur, un créneau, supprimer une
+     actualité…) ou ce qu'un autre dirigeant, un joueur ou un parent enregistrait n'apparaissait qu'en changeant d'onglet.
+     On redessine l'onglet ouvert comme l'application le fait pour l'éditeur, mais prudemment :
+     - seulement si les données que montre cet onglet ont vraiment changé depuis son dernier affichage ;
+     - jamais pendant une saisie : un champ de l'onglet a le curseur, un champ a été tapé sans être enregistré, l'éditeur
+       de compo est ouvert, ou une fenêtre (choix d'un club, d'une date…) est ouverte. On réessaie quand c'est fini
+       (champ quitté, formulaire envoyé, fenêtre fermée) ; les blocs dépliés restent dépliés.
+     Onglets suivis : ceux que l'application suit pour l'éditeur (effectifs, entraînements, compos, actualités, tournois,
+     réunions, bénévoles), plus Le club quand son brouillon n'a pas été touché. */
+  const VIVANTS = {
+    effectifs: () => [S.effectifs, C().equipes],
+    entrainements: () => [S.entrainements, S.presences, S.effectifs, S.matchs],
+    compos: () => S.ui.compo ? null : [S.compos, S.matchs, S.effectifs],
+    actus: () => [S.actus],
+    tournois: () => [S.tournois],
+    reunions: () => [S.reunions],
+    benevoles: () => [S.benevoles, S.engagements],
+    club: () => (S.ui.clubSection || "infos") === "clubs" ? null : [S.club],
+  };
+  const signature = () => { const f = VIVANTS[S.ui.onglet]; if (!f) return null; try { const d = f(); return d ? S.ui.onglet + "|" + JSON.stringify(d) : null; } catch(err){ return null; } };
+  let signeAffiche = null, enAttente = false, minuteur = 0;
+  const base = new WeakMap(), envoyes = new WeakMap();      // envoyes : formulaire → heure de l'envoi
+  const CHAMPS = "input:not([type=file]):not([type=button]):not([type=submit]):not([type=reset]):not([type=image]), select, textarea";
+  const valeur = c => (c.type === "checkbox" || c.type === "radio") ? (c.checked ? "1" : "0") : c.tagName === "SELECT" ? String(c.selectedIndex) : c.value;
+  const defaut = c => (c.type === "checkbox" || c.type === "radio") ? (c.defaultChecked ? "1" : "0")
+    : c.tagName === "SELECT" ? String(Math.max(0, [...c.options].map(o => o.defaultSelected).lastIndexOf(true))) : c.defaultValue;
+  // les champs de recherche (l'application les garde et les remet elle-même) ne comptent pas comme une saisie
+  const filtre = c => c.type === "search" || [...c.attributes].some(x => /^data-[a-z-]*cherche/.test(x.name));
+  // champs enregistrés tout de suite par l'application, ou gardés dans un brouillon qu'elle remet à chaque affichage
+  const ENREGISTRES = '[data-ent],[data-nt],[data-nt-rep],[data-t-num],[data-t-ajout],[data-import-cat],[data-a="choix-eq"],[data-statut],[data-recrute],[data-perm],[data-eq-perm],[data-r],[data-cpt-eq],[data-club],[data-champ],[data-club-num],[data-imp-c],[data-vc],[data-anc],[data-an-lieu],[data-vet-lieu],[data-logo-adv],[data-cl],[data-e],[data-c]';
+  const noterBase = () => { const p = document.getElementById("panneau"); if (p) p.querySelectorAll(CHAMPS).forEach(c => base.set(c, valeur(c))); };
+  function saisieEnCours(p){
+    for (const c of p.querySelectorAll(CHAMPS)){
+      if (filtre(c) || (c.form && Date.now() - (envoyes.get(c.form) || 0) < 5000)) continue;   // envoyé il y a moins de 5 s : il part à l'enregistrement
+      if (valeur(c) !== (base.has(c) ? base.get(c) : defaut(c))) return true;
+    }
+    return false;
+  }
+  function occupe(p){
+    const a = document.activeElement;
+    if (a && p.contains(a) && a.matches("input, select, textarea, [contenteditable]")) return true;
+    if (document.body.classList.contains("modale-ouverte") || document.querySelector(".modale-fond, .dp-fond")) return true;
+    return saisieEnCours(p);
+  }
+  // les blocs dépliés de l'application (« Voir les réponses »…) restent dépliés après le nouvel affichage
+  const cleBloc = d => { const s = d.querySelector(":scope > summary"); return (s ? s.textContent : "").replace(/\d+/g, "#").replace(/\s+/g, " ").trim(); };
+  function rafraichir(){
+    clearTimeout(minuteur); minuteur = 0;
+    const p = document.getElementById("panneau");
+    if (S.editeur || !p || !S.db){ enAttente = false; return; }            // l'éditeur : l'application s'en charge déjà
+    const s = signature();
+    if (!s || s === signeAffiche){ enAttente = false; return; }
+    if (location.hash !== "#espace"){ enAttente = true; return; }          // on redessinera en revenant dans l'espace
+    if (occupe(p)){ enAttente = true; minuteur = setTimeout(rafraichir, 2000); return; }
+    if (S.ui.onglet === "club"){
+      // Le club : on ne remplace le brouillon que s'il était à jour (barre « Tout est enregistré ») ; sinon on garde les changements
+      const barre = p.querySelector(".ong-reg-save");
+      if (!barre || barre.classList.contains("ong-reg-modifie")){ enAttente = false; signeAffiche = s; return; }
+      S.ui.club = null;
+    }
+    enAttente = false;
+    const vus = {}, ouverts = [...p.querySelectorAll("details[open]:not([data-ong-pli])")].map(d => { const k = cleBloc(d); vus[k] = (vus[k] || 0) + 1; return k + "|" + vus[k]; });
+    try { rendrePanneau(); } catch(err){ return; }
+    if (ouverts.length){
+      const vus2 = {};
+      p.querySelectorAll("details:not([data-ong-pli])").forEach(d => { const k = cleBloc(d); vus2[k] = (vus2[k] || 0) + 1; if (ouverts.includes(k + "|" + vus2[k])) d.open = true; });
+    }
+  }
+  if (typeof window.majAdmin === "function" && typeof window.rendrePanneau === "function"){
+    const majAvant = window.majAdmin;
+    window.majAdmin = function(){ const r = majAvant.apply(this, arguments); try { rafraichir(); } catch(err){} return r; };
+    // chaque affichage de l'onglet (par l'application ou par nous) : ce qu'il montre, et la valeur de départ de ses champs
+    const rendreAvant = window.rendrePanneau;
+    window.rendrePanneau = function(){
+      const r = rendreAvant.apply(this, arguments);
+      try { signeAffiche = signature(); enAttente = false; clearTimeout(minuteur); setTimeout(noterBase, 60); } catch(err){}
+      return r;
+    };
+    if (window.ONG) ONG.suivi = true;                                    // les onglets n'ont plus à se redessiner eux-mêmes
+    const reessayer = ms => { if (enAttente){ clearTimeout(minuteur); minuteur = setTimeout(rafraichir, ms); } };
+    document.addEventListener("focusout", () => reessayer(80));
+    document.addEventListener("click", () => reessayer(350));
+    window.addEventListener("hashchange", () => reessayer(120));
+    // un formulaire envoyé : ce qui y est tapé part à l'enregistrement, ce n'est plus une saisie en cours pendant 5 s
+    // (ou jusqu'à la prochaine frappe) ; s'il est refusé et garde son texte, il redevient une saisie en cours
+    document.addEventListener("submit", ev => { const f = ev.target; if (f && f.closest && f.closest("#panneau")) envoyes.set(f, Date.now()); reessayer(400); }, true);
+    document.addEventListener("input", ev => { const f = ev.target && ev.target.form; if (f) envoyes.delete(f); }, true);
+    // un champ enregistré tout de suite (créneau, statut…) n'est plus une saisie en cours une fois validé
+    document.addEventListener("change", ev => {
+      const c = ev.target, p = document.getElementById("panneau");
+      if (p && c && c.matches && p.contains(c) && c.matches(CHAMPS) && c.matches(ENREGISTRES)) base.set(c, valeur(c));
+    });
+  }
+
+  /* ================= CHOIX D'UN CLUB : LA LISTE COMPLÈTE QUAND LA RECHERCHE EST VIDE =================
+     L'application filtre avec slug(recherche), qui vaut « x » pour une recherche vide : à l'ouverture de la fenêtre, et quand
+     on efface ce qu'on a tapé, seuls les clubs contenant un « x » restaient. Sans lettre ni chiffre tapé, on montre tout. */
+  if (typeof window.listePickClub === "function" && typeof window.clubsPick === "function"){
+    const pickAvant = window.listePickClub;
+    const sansMot = q => !/[0-9a-z]/i.test(String(q || "").normalize("NFD").replace(/[̀-ͯ]/g, ""));
+    window.listePickClub = function(q){
+      if (!sansMot(q)) return pickAvant.apply(this, arguments);
+      try {
+        const l = clubsPick();
+        return l.slice(0, 80).map(([nom, n, district]) => `<button type="button" class="pick-club" data-club-choix="${esc(nom)}"${district ? ` data-district="${esc(district)}"` : ""}>
+      <span class="pick-logo">${srcLogoClub(n) ? `<img src="${esc(srcLogoClub(n))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${esc(String(nom).slice(0, 1))}'">` : (logoAdvSrc(nom) ? `<img src="${logoAdvSrc(nom)}" alt="" loading="lazy" onerror="this.remove()">` : esc(nom.slice(0, 1)))}</span><span><b>${esc(nom)}</b></span></button>`).join("");
+      } catch(err){ return pickAvant.apply(this, arguments); }
+    };
+  }
+
   /* cartes en relief : elles s'inclinent sous la souris (ordinateur) */
   if (matchMedia("(hover: hover) and (pointer: fine)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches){
     document.addEventListener("pointermove", ev => {
@@ -17224,8 +17357,8 @@ body.sur-espace #panneau .rangee:hover{border-color:rgba(143,168,240,.45)}
 body.sur-espace #panneau .rangee .txt{flex:1;min-width:200px}
 body.sur-espace #panneau .item{border-radius:18px;background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5));border:1px solid rgba(143,168,240,.18)}
 body.sur-espace #panneau .statut,body.sur-espace #panneau .etiq{border-radius:999px}
-/* messages vides : clairs et aérés */
-body.sur-espace #panneau .vide,body.sur-espace #panneau .etat-vide{border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
+/* messages vides : clairs et aérés (pas le champ de date encore vide, qui porte aussi la classe « vide ») */
+body.sur-espace #panneau .vide:not(.dp-champ),body.sur-espace #panneau .etat-vide{border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
 body.sur-espace #panneau .etat-vide b{color:#fff}
 /* tableaux */
 body.sur-espace #panneau table{border-collapse:separate;border-spacing:0;border:1px solid rgba(143,168,240,.2);border-radius:16px;overflow:hidden}
@@ -17246,6 +17379,9 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
 :root[data-theme="light"] body.sur-espace #panneau .btn.danger{background:#fff;color:#B91C1C;border-color:#F87171}
 :root[data-theme="light"] body.sur-espace #panneau .btn.danger:hover{background:#FEE2E2}
 :root[data-theme="light"] body.sur-espace #panneau .quoi{color:var(--texte-doux)}
+/* thème clair : les verts trop pâles sur fond blanc (présents, « Publiée », « Sur le site ») */
+:root[data-theme="light"] body.sur-espace #panneau .en-compte .v,:root[data-theme="light"] body.sur-espace #panneau .en-det b.v,
+:root[data-theme="light"] body.sur-espace #panneau .etiq.ok{color:#15803D}
 :root[data-theme="light"] body.sur-espace .rub-onglets{background:var(--carte)}
 :root[data-theme="light"] body.sur-espace .rub-onglets button{color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .rub-onglets button[aria-selected="true"]{color:#fff}
@@ -17279,10 +17415,21 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
   .esp-moi-bt{flex:1;justify-content:center}
   .esp-rubs{grid-template-columns:minmax(0,1fr);gap:14px}
   .esp-lanceur h2{font-size:24px}
-  .esp-accueil{padding:8px 13px;min-height:40px}
+  /* le bandeau garde la même hauteur d'un onglet à l'autre : « Accueil » toujours en haut à droite (il passait dessous
+     quand la phrase de l'onglet était longue, et les onglets de la rubrique sautaient), la phrase sur deux lignes au plus */
+  body.sur-espace .app-tete.esp-bandeau{display:block;position:relative}
+  body.sur-espace .app-tete.esp-bandeau h1{padding-right:112px;min-height:44px}
+  body.sur-espace .app-tete.esp-bandeau p{min-height:2.8em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .esp-accueil{position:absolute;top:16px;right:16px;padding:8px 13px;min-height:40px}
   body.sur-espace .rub-onglets button{padding:10px 14px;font-size:14.5px}
   body.sur-espace #panneau .carte{padding:16px}
   body.sur-espace #panneau .carte>div:last-child>.btn.bleu:only-child,body.sur-espace #panneau form.carte>div:last-child>.btn.bleu{width:100%}
+}
+/* petits téléphones : le nom de la rubrique un peu plus petit, pour ne pas passer sous « Accueil » */
+@media (max-width:380px){
+  body.sur-espace .app-tete.esp-bandeau h1{font-size:21px;gap:10px;padding-right:104px}
+  body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:40px;height:40px;font-size:21px}
+  .esp-accueil{padding:8px 11px}
 }`;
   document.head.appendChild(css);
   // l'espace est peut-être déjà affiché : on l'habille tout de suite
