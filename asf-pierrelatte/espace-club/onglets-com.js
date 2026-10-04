@@ -183,9 +183,74 @@
     return `<div class="ong-msg-barre">${portee}${tous.length ? `<div class="ong-msg-etats" role="group" aria-label="Filtrer par état">${chips}</div>` : ""}</div>`;
   }
 
+  /* ---- Réponses en cours d'écriture : une par conversation ----
+     Avant, sur PC, quand on n'avait touché aucun message, la conversation montrée par défaut (le non lu le plus récent)
+     changeait à l'arrivée d'un nouveau message, et majConversationOuverte remettait le texte tapé dans le champ de
+     l'AUTRE conversation : « Envoyer » partait alors à la mauvaise personne.
+     Maintenant : le brouillon est rangé par conversation (S.ui.ongMsgBrouillons), il ne revient que dans sa conversation,
+     et la conversation où l'on écrit est retenue (S.ui.ongMsgVoir, comme après un filtre : affichée sans être marquée lue)
+     pour ne jamais changer sous les doigts. */
+  const brouillons = () => (S.ui.ongMsgBrouillons = S.ui.ongMsgBrouillons || {});
+  const convDe = tx => (tx && tx.dataset.ongMsgConv)
+    || ((document.querySelector('#panneau .cv-conv [data-a="msg-envoyer"]') || {}).dataset || {}).id || "";
+  const retenirBrouillon = (id, v) => { if (!id) return; if (v) brouillons()[id] = v; else delete brouillons()[id]; };
+  // la conversation où l'on écrit reste affichée ; choisie à la main (S.ui.msgSel), elle l'est déjà
+  const epingler = id => { if (id && id !== S.ui.msgSel && (S.messages || []).some(x => x.id === id)) S.ui.ongMsgVoir = id; };
+  // réponse envoyée : son brouillon disparaît dès qu'elle est dans le fil (un envoi refusé garde le texte).
+  // On regarde la conversation que l'application complète (envoi.x, même objet qu'elle) et celle de la dernière relecture.
+  let envoi = null;
+  function verifierEnvoi(){
+    if (!envoi || typeof filDe !== "function") return;
+    const partie = x => { if (!x) return false; const f = filDe(x), der = f[f.length - 1] || {};
+      return f.length > envoi.n && der.de === "club" && String(der.texte || "").trim() === envoi.texte; };
+    if (partie(envoi.x) || partie((S.messages || []).find(y => y.id === envoi.id))){
+      if (String(brouillons()[envoi.id] || "").trim() === envoi.texte) delete brouillons()[envoi.id];
+      envoi = null;
+    }
+  }
+
   if (typeof window.panMessages === "function" && typeof etatConv === "function"){
+    // phase de capture : avant que l'application ne lise le champ et n'envoie
+    document.addEventListener("click", ev => {
+      const b = ev.target.closest && ev.target.closest('#panneau [data-a="msg-envoyer"]'); if (!b) return;
+      const tx = document.getElementById("cv-texte"), texte = String(tx ? tx.value : "").trim();
+      const x = (S.messages || []).find(y => y.id === b.dataset.id);
+      if (x && texte && typeof filDe === "function") envoi = { id: x.id, x, texte, n: filDe(x).length };
+    }, true);
+    document.addEventListener("input", ev => {
+      const tx = ev.target; if (!tx || tx.id !== "cv-texte") return;
+      const id = convDe(tx); if (!id) return;
+      retenirBrouillon(id, tx.value);
+      if (tx.value.trim()) epingler(id);
+    });
+    // relecture de la base (nouveau message, message lu ailleurs…) : la conversation ne change pas sous la frappe,
+    // et le texte remis dans le champ est toujours celui de la conversation affichée
+    if (typeof window.majConversationOuverte === "function"){
+      const majAvant = window.majConversationOuverte;
+      window.majConversationOuverte = function(){
+        const tx = document.getElementById("cv-texte"), avant = tx ? convDe(tx) : "", focus = !!tx && document.activeElement === tx;
+        if (tx && avant){
+          retenirBrouillon(avant, tx.value);
+          if (tx.value.trim() || focus) epingler(avant);
+        }
+        const r = majAvant.apply(this, arguments);
+        const t2 = document.getElementById("cv-texte"), apres = t2 ? convDe(t2) : "";
+        if (t2 && apres){
+          const voulu = brouillons()[apres] || "";
+          if (t2.value !== voulu){
+            t2.value = voulu;                                  // l'application y avait remis le texte de l'autre conversation
+            if (apres !== avant && document.activeElement === t2) t2.blur();
+          }
+          // curseur dans le champ encore vide : l'application ne le remet que s'il y avait du texte
+          if (focus && apres === avant && !voulu && document.activeElement !== t2) t2.focus({ preventScroll: true });
+        }
+        return r;
+      };
+    }
+
     const avantMsg = window.panMessages;
     window.panMessages = function(){
+      verifierEnvoi();
       const etat = ETATS.some(([k]) => k === S.ui.ongMsgEtat) ? (S.ui.ongMsgEtat || "") : "";
       const tous = triMsgs(mesMessages());
       const vus = etat ? tous.filter(x => etatConv(x)[1] === etat) : tous;
@@ -239,6 +304,10 @@
           t.innerHTML = `<span aria-hidden="true">✍️</span>Ta réponse à ${e(sel.nom || "la personne")}`;
           rep.insertBefore(t, rep.firstChild);
           tx.setAttribute("rows", "4");
+          // le champ sait à quelle conversation il appartient, et reprend la réponse commencée pour CELLE-CI seulement
+          tx.dataset.ongMsgConv = sel.id;
+          const br = brouillons()[sel.id];
+          if (br) tx.textContent = br.charAt(0) === "\n" ? "\n" + br : br;     // le navigateur avale un saut de ligne en tête de <textarea>
         }
         rep.classList.add("ong-msg-rep");
         const liste = vus.length ? vus.map(x => ligneMsg(x, selId)).join("")
@@ -362,6 +431,8 @@ ${M} .cv{grid-template-columns:minmax(300px,380px) minmax(0,1fr);align-items:str
 ${M} .cv.ong-msg-sans{grid-template-columns:minmax(0,1fr)}
 ${M} .cv.ong-msg-sans .cv-conv{display:none}
 ${M} .cv-liste{gap:6px;padding:8px;max-height:calc(100vh - 150px);align-content:start}
+/* chaque fiche garde sa hauteur : à partir de 7 messages, elles étaient écrasées (lignes coupées) au lieu de faire défiler la liste */
+${M} .cv-liste{grid-auto-rows:max-content}
 ${M} .ong-msg-it{display:grid;gap:4px;padding:12px 14px;border-radius:14px;min-height:44px;border:1px solid transparent}
 ${M} .ong-msg-it+.ong-msg-it{box-shadow:0 -7px 0 -6px rgba(143,168,240,.14)}
 ${M} .ong-msg-l1,${M} .ong-msg-l2{display:flex;align-items:center;gap:8px;min-width:0}

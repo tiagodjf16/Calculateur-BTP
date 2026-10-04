@@ -9,10 +9,58 @@
    - ONG.groupe(libelle, html) : un groupe de pastilles ou de boutons avec son libellé.
    Mêmes places partout : « 💡 Comment ça marche ? » en premier sous les onglets, puis la barre (titre + action principale).
    Classe « ong-archive » sur un ONG.pli : le bloc replié des éléments passés (compos, stages, créneaux…), plus discret.
+   Aussi, pour toute l'application :
+   - S.downloads toujours présent (téléchargement par le navigateur quand Claude ne le fournit pas), voir plus bas ;
+   - la visionneuse des affiches de la semaine : « Télécharger l'image » en bouton secondaire, « Copier le texte » reste l'action principale.
    Ajouté sans modifier le script de l'application. */
 (function(){
   "use strict";
   if (typeof S === "undefined") return;
+
+  /* ---------- Téléchargements ----------
+     L'application enregistre ses fichiers par S.downloads.save({ filename, data }) : export CSV des demandes d'inscription,
+     affiche en PNG. S.downloads n'existe que dans Claude (demarrer() fait S.downloads = await use("downloads")) ; sur le site
+     hébergé, ou le fichier ouvert hors ligne, il vaut null et ces boutons répondaient « Export indisponible ici. ».
+     Quand il manque, on fournit la même chose avec le navigateur (Blob + lien <a download>). Un accesseur sur S : ce que
+     l'application y range plus tard (null hors de Claude) ne l'efface pas, et un vrai « downloads » de Claude reste prioritaire. */
+  (function(){
+    const TYPES = { csv: "text/csv;charset=utf-8", txt: "text/plain;charset=utf-8", json: "application/json", png: "image/png", jpg: "image/jpeg",
+      jpeg: "image/jpeg", pdf: "application/pdf", ics: "text/calendar;charset=utf-8", svg: "image/svg+xml", html: "text/html;charset=utf-8" };
+    const typeDe = nom => { const m = /\.([a-z0-9]+)$/i.exec(nom); return (m && TYPES[m[1].toLowerCase()]) || "application/octet-stream"; };
+    const navigateur = Object.freeze({
+      navigateur: true,                                   // pour le reconnaître (essais, diagnostic)
+      async save({ filename, data, type, mimeType } = {}){
+        const nom = String(filename || "fichier").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-");
+        const blob = data instanceof Blob ? data : new Blob([data == null ? "" : data], { type: type || mimeType || typeDe(nom) });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = nom; a.rel = "noopener"; a.hidden = true;
+        document.body.appendChild(a);
+        try { a.click(); }
+        finally { a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); }   // pas tout de suite : certains navigateurs lisent le fichier après le clic
+        return { ok: true, filename: nom };
+      },
+    });
+    const d = Object.getOwnPropertyDescriptor(S, "downloads");
+    if (d && !d.configurable) return;                      // ne devrait pas arriver : on laisse alors l'application telle quelle
+    let reel = d ? ("value" in d ? d.value : (d.get ? d.get.call(S) : null)) : null;
+    Object.defineProperty(S, "downloads", { configurable: true, enumerable: true,
+      get: () => reel || navigateur,
+      set: v => { reel = v || null; } });
+  })();
+
+  /* ---------- Visionneuse des affiches de la semaine ----------
+     « 📋 Copier le texte » et « ⬇️ Télécharger l'image » étaient deux boutons bleus côte à côte : le téléchargement passe en
+     bouton secondaire (même lien, même nom de fichier), comme « Ouvrir en grand ». */
+  if (typeof window.voirAfficheSemaine === "function"){
+    const voirAvant = window.voirAfficheSemaine;
+    window.voirAfficheSemaine = function(){
+      const r = voirAvant.apply(this, arguments);
+      try { document.querySelectorAll(".as-modale .modale-pied a.btn.bleu[download]").forEach(a => a.classList.replace("bleu", "contour")); } catch(err){}
+      return r;
+    };
+  }
+
   const e = s => typeof esc === "function" ? esc(s) : String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const etats = () => (S.ui.ongPli = S.ui.ongPli || {});
   const ouvert = (cle, defaut) => { const v = etats()[cle]; return v == null ? !!defaut : !!v; };
