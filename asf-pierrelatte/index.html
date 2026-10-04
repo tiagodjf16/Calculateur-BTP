@@ -11765,11 +11765,613 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   document.head.appendChild(css);
 })();
 </script>
+<script id="bureau3d-js">
+/* ============================================================
+   BUREAU 3D : en-tête de l'espace club
+   Le tableau tactique du coach posé sur une table en bois, sous une lampe :
+   les aimants des deux équipes, les flèches tracées au feutre qui se dessinent
+   et l'action qui se joue (passe, appel, centre, frappe), en boucle.
+   Rendu en temps réel (WebGL, sans bibliothèque) : objets calculés exactement
+   (pas d'approximation), ombres douces, reflets, puis flou de mise au point.
+   Si le navigateur ne sait pas faire de 3D, l'en-tête garde un fond dégradé.
+   ============================================================ */
+(() => {
+  "use strict";
+  const hero = document.querySelector("#p-espace .titre-page");
+  if (!hero || hero.querySelector(".esp-3d")) return;
+  hero.classList.add("esp-hero");
+  const voile = document.createElement("div"); voile.className = "esp-hero-voile"; voile.setAttribute("aria-hidden", "true");
+  const cv = document.createElement("canvas"); cv.className = "esp-3d"; cv.setAttribute("aria-hidden", "true");
+  hero.prepend(voile); hero.prepend(cv);
+  const sans3d = () => { cv.remove(); hero.classList.add("esp-hero-sans3d"); };
+  let gl = null;
+  try { gl = cv.getContext("webgl", { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance" }); } catch(e){}
+  if (!gl) return sans3d();
+  const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tactile = matchMedia("(pointer: coarse)").matches;
+
+  const VS = `attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  /* ---------- passe 1 : la scène ---------- */
+  const FS_SCENE = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes;
+uniform float uTime, uFocal, uLens, uFocus, uAper, uExpo;
+uniform vec3 uCam, uCR, uCU, uCF;
+uniform vec4 uMag[22];
+uniform vec3 uBall;
+uniform mat3 uBallRot;
+uniform vec2 uArr[12];
+uniform float uArrT[4];
+uniform float uArrA;
+
+const float BX = 1.0, BZ = 0.64, BY = 0.035, FW = 0.04;
+const float MR = 0.036, MH = 0.021, RB = 0.016;
+const vec3 LP = vec3(-1.25, 2.5, 1.15);
+const vec3 KEYCOL = vec3(1.0, 0.88, 0.74) * 8.0;
+const vec3 FILLCOL = vec3(0.22, 0.34, 0.72) * 0.55;
+const vec3 FILLDIR = vec3(0.62, 0.47, -0.63);
+const vec3 SPOTDIR = vec3(0.4433, -0.8312, -0.3369);
+const vec3 W0 = vec3(1.16, 0.0, 0.30), W1 = vec3(1.27, 0.0, 0.22), W2 = vec3(1.31, 0.0, 0.19);
+const float WR = 0.026, WR2 = 0.011;
+const vec3 P0 = vec3(0.98, 0.0, 0.78), P1 = vec3(1.36, 0.0, 0.58);
+const float PR = 0.018;
+
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float bruit(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ s += a * bruit(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+float sdBox2(vec2 p, vec2 b){ vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
+float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
+
+/* ----- intersections exactes ----- */
+float iSphere(vec3 ro, vec3 rd, vec3 c, float r){ vec3 oc = ro - c; float b = dot(oc, rd), h = b * b - dot(oc, oc) + r * r; if (h < 0.0) return -1.0; return -b - sqrt(h); }
+float iCaps(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra){
+  vec3 ba = pb - pa, oa = ro - pa;
+  float baba = dot(ba, ba), bard = dot(ba, rd), baoa = dot(ba, oa), rdoa = dot(rd, oa), oaoa = dot(oa, oa);
+  float a = baba - bard * bard, b = baba * rdoa - baoa * bard, c = baba * oaoa - baoa * baoa - ra * ra * baba, h = b * b - a * c;
+  if (h >= 0.0){
+    float t = (-b - sqrt(h)) / a, y = baoa + t * bard;
+    if (y > 0.0 && y < baba) return t;
+    vec3 oc = (y <= 0.0) ? oa : ro - pb;
+    b = dot(rd, oc); c = dot(oc, oc) - ra * ra; h = b * b - c;
+    if (h > 0.0) return -b - sqrt(h);
+  }
+  return -1.0;
+}
+vec3 nCaps(vec3 p, vec3 a, vec3 b, float r){ vec3 ba = b - a, pa = p - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return (pa - h * ba) / r; }
+/* aimant : cylindre vertical posé sur le tableau, bord arrondi simulé par la normale */
+float iMag(vec3 ro, vec3 rd, vec2 c, out vec3 n){
+  float y1 = BY + MH, best = 1e9;
+  vec2 oc = ro.xz - c;
+  float tc = (y1 - ro.y) / rd.y;
+  if (tc > 0.0){ vec2 q = oc + tc * rd.xz; if (dot(q, q) < MR * MR){ best = tc; float e = smoothstep(MR - 0.006, MR, length(q)); n = normalize(vec3(q.x / MR * e * 1.4, 1.0, q.y / MR * e * 1.4)); } }
+  float a = dot(rd.xz, rd.xz), b = dot(oc, rd.xz), cc = dot(oc, oc) - MR * MR, h = b * b - a * cc;
+  if (h > 0.0){
+    float ts = (-b - sqrt(h)) / a, y = ro.y + ts * rd.y;
+    if (ts > 0.0 && ts < best && y > BY && y < y1){ best = ts; vec2 q = (oc + ts * rd.xz) / MR; float e = smoothstep(y1 - 0.006, y1, y); n = normalize(vec3(q.x, e * 1.6, q.y)); }
+  }
+  return best < 1e8 ? best : -1.0;
+}
+/* ombre douce d'un segment épais (aimant, sifflet, feutre, ballon) vue depuis p vers la lampe */
+float ombreSeg(vec3 ro, vec3 rd, vec3 a, vec3 b, float r, float k){
+  vec3 ba = b - a, oa = ro - a;
+  float baba = dot(ba, ba), bard = dot(ba, rd), rdoa = dot(rd, oa), baoa = dot(ba, oa);
+  float den = baba - bard * bard;
+  float s = den > 1e-7 ? clamp((baoa - rdoa * bard) / den, 0.0, 1.0) : 0.0;
+  float t = max(s * bard - rdoa, 0.0);
+  s = baba > 1e-7 ? clamp(dot(oa + t * rd, ba) / baba, 0.0, 1.0) : 0.0;
+  float d = length(oa + t * rd - s * ba);
+  float w = k * t + 0.0015;
+  return smoothstep(0.0, 1.0, clamp((d - r + w) / (2.0 * w), 0.0, 1.0));
+}
+
+/* ----- le ciel de la pièce, pour les reflets ----- */
+vec3 piece(vec3 d, float rough){
+  vec3 c = mix(vec3(0.006, 0.008, 0.016), vec3(0.03, 0.04, 0.07), clamp(d.y * 0.6 + 0.4, 0.0, 1.0));
+  float s = max(dot(d, -SPOTDIR), 0.0);
+  c += vec3(1.0, 0.86, 0.68) * (pow(s, mix(90.0, 6.0, rough)) * mix(9.0, 0.6, rough) + pow(s, 6.0) * 0.18);
+  float w = max(dot(d, normalize(vec3(0.85, 0.42, -0.55))), 0.0);
+  c += vec3(0.28, 0.42, 0.9) * pow(w, mix(40.0, 4.0, rough)) * mix(1.6, 0.25, rough);
+  return c;
+}
+
+/* ----- éclairage : lampe (ombres douces), lumière froide, ambiance, reflets ----- */
+vec3 eclaire(vec3 p, vec3 n, vec3 v, vec3 alb, float rough, float metal, float ao, float sh){
+  vec3 L = LP - p; float dist = length(L); L /= dist;
+  float spot = smoothstep(0.78, 0.985, dot(-L, SPOTDIR));
+  float att = 9.2 / (dist * dist);
+  float ndl = max(dot(n, L), 0.0), ndv = max(dot(n, v), 1e-3);
+  vec3 h = normalize(L + v);
+  float ndh = max(dot(n, h), 0.0), a = max(rough * rough, 0.003), a2 = a * a;
+  float dd = ndh * ndh * (a2 - 1.0) + 1.0, D = a2 / (3.14159 * dd * dd);
+  vec3 F0 = mix(vec3(0.04), alb, metal);
+  vec3 F = F0 + (1.0 - F0) * pow(1.0 - max(dot(v, h), 0.0), 5.0);
+  float k = (rough + 1.0) * (rough + 1.0) / 8.0;
+  float G = 1.0 / ((ndl * (1.0 - k) + k) * (ndv * (1.0 - k) + k));
+  vec3 spec = D * F * G * 0.25;
+  vec3 kd = (1.0 - F) * (1.0 - metal);
+  vec3 col = (kd * alb / 3.14159 + spec) * ndl * KEYCOL * spot * att * sh;
+  float ndf = max(dot(n, normalize(FILLDIR)), 0.0);
+  col += (alb * (1.0 - metal) + F0 * 0.6) * ndf * FILLCOL * (0.35 + 0.65 * ao);
+  col += alb * (1.0 - metal) * mix(vec3(0.010, 0.012, 0.018), vec3(0.05, 0.06, 0.09), n.y * 0.5 + 0.5) * ao;
+  vec3 Fr = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - ndv, 5.0);
+  col += piece(reflect(-v, n), rough) * Fr * ao * mix(0.35, 1.0, sh);
+  return col;
+}
+
+/* ----- ombres et occlusion sur un point ----- */
+float ombres(vec3 p, int moi){
+  vec3 L = normalize(LP - p);
+  float sh = 1.0;
+  if (p.y < BY - 0.001){                                         // le tableau sur la table
+    float t = (BY * 0.5 - p.y) / L.y; vec2 q = p.xz + t * L.xz;
+    float w = 0.06 * t + 0.003;
+    sh *= smoothstep(-w, w, sdBox2(q, vec2(BX, BZ)));
+  }
+  for (int i = 0; i < 22; i++){
+    if (i == moi) continue;
+    vec4 m = uMag[i];
+    sh *= ombreSeg(p, L, vec3(m.x, BY + 0.004, m.y), vec3(m.x, BY + MH - 0.004, m.y), MR - 0.002, 0.05);
+  }
+  sh *= ombreSeg(p, L, vec3(uBall.x, BY + RB, uBall.y), vec3(uBall.x, BY + RB, uBall.y), RB, 0.05);
+  sh *= ombreSeg(p, L, W0 + vec3(0.0, WR, 0.0), W1 + vec3(0.0, WR, 0.0), WR, 0.05);
+  sh *= ombreSeg(p, L, W1 + vec3(0.0, WR2, 0.0), W2 + vec3(0.0, WR2, 0.0), WR2, 0.05);
+  sh *= ombreSeg(p, L, P0 + vec3(0.0, PR, 0.0), P1 + vec3(0.0, PR, 0.0), PR, 0.05);
+  return sh;
+}
+float occlusion(vec3 p){
+  float ao = 1.0;
+  if (p.y < BY + 0.003){
+    for (int i = 0; i < 22; i++){ float d = length(p.xz - uMag[i].xy) - MR; ao *= 1.0 - 0.55 * exp(-max(d, 0.0) * 70.0) * step(BY - 0.002, p.y); }
+    ao *= 1.0 - 0.6 * exp(-max(length(p - vec3(uBall.x, BY + RB, uBall.y)) - RB, 0.0) * 90.0);
+  }
+  if (p.y < 0.003){
+    float d = sdBox2(p.xz, vec2(BX, BZ));
+    ao *= mix(0.35, 1.0, smoothstep(0.0, 0.07, d));
+    ao *= 1.0 - 0.55 * exp(-max(length(p - (W0 + vec3(0.0, WR, 0.0))) - WR, 0.0) * 60.0);
+    float dp = length(nCaps(p, P0 + vec3(0.0, PR, 0.0), P1 + vec3(0.0, PR, 0.0), PR)) * PR - PR;
+    ao *= 1.0 - 0.5 * exp(-max(dp, 0.0) * 80.0);
+  }
+  return ao;
+}
+
+/* ----- le feutre vert : pelouse tondue, lignes du terrain, flèches au feutre ----- */
+float lignesTerrain(vec2 q){
+  float w = 0.0028, d = 1e3;
+  d = min(d, abs(sdBox2(q, vec2(0.92, 0.58))));
+  d = min(d, abs(q.x));
+  d = min(d, abs(length(q) - 0.160));
+  d = min(d, length(q) - 0.006 + w);
+  vec2 s = vec2(abs(q.x), q.y);
+  d = min(d, abs(sdBox2(s - vec2(0.92 - 0.1445, 0.0), vec2(0.1445, 0.353))));
+  d = min(d, abs(sdBox2(s - vec2(0.92 - 0.048, 0.0), vec2(0.048, 0.1605))));
+  d = min(d, length(s - vec2(0.727, 0.0)) - 0.005 + w);
+  float arc = abs(length(s - vec2(0.727, 0.0)) - 0.160);
+  d = min(d, s.x < 0.6315 ? arc : 1e3);
+  d = min(d, abs(sdBox2(s - vec2(0.938, 0.0), vec2(0.018, 0.064))));
+  vec2 c = vec2(s.x, abs(s.y)) - vec2(0.92, 0.58);
+  d = min(d, (c.x < 0.0 && c.y < 0.0) ? abs(length(c) - 0.017) : 1e3);
+  return 1.0 - smoothstep(w - 0.0012, w + 0.0012, d);
+}
+vec2 bez(vec2 a, vec2 b, vec2 c, float t){ return mix(mix(a, b, t), mix(b, c, t), t); }
+vec4 fleches(vec2 q){                                            // rgb : encre, a : couverture
+  vec4 res = vec4(0.0);
+  for (int k = 0; k < 4; k++){
+    float rev = 0.0; vec2 a = vec2(0.0), b = vec2(0.0), c = vec2(0.0);
+    if (k == 0){ rev = uArrT[0]; a = uArr[0]; b = uArr[1]; c = uArr[2]; }
+    else if (k == 1){ rev = uArrT[1]; a = uArr[3]; b = uArr[4]; c = uArr[5]; }
+    else if (k == 2){ rev = uArrT[2]; a = uArr[6]; b = uArr[7]; c = uArr[8]; }
+    else { rev = uArrT[3]; a = uArr[9]; b = uArr[10]; c = uArr[11]; }
+    if (rev <= 0.001) continue;
+    bool tiret = (k == 0 || k == 3);
+    vec3 encre = tiret ? vec3(0.82, 0.84, 0.86) : vec3(0.95, 0.62, 0.08);
+    float dmin = 1e3, acc = 0.0, sMin = 0.0;
+    vec2 prev = a;
+    for (int i = 1; i <= 10; i++){
+      float t = float(i) / 10.0;
+      if (t > rev + 0.1) break;
+      vec2 cur = bez(a, b, c, min(t, rev));
+      vec2 pa = q - prev, ba = cur - prev; float l = length(ba);
+      float h = clamp(dot(pa, ba) / max(l * l, 1e-6), 0.0, 1.0);
+      float d = length(pa - ba * h);
+      if (d < dmin){ dmin = d; sMin = acc + h * l; }
+      acc += l; prev = cur;
+    }
+    float on = 1.0;
+    if (tiret) on = step(fract(sMin / 0.042), 0.58);
+    float cov = (1.0 - smoothstep(0.0032, 0.0052, dmin)) * on;
+    if (rev > 0.97){                                             // pointe de flèche
+      vec2 dir = normalize(c - b), per = vec2(-dir.y, dir.x), r = q - c;
+      float al = dot(r, dir), ac = abs(dot(r, per));
+      float tri = step(-0.04, al) * step(al, 0.004) * step(ac, (al + 0.04) / 0.044 * 0.019);
+      cov = max(cov, tri * smoothstep(0.97, 1.0, rev));
+    }
+    cov *= 0.9 * uArrA;
+    res.rgb = mix(res.rgb, encre, cov); res.a = max(res.a, cov);
+  }
+  return res;
+}
+
+/* ----- le ballon du tableau : panneaux noirs aux sommets d'un icosaèdre ----- */
+float panneaux(vec3 d){
+  const float P = 1.618034;
+  float m = 0.0;
+  m = max(m, abs(dot(d, normalize(vec3(0.0, 1.0, P)))));
+  m = max(m, abs(dot(d, normalize(vec3(0.0, 1.0, -P)))));
+  m = max(m, abs(dot(d, normalize(vec3(1.0, P, 0.0)))));
+  m = max(m, abs(dot(d, normalize(vec3(-1.0, P, 0.0)))));
+  m = max(m, abs(dot(d, normalize(vec3(P, 0.0, 1.0)))));
+  m = max(m, abs(dot(d, normalize(vec3(-P, 0.0, 1.0)))));
+  return smoothstep(0.925, 0.94, m);
+}
+
+/* ----- la table en noyer ----- */
+vec3 bois(vec2 q, out float vernis){
+  float lame = floor((q.y + 3.0) / 0.34);
+  vec2 w = vec2(q.x * 1.6 + hash(vec2(lame, 3.1)) * 40.0, q.y * 30.0);
+  float g = fbm(vec2(w.x * 0.5, w.y * 0.22 + sin(w.x * 0.7 + lame) * 0.5));
+  float veine = 0.5 + 0.5 * sin(q.y * 95.0 + g * 9.0 + lame * 4.0);
+  vec3 c = mix(vec3(0.030, 0.013, 0.006), vec3(0.105, 0.050, 0.022), veine * 0.55 + g * 0.45);
+  c *= 0.8 + 0.4 * hash(vec2(lame, 7.7));
+  float f = fract((q.y + 3.0) / 0.34), joint = min(f, 1.0 - f) * 0.34;
+  c *= mix(0.3, 1.0, smoothstep(0.0, 0.0025, joint));
+  vernis = 0.28 + 0.2 * fbm(q * 9.0);
+  return c;
+}
+/* cordon du sifflet posé sur la table (relief simulé) */
+float cordon(vec2 q, out vec3 nn){
+  vec2 pts0 = vec2(1.33, 0.18), pts1 = vec2(1.42, 0.08), pts2 = vec2(1.50, 0.12), pts3 = vec2(1.56, 0.30), pts4 = vec2(1.52, 0.52), pts5 = vec2(1.60, 0.74);
+  float d = 1e3; vec2 cp = q;
+  vec2 A[6]; A[0] = pts0; A[1] = pts1; A[2] = pts2; A[3] = pts3; A[4] = pts4; A[5] = pts5;
+  for (int i = 0; i < 5; i++){
+    vec2 a = A[i], b = A[i + 1], pa = q - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    vec2 c = a + ba * h; float dd = length(q - c);
+    if (dd < d){ d = dd; cp = c; }
+  }
+  const float R = 0.0055;
+  if (d < R){ vec2 s = (q - cp) / R; float u = clamp(length(s), 0.0, 0.999); nn = normalize(vec3(s.x, sqrt(1.0 - u * u), s.y)); }
+  else nn = vec3(0.0, 1.0, 0.0);
+  return d;
+}
+
+vec4 scene(vec3 ro, vec3 rd){                                    // rgb, a = distance
+  float tMin = 1e9; int quoi = 0; vec3 n = vec3(0.0, 1.0, 0.0); int idx = 0;
+  float tp = rd.y < 0.0 ? -ro.y / rd.y : -1.0;
+  if (tp > 0.0){ tMin = tp; quoi = 1; }
+  // le tableau (boîte)
+  {
+    vec3 inv = 1.0 / rd, t0 = (vec3(-BX, 0.0, -BZ) - ro) * inv, t1 = (vec3(BX, BY, BZ) - ro) * inv;
+    vec3 mn = min(t0, t1), mx = max(t0, t1);
+    float tn = max(max(mn.x, mn.y), mn.z), tf = min(min(mx.x, mx.y), mx.z);
+    if (tn < tf && tn > 0.0 && tn < tMin){ tMin = tn; quoi = 2;
+      n = (tn == mn.x) ? vec3(-sign(rd.x), 0.0, 0.0) : (tn == mn.y) ? vec3(0.0, -sign(rd.y), 0.0) : vec3(0.0, 0.0, -sign(rd.z)); }
+  }
+  // les aimants
+  if (ro.y + rd.y * (tMin < 1e8 ? tMin : 10.0) < BY + MH + 0.01){
+    for (int i = 0; i < 22; i++){
+      vec3 nm; float t = iMag(ro, rd, uMag[i].xy, nm);
+      if (t > 0.0 && t < tMin){ tMin = t; quoi = 3; n = nm; idx = i; }
+    }
+  }
+  float tb = iSphere(ro, rd, vec3(uBall.x, BY + RB, uBall.y), RB);
+  if (tb > 0.0 && tb < tMin){ tMin = tb; quoi = 4; }
+  float tw = iCaps(ro, rd, W0 + vec3(0.0, WR, 0.0), W1 + vec3(0.0, WR, 0.0), WR);
+  if (tw > 0.0 && tw < tMin){ tMin = tw; quoi = 5; }
+  float tw2 = iCaps(ro, rd, W1 + vec3(0.0, WR2, 0.0), W2 + vec3(0.0, WR2, 0.0), WR2);
+  if (tw2 > 0.0 && tw2 < tMin){ tMin = tw2; quoi = 6; }
+  float tpen = iCaps(ro, rd, P0 + vec3(0.0, PR, 0.0), P1 + vec3(0.0, PR, 0.0), PR);
+  if (tpen > 0.0 && tpen < tMin){ tMin = tpen; quoi = 7; }
+
+  vec3 v = -rd;
+  if (quoi == 0) return vec4(piece(rd, 0.6) * 0.15, 20.0);
+  vec3 p = ro + rd * tMin;
+  vec3 alb = vec3(0.5); float rough = 0.5, metal = 0.0;
+  if (quoi == 1){                                                // table
+    vec3 nn; float dc = cordon(p.xz, nn);
+    if (dc < 0.0055){ n = nn; alb = vec3(0.02, 0.06, 0.40); rough = 0.55; }
+    else {
+      float vernis; alb = bois(p.xz, vernis); rough = vernis;
+      if (dc < 0.012) alb *= mix(0.45, 1.0, (dc - 0.0055) / 0.0065);
+      n = normalize(vec3((bruit(p.xz * 140.0) - 0.5) * 0.02, 1.0, (bruit(p.zx * 140.0) - 0.5) * 0.02));
+    }
+  } else if (quoi == 2){                                         // tableau
+    vec2 q = p.xz;
+    bool dessus = n.y > 0.5;
+    bool cadre = !dessus || abs(q.x) > BX - FW || abs(q.y) > BZ - FW;
+    if (cadre){
+      alb = vec3(0.86, 0.87, 0.88); metal = 1.0; rough = 0.30 + 0.06 * bruit(q * vec2(4.0, 600.0));
+      if (dessus){                                                // arêtes arrondies : la lumière accroche les bords
+        float e = min(BX - abs(q.x), BZ - abs(q.y));
+        float bord = 1.0 - smoothstep(0.0, 0.006, e);
+        vec3 nb = abs(q.x) / BX > abs(q.y) / BZ ? vec3(sign(q.x), 0.0, 0.0) : vec3(0.0, 0.0, sign(q.y));
+        float inner = 1.0 - smoothstep(0.0, 0.004, min(abs(abs(q.x) - (BX - FW)), abs(abs(q.y) - (BZ - FW))));
+        n = normalize(mix(n, nb, bord * 0.7));
+        alb *= 1.0 - 0.6 * inner;
+      } else {
+        float e = BY - p.y; n = normalize(mix(n, vec3(0.0, 1.0, 0.0), (1.0 - smoothstep(0.0, 0.006, e)) * 0.7));
+      }
+    } else {
+      float bande = step(0.5, fract((q.x + 0.92) / 0.1314));
+      float fibre = bruit(q * 900.0) * 0.6 + bruit(q * 260.0) * 0.4;
+      alb = vec3(0.040, 0.150, 0.068) * (0.88 + 0.12 * bande) * (0.82 + 0.3 * fibre);
+      rough = 0.85;
+      float li = lignesTerrain(q);
+      alb = mix(alb, vec3(0.74, 0.76, 0.74), li * 0.92); rough = mix(rough, 0.6, li);
+      vec4 f = fleches(q);
+      alb = mix(alb, f.rgb * 0.85, f.a); rough = mix(rough, 0.35, f.a);
+      n = normalize(vec3((fibre - 0.5) * 0.06, 1.0, (bruit(q.yx * 900.0) - 0.5) * 0.06));
+    }
+  } else if (quoi == 3){                                         // aimant
+    vec4 m = uMag[0];
+    for (int i = 0; i < 22; i++) if (i == idx) m = uMag[i];
+    bool bleu = m.z < 0.5;
+    alb = bleu ? vec3(0.018, 0.06, 0.40) : vec3(0.52, 0.025, 0.022);
+    rough = 0.22;
+    if (p.y > BY + MH - 0.0005){
+      float r = length(p.xz - m.xy);
+      float anneau = smoothstep(0.0215, 0.0235, r) * (1.0 - smoothstep(0.0275, 0.0295, r));
+      alb = mix(alb, vec3(0.80, 0.80, 0.80), anneau);
+      if (m.w > 0.5) alb = mix(alb, vec3(0.85, 0.62, 0.10), 1.0 - smoothstep(0.009, 0.011, r));
+    }
+  } else if (quoi == 4){                                         // ballon
+    vec3 c = vec3(uBall.x, BY + RB, uBall.y);
+    n = normalize(p - c);
+    alb = mix(vec3(0.82, 0.82, 0.80), vec3(0.015), panneaux(uBallRot * n));
+    rough = 0.32;
+  } else if (quoi == 5 || quoi == 6){                            // sifflet chromé
+    n = quoi == 5 ? normalize(nCaps(p, W0 + vec3(0.0, WR, 0.0), W1 + vec3(0.0, WR, 0.0), WR))
+                  : normalize(nCaps(p, W1 + vec3(0.0, WR2, 0.0), W2 + vec3(0.0, WR2, 0.0), WR2));
+    alb = vec3(0.92, 0.90, 0.86); metal = 1.0; rough = 0.14;
+    if (quoi == 5){ float fente = smoothstep(0.004, 0.0, abs(dot(p - W1, normalize(W1 - W0)) + 0.012)) * step(WR * 1.4, p.y); alb *= 1.0 - 0.85 * fente; }
+  } else {                                                       // feutre
+    n = normalize(nCaps(p, P0 + vec3(0.0, PR, 0.0), P1 + vec3(0.0, PR, 0.0), PR));
+    float s = dot(p - P0, normalize(P1 - P0)) / length(P1 - P0);
+    alb = s > 0.68 ? vec3(0.02, 0.07, 0.42) : (s < 0.04 ? vec3(0.7) : vec3(0.012));
+    rough = s > 0.68 ? 0.25 : 0.38;
+    if (s > 0.66 && s < 0.68) alb = vec3(0.6);
+  }
+  float sh = ombres(p + n * 0.0015, quoi == 3 ? idx : -1);
+  float ao = occlusion(p);
+  if (quoi == 3) ao *= mix(0.5, 1.0, smoothstep(BY, BY + 0.012, p.y));
+  vec3 col = eclaire(p, n, v, alb, rough, metal, ao, sh);
+  if (quoi == 3 || quoi == 4) col += alb * vec3(0.03, 0.10, 0.04) * max(0.0, 1.0 - abs(n.y)) * 0.6;   // reflet vert du feutre
+  float brume = 1.0 - exp(-max(tMin - 2.2, 0.0) * 0.35);
+  col = mix(col, vec3(0.006, 0.009, 0.02), brume);
+  return vec4(col, tMin);
+}
+
+vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  vec3 rd = normalize(uCF * uFocal + (uv.x - uLens) * uCR + uv.y * uCU);
+  vec4 s = scene(uCam, rd);
+  vec3 c = aces(s.rgb * uExpo);
+  c = pow(c, vec3(1.0 / 2.2));
+  float coc = clamp(uAper * (s.a - uFocus) / s.a, -1.0, 1.0);
+  gl_FragColor = vec4(c, coc * 0.5 + 0.5);
+}`;
+
+  /* ---------- passe 2 : mise au point (flou de profondeur), vignette, grain ---------- */
+  const FS_FLOU = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform sampler2D uTex;
+uniform vec2 uRes;
+uniform float uMaxR, uTime;
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec4 c0 = texture2D(uTex, uv);
+  float sc = c0.a * 2.0 - 1.0, rc = abs(sc) * uMaxR;
+  vec3 acc = c0.rgb; float wsum = 1.0;
+  for (int i = 1; i < 28; i++){
+    float fi = float(i);
+    float r = sqrt(fi / 27.0) * uMaxR, an = fi * 2.39996;
+    vec2 o = vec2(cos(an), sin(an)) * r;
+    vec4 t = texture2D(uTex, uv + o / uRes);
+    float st = t.a * 2.0 - 1.0, rt = abs(st) * uMaxR;
+    float w = smoothstep(r - 1.2, r, rt);
+    if (st > sc) w *= smoothstep(r - 1.2, r, rc);
+    float lum = dot(t.rgb, vec3(0.299, 0.587, 0.114));
+    w *= 1.0 + smoothstep(0.65, 1.0, lum) * 2.5;
+    acc += t.rgb * w; wsum += w;
+  }
+  vec3 col = acc / wsum;
+  vec2 q = uv - 0.5;
+  col *= 1.0 - 0.55 * dot(q * vec2(1.15, 1.4), q * vec2(1.15, 1.4));
+  float g = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (g - 0.5) * 0.028;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+  function prog(fs){
+    const mk = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const p = gl.createProgram();
+    gl.attachShader(p, mk(gl.VERTEX_SHADER, VS)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
+    gl.bindAttribLocation(p, 0, "aPos"); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++){ const inf = gl.getActiveUniform(p, i); u[inf.name.replace(/\[0\]$/, "")] = gl.getUniformLocation(p, inf.name); }
+    return { p, u };
+  }
+  let P1, P2;
+  try { P1 = prog(FS_SCENE); P2 = prog(FS_FLOU); }
+  catch(e){ window.__bureau3d = { erreur: String(e && e.message || e) }; return sans3d(); }
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const tex = gl.createTexture(), fbo = gl.createFramebuffer();
+  let W = 0, H = 0;
+  function taille(){
+    const r = hero.getBoundingClientRect();
+    if (r.width < 10 || r.height < 10) return false;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const max = tactile ? 300000 : 620000;
+    let w = r.width * dpr, h = r.height * dpr;
+    const k = Math.min(1, Math.sqrt(max / (w * h)));
+    w = Math.max(2, Math.round(w * k)); h = Math.max(2, Math.round(h * k));
+    if (w === W && h === H) return true;
+    W = w; H = h; cv.width = W; cv.height = H;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return true;
+  }
+
+  /* ---------- l'action jouée sur le tableau ---------- */
+  const BLEU = [[-0.86, 0], [-0.58, 0.40], [-0.62, 0.13], [-0.62, -0.13], [-0.58, -0.40], [-0.30, 0.05], [-0.36, -0.22], [-0.36, 0.27], [0.06, 0.42], [0.16, 0.03], [0.10, -0.36]];
+  const ROUGE = [[0.86, 0], [0.62, 0.38], [0.64, 0.13], [0.64, -0.13], [0.62, -0.38], [0.38, 0.35], [0.40, 0.12], [0.40, -0.12], [0.38, -0.35], [0.05, 0.19], [0.03, -0.16]];
+  const CM = 5, AIL = 8, BU = 9;
+  const ARR = [
+    [[-0.27, 0.07], [0.02, 0.30], [0.30, 0.41]],                 // passe vers l'ailier
+    [[0.06, 0.42], [0.20, 0.47], [0.34, 0.42]],                  // appel de l'ailier
+    [[0.18, 0.02], [0.48, -0.08], [0.69, 0.05]],                 // appel de l'avant-centre
+    [[0.66, 0.34], [0.72, 0.22], [0.71, 0.08]],                  // centre
+  ];
+  const lisse = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  const seg = (t, a, b) => lisse((t - a) / (b - a));
+  const lerp = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  const bz = (p, k) => lerp(lerp(p[0], p[1], k), lerp(p[1], p[2], k), k);
+  const CYCLE = 12;
+  function etat(T){
+    const t = T % CYCLE;
+    const retour = seg(t, 8.2, 9.8);
+    const bleu = BLEU.map(p => p.slice()), rouge = ROUGE.map(p => p.slice());
+    // l'ailier : appel puis conduite de balle
+    const ail = t < 2.6 ? bz(ARR[1], seg(t, 0.6, 2.2)) : lerp([0.34, 0.42], [0.62, 0.36], seg(t, 2.6, 3.9));
+    bleu[AIL] = lerp(ail, BLEU[AIL], retour);
+    // l'avant-centre : appel dans la surface
+    bleu[BU] = lerp(bz([[0.16, 0.03], ARR[2][1], [0.69, 0.05]], seg(t, 2.8, 4.4)), BLEU[BU], retour);
+    // le bloc bleu monte un peu, le bloc rouge glisse vers le ballon
+    const monte = seg(t, 1.0, 4.0) * (1 - retour);
+    [1, 2, 3, 4, 5, 6, 7, 10].forEach(i => { bleu[i][0] += 0.07 * monte; });
+    bleu[CM] = lerp(BLEU[CM], [-0.20, 0.08], monte);
+    const glisse = seg(t, 1.6, 4.2) * (1 - retour);
+    rouge.forEach((p, i) => { if (i){ p[1] += 0.06 * glisse; p[0] += (i <= 4 ? 0.05 : 0.03) * glisse; } });
+    rouge[1] = lerp(rouge[1], [0.60, 0.33], seg(t, 2.6, 3.8) * (1 - retour));
+    // le ballon
+    let b;
+    if (t < 1.0) b = [BLEU[CM][0] + 0.05, BLEU[CM][1] + 0.01];
+    else if (t < 2.25) b = bz(ARR[0], seg(t, 1.0, 2.25));
+    else if (t < 2.6) b = [0.30, 0.41];
+    else if (t < 3.95){ const k = seg(t, 2.6, 3.9); const a = lerp([0.34, 0.42], [0.62, 0.36], k); b = [a[0] + 0.05, a[1] - 0.01]; }
+    else if (t < 4.6) b = bz([[0.67, 0.35], [0.73, 0.21], [0.735, 0.06]], seg(t, 3.95, 4.6));
+    else if (t < 5.1) b = lerp([0.735, 0.06], [0.955, 0.015], seg(t, 4.75, 5.1));
+    else b = [0.955, 0.015];
+    if (t >= 8.2) b = lerp([0.955, 0.015], [BLEU[CM][0] + 0.05, BLEU[CM][1] + 0.01], retour);
+    const fl = [seg(t, 0.2, 0.9), seg(t, 0.05, 0.6), seg(t, 2.2, 2.9), seg(t, 3.2, 3.85)];
+    const alpha = 1 - seg(t, 7.6, 8.4);
+    return { bleu, rouge, b, fl, alpha };
+  }
+
+  /* ---------- le ballon roule ---------- */
+  let rot = [1, 0, 0, 0, 1, 0, 0, 0, 1], dernierB = null;
+  function rouler(b){
+    if (dernierB){
+      const dx = b[0] - dernierB[0], dz = b[1] - dernierB[1], d = Math.hypot(dx, dz);
+      if (d > 1e-6 && d < 0.3){
+        const ax = [dz / d, 0, -dx / d], an = d / 0.016, c = Math.cos(an), s = Math.sin(an), C = 1 - c;
+        const [x, y, z] = ax;
+        const R = [c + x * x * C, x * y * C - z * s, x * z * C + y * s, y * x * C + z * s, c + y * y * C, y * z * C - x * s, z * x * C - y * s, z * y * C + x * s, c + z * z * C];
+        const m = new Array(9);
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m[i * 3 + j] = R[i * 3] * rot[j] + R[i * 3 + 1] * rot[3 + j] + R[i * 3 + 2] * rot[6 + j];
+        rot = m;
+      }
+    }
+    dernierB = b;
+  }
+
+  /* ---------- caméra : lent travelling, suit un peu la souris sur ordinateur ---------- */
+  let sx = 0, sy = 0, cx = 0, cy = 0;
+  if (!tactile) hero.addEventListener("pointermove", e => { const r = hero.getBoundingClientRect(); sx = (e.clientX - r.left) / r.width - 0.5; sy = (e.clientY - r.top) / r.height - 0.5; });
+  hero.addEventListener("pointerleave", () => { sx = 0; sy = 0; });
+  function camera(T){
+    const asp = W / H, large = asp > 1.7;
+    cx += (sx - cx) * 0.05; cy += (sy - cy) * 0.05;
+    const yaw = (large ? 0.30 : 0.40) + 0.07 * Math.sin(T * 0.11) + cx * 0.10;
+    const pitch = (large ? 0.56 : 0.74) + 0.03 * Math.sin(T * 0.083) - cy * 0.05;
+    const D = large ? 2.1 : 2.55 - Math.min(0.5, (asp - 1) * 0.5);
+    const tg = large ? [0.30, 0.0, 0.06] : [0.30, 0.0, 0.10];
+    const pos = [tg[0] + D * Math.cos(pitch) * Math.sin(yaw), tg[1] + D * Math.sin(pitch), tg[2] + D * Math.cos(pitch) * Math.cos(yaw)];
+    const f = norm([tg[0] - pos[0], tg[1] - pos[1], tg[2] - pos[2]]);
+    const r = norm([-f[2], 0, f[0]]);
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    const fov = large ? 0.50 : 0.66;
+    const lens = large ? Math.min(0.62, 0.16 * asp) : 0;
+    return { pos, f, r, u, focal: 0.5 / Math.tan(fov / 2), lens };
+  }
+  const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+
+  const mags = new Float32Array(22 * 4), arr = new Float32Array(24);
+  ARR.forEach((a, i) => a.forEach((p, j) => { arr[(i * 3 + j) * 2] = p[0]; arr[(i * 3 + j) * 2 + 1] = p[1]; }));
+  const t0 = performance.now();
+  let tFixe = null;
+  function dessiner(T){
+    if (!taille()) return;
+    const e = etat(T);
+    e.bleu.forEach((p, i) => mags.set([p[0], p[1], 0, i === CM || i === AIL || i === BU ? 1 : 0], i * 4));
+    e.rouge.forEach((p, i) => mags.set([p[0], p[1], 1, 0], (11 + i) * 4));
+    rouler(e.b);
+    const c = camera(T);
+    const bp = [e.b[0], 0.051, e.b[1]];
+    const focus = Math.hypot(bp[0] - c.pos[0], bp[1] - c.pos[1], bp[2] - c.pos[2]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, W, H);
+    gl.useProgram(P1.p); const u = P1.u;
+    gl.uniform2f(u.uRes, W, H); gl.uniform1f(u.uTime, T);
+    gl.uniform3fv(u.uCam, c.pos); gl.uniform3fv(u.uCR, c.r); gl.uniform3fv(u.uCU, c.u); gl.uniform3fv(u.uCF, c.f);
+    gl.uniform1f(u.uFocal, c.focal); gl.uniform1f(u.uLens, c.lens); gl.uniform1f(u.uFocus, focus);
+    gl.uniform1f(u.uAper, 1.4); gl.uniform1f(u.uExpo, 1.15);
+    gl.uniform4fv(u.uMag, mags); gl.uniform3f(u.uBall, e.b[0], e.b[1], 0);
+    gl.uniformMatrix3fv(u.uBallRot, false, new Float32Array(rot));
+    gl.uniform2fv(u.uArr, arr); gl.uniform1fv(u.uArrT, new Float32Array(e.fl)); gl.uniform1f(u.uArrA, e.alpha);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+    gl.useProgram(P2.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(P2.u.uTex, 0); gl.uniform2f(P2.u.uRes, W, H);
+    gl.uniform1f(P2.u.uMaxR, Math.max(3, Math.min(9, H / 55))); gl.uniform1f(P2.u.uTime, T);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /* ---------- boucle : 30 images/s au plus, en pause quand l'en-tête n'est pas visible ---------- */
+  let visible = true, raf = 0, dernier = 0;
+  function boucle(now){
+    raf = 0;
+    if (!visible || document.hidden) return;
+    if (now - dernier >= 33){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
+    if (!reduit && tFixe == null) raf = requestAnimationFrame(boucle);
+  }
+  const relancer = () => { if (!raf) raf = requestAnimationFrame(boucle); };
+  if ("IntersectionObserver" in window) new IntersectionObserver(es => { visible = es.some(x => x.isIntersecting); if (visible) relancer(); }).observe(hero);
+  document.addEventListener("visibilitychange", relancer);
+  window.addEventListener("hashchange", () => setTimeout(relancer, 50));
+  if ("ResizeObserver" in window) new ResizeObserver(() => { dernier = 0; relancer(); }).observe(hero);
+  if (reduit) tFixe = 4.5;
+  cv.addEventListener("webglcontextlost", e => { e.preventDefault(); sans3d(); });
+  window.__bureau3d = { dessiner, figer: t => { tFixe = t; dernier = 0; relancer(); } };
+  relancer();
+})();
+</script>
 <script id="espace-js">
-/* Espace dirigeants : plus simple à prendre en main.
-   - Accueil : « Où veux-tu aller ? », toutes les rubriques et leurs onglets en grandes tuiles, avec une phrase pour chacun.
-   - Chaque page : un bouton « Accueil » dans l'en-tête, et sous les onglets une phrase qui dit à quoi sert l'onglet ouvert.
-   - Changer d'onglet ramène en haut de la page.
+/* Espace dirigeants : simple à prendre en main, propre et beau.
+   - En haut : le tableau tactique en 3D (bureau3d.js), avec le nom de la personne, son rôle, « Voir le site » et « Se déconnecter ».
+   - Plus de menu à gauche : l'Accueil « Où veux-tu aller ? » montre toutes les rubriques et leurs onglets en grandes cartes.
+   - Chaque page : un bandeau (rubrique, à quoi sert l'onglet, bouton « Accueil ») et les onglets de la rubrique.
+   - Téléphone : une barre des rubriques en bas de l'écran.
+   - L'intérieur des onglets : mêmes cadres, mêmes champs, mêmes boutons partout.
    Ajouté sans modifier le script de l'application (on se branche sur panTableau et rendreEspace). */
 (function(){
   "use strict";
@@ -11778,16 +12380,17 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
   const desc = k => ((typeof ONGLETS !== "undefined" ? ONGLETS : []).find(o => o[0] === k) || [])[4] || "";
   const badge = k => { try { return typeof badgeOnglet === "function" ? badgeOnglet(k) : ""; } catch(err){ return ""; } };
   const nom = k => { try { return typeof nomOnglet === "function" ? nomOnglet(k) : k; } catch(err){ return k; } };
+  const rubsDuCompte = () => { try { return rubriquesVisibles(ongletsVisibles()); } catch(err){ return []; } };
+  const TEINTE = { equipes: "#2F6BFF", matchs: "#16A34A", com: "#F59E0B", vie: "#E0457B", reglages: "#8B5CF6" };
 
   /* Accueil : les raccourcis vers tous les onglets du compte, rangés par rubrique */
   function raccourcis(){
-    let rubs = [];
-    try { rubs = rubriquesVisibles(ongletsVisibles()).filter(r => r[0] !== "accueil"); } catch(err){ return ""; }
+    const rubs = rubsDuCompte().filter(r => r[0] !== "accueil");
     if (!rubs.length) return "";
     return `<section class="esp-lanceur" aria-labelledby="esp-lanceur-t">
       <h2 id="esp-lanceur-t">Où veux-tu aller ?</h2>
-      <div class="esp-rubs">${rubs.map(([k, l, ico, tabs]) => `<div class="esp-rub">
-        <div class="esp-rub-t"><span class="esp-rub-ico" aria-hidden="true">${ico}</span><b>${esc(l)}</b></div>
+      <div class="esp-rubs">${rubs.map(([k, l, ico, tabs, d]) => `<div class="esp-rub" style="--teinte:${TEINTE[k] || "#2F6BFF"}">
+        <div class="esp-rub-t"><span class="esp-rub-ico" aria-hidden="true">${ico}</span><span><b>${esc(l)}</b><small>${esc(d || "")}</small></span></div>
         <div class="esp-tuiles">${tabs.map(t => `<button type="button" class="esp-tuile" data-a="onglet" data-k="${esc(t)}">
           <span class="esp-tuile-ico">${icone(t)}</span><span class="esp-tuile-txt"><b>${esc(nom(t))}${badge(t)}</b><small>${esc(desc(t))}</small></span><span class="esp-fl" aria-hidden="true">›</span></button>`).join("")}</div>
       </div>`).join("")}</div>
@@ -11798,19 +12401,30 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     window.panTableau = function(){ return raccourcis() + avant.apply(this, arguments); };
   }
 
-  const COURT = { accueil: "Accueil", equipes: "Équipes", matchs: "Matchs", com: "Com.", vie: "Vie club", reglages: "Réglages" };
-  const rubsDuCompte = () => { try { return rubriquesVisibles(ongletsVisibles()); } catch(err){ return []; } };
-  /* ordinateur : le menu de gauche montre chaque rubrique avec tous ses onglets, un clic suffit */
-  function menuArbre(z){
-    const nav = z.querySelector(".app-nav"); if (!nav || nav.querySelector(".esp-arbre")) return;
-    const rubs = rubsDuCompte(); if (!rubs.length) return;
-    nav.querySelectorAll(":scope > .lien.rub, :scope > .rub-groupe").forEach(b => b.remove());
-    nav.insertAdjacentHTML("afterbegin", `<div class="esp-marque"><img src="img/blason.png" alt=""><div><b>Espace club</b><small>ASF Pierrelatte</small></div></div>
-      <nav class="esp-arbre" aria-label="Rubriques">${rubs.map(([k, l, ico, tabs]) => k === "accueil"
-        ? `<button type="button" class="esp-nav-o esp-nav-accueil" aria-current="${S.ui.onglet === tabs[0] ? "page" : "false"}" data-a="onglet" data-k="${esc(tabs[0])}"><span class="esp-nav-ico">${ico}</span>Accueil</button>`
-        : `<div class="esp-nav-rub"><div class="esp-nav-t"><span aria-hidden="true">${ico}</span>${esc(l)}</div>${tabs.map(t => `<button type="button" class="esp-nav-o" aria-current="${S.ui.onglet === t ? "page" : "false"}" data-a="onglet" data-k="${esc(t)}">${icone(t)}<span>${esc(nom(t))}</span>${badge(t)}</button>`).join("")}</div>`).join("")}</nav>`);
+  /* en haut de page : qui est connecté, voir le site, se déconnecter */
+  function heroCompte(){
+    const wrap = document.querySelector("#p-espace .titre-page .wrap"); if (!wrap) return;
+    const p = wrap.querySelector("p");
+    if (p && p.dataset.orig == null) p.dataset.orig = p.textContent;
+    const moi = document.querySelector("#espace .app-moi");
+    let carte = wrap.querySelector(".esp-moi");
+    if (!moi){ if (carte) carte.remove(); if (p) p.textContent = p.dataset.orig; return; }
+    const nomC = ((moi.querySelector(".app-moi-haut b") || {}).textContent || "").trim();
+    const role = ((moi.querySelector(".app-moi-haut small") || {}).textContent || "").trim();
+    const img = moi.querySelector(".app-moi-haut img");
+    const ini = ((moi.querySelector(".app-ini") || {}).textContent || "").trim();
+    const sortir = !!moi.querySelector('[data-a="deconnexion"]');
+    const prenom = /membre du club/i.test(nomC) ? "" : nomC.split(/\s+/)[0];
+    if (p) p.textContent = `Bonjour${prenom ? " " + prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() : ""} ! Que veux-tu faire aujourd'hui ?`;
+    const html = `<span class="esp-moi-av">${img ? `<img src="${esc(img.getAttribute("src") || "")}" alt="">` : esc(ini || "?")}</span>
+      <span class="esp-moi-txt"><b>${esc(nomC)}</b><small>${esc(role)}</small></span>
+      <span class="esp-moi-bts"><a class="esp-moi-bt" href="#accueil"><span aria-hidden="true">↗</span> Voir le site</a>${sortir ? `<button type="button" class="esp-moi-bt sortir" data-a="deconnexion"><span aria-hidden="true">⏻</span> Se déconnecter</button>` : ""}</span>`;
+    if (!carte){ carte = document.createElement("div"); carte.className = "esp-moi"; wrap.appendChild(carte); }
+    if (carte.dataset.html !== html){ carte.innerHTML = html; carte.dataset.html = html; }
   }
+
   /* téléphone : une barre en bas avec les rubriques, toujours à portée du pouce */
+  const COURT = { accueil: "Accueil", equipes: "Équipes", matchs: "Matchs", com: "Com.", vie: "Vie club", reglages: "Réglages" };
   function barreBas(){
     let b = document.getElementById("esp-barre");
     if (location.hash !== "#espace" || !document.getElementById("panneau")){ if (b) b.remove(); document.body.classList.remove("avec-barre"); return; }
@@ -11820,8 +12434,8 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     if (!b){ b = document.createElement("nav"); b.id = "esp-barre"; b.setAttribute("aria-label", "Rubriques de l'espace club"); document.body.appendChild(b); }
     b.innerHTML = html; document.body.classList.add("avec-barre");
   }
-  window.addEventListener("hashchange", () => setTimeout(barreBas, 0));
-  // la barre du bas est hors de #espace : on relaie ses boutons au gestionnaire de l'application (qui écoute les [data-a])
+  window.addEventListener("hashchange", () => setTimeout(() => { barreBas(); heroCompte(); }, 0));
+  // la barre du bas est hors de #espace : on relaie ses boutons au gestionnaire de l'application
   document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest("#esp-barre button"); if (!b) return;
     ev.preventDefault();
@@ -11830,21 +12444,24 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     setTimeout(() => window.scrollTo({ top: 0 }), 0);
   });
 
-  /* chaque page : un bandeau (rubrique, explication, « Accueil »), et à quoi sert l'onglet ouvert */
+  /* chaque page : le bandeau de la rubrique (à quoi sert l'onglet ouvert + « Accueil ») */
   function habiller(){
     const z = document.getElementById("espace"); if (!z) return;
-    menuArbre(z); barreBas();
+    heroCompte(); barreBas();
+    const app = z.querySelector(".app"); if (!app) return;
+    app.classList.add("esp-app");
+    app.classList.toggle("esp-sur-accueil", S.ui.onglet === "tableau");
     const main = z.querySelector(".app-main");
     if (main && !main.querySelector(".esp-version")) main.insertAdjacentHTML("beforeend", `<p class="esp-version">Espace club · version du 4 octobre 2026</p>`);
     const tete = z.querySelector(".app-tete"); if (!tete) return;
     tete.classList.add("esp-bandeau");
+    const rub = rubsDuCompte().find(r => r[3].includes(S.ui.onglet));
+    if (rub) tete.style.setProperty("--teinte", TEINTE[rub[0]] || "#2F6BFF");
+    const pd = tete.querySelector("p"), d = desc(S.ui.onglet);
+    if (pd && d) pd.textContent = d;
     if (S.ui.onglet !== "tableau" && !tete.querySelector(".esp-accueil"))
-      tete.insertAdjacentHTML("beforeend", `<button type="button" class="btn contour petit esp-accueil" data-a="onglet" data-k="tableau">🏠 Accueil</button>`);
+      tete.insertAdjacentHTML("beforeend", `<button type="button" class="esp-accueil" data-a="onglet" data-k="tableau"><span aria-hidden="true">←</span> Accueil</button>`);
     const ongs = z.querySelector(".rub-onglets");
-    if (ongs && !z.querySelector(".esp-aide")){
-      const d = desc(S.ui.onglet);
-      if (d) ongs.insertAdjacentHTML("afterend", `<p class="esp-aide">${esc(d)}</p>`);
-    }
     const actif = ongs && ongs.querySelector('[aria-selected="true"]');
     if (actif) try { actif.scrollIntoView({ block: "nearest", inline: "center" }); } catch(err){}
   }
@@ -11854,115 +12471,221 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     try { habiller(); } catch(err){}
     return r;
   };
-  // changer d'onglet : on repart du haut de la page
+  // changer d'onglet : on repart du haut de la page (sous l'en-tête 3D)
   document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest('#espace [data-a="onglet"], #espace [data-a="rubrique"], #drawer-contenu [data-a="onglet"], #drawer-contenu [data-a="rubrique"]');
-    if (b && b.dataset.k !== S.ui.onglet) setTimeout(() => window.scrollTo({ top: 0, behavior: "auto" }), 0);
+    if (b && b.dataset.k !== S.ui.onglet) setTimeout(() => {
+      const z = document.getElementById("espace"); const y = z ? z.getBoundingClientRect().top + window.scrollY - 90 : 0;
+      window.scrollTo({ top: b.dataset.k === "tableau" ? 0 : Math.max(0, Math.min(window.scrollY, y)), behavior: "auto" });
+    }, 0);
   }, true);
+
+  /* cartes en relief : elles s'inclinent sous la souris (ordinateur) */
+  if (matchMedia("(hover: hover) and (pointer: fine)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches){
+    document.addEventListener("pointermove", ev => {
+      const c = ev.target.closest && ev.target.closest(".esp-rub"); if (!c) return;
+      const r = c.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width - 0.5, y = (ev.clientY - r.top) / r.height - 0.5;
+      c.style.setProperty("--rx", (-y * 5).toFixed(2) + "deg"); c.style.setProperty("--ry", (x * 7).toFixed(2) + "deg");
+      c.style.setProperty("--mx", ((x + 0.5) * 100).toFixed(1) + "%"); c.style.setProperty("--my", ((y + 0.5) * 100).toFixed(1) + "%");
+    }, { passive: true });
+    document.addEventListener("pointerout", ev => {
+      const c = ev.target.closest && ev.target.closest(".esp-rub"); if (!c || c.contains(ev.relatedTarget)) return;
+      c.style.removeProperty("--rx"); c.style.removeProperty("--ry");
+    }, { passive: true });
+  }
 
   const css = document.createElement("style");
   css.id = "espace-css";
   css.textContent = `
-/* ---------- Accueil : où veux-tu aller ? ---------- */
-.esp-lanceur{margin:0 0 26px}
-.esp-lanceur h2{font:800 24px var(--display);margin:0 0 12px}
-.esp-rubs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.esp-rub{background:var(--carte);border:1px solid var(--ligne);border-radius:18px;padding:14px;display:grid;gap:10px;align-content:start;box-shadow:0 10px 26px rgba(7,18,48,.12)}
-.esp-rub-t{display:flex;align-items:center;gap:10px;font:800 18px var(--display);letter-spacing:.2px}
-.esp-rub-ico{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-size:19px;background:rgba(143,168,240,.14)}
-.esp-tuiles{display:grid;gap:6px}
-.esp-tuile{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid transparent;background:rgba(143,168,240,.07);color:var(--texte);
-  border-radius:12px;padding:10px 12px;min-height:56px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
-.esp-tuile:hover{background:rgba(143,168,240,.16);border-color:var(--ligne)}
-.esp-tuile:active{transform:scale(.99)}
-.esp-tuile:focus-visible{outline:3px solid var(--bleu-texte,#8FC2FF);outline-offset:2px}
-.esp-tuile-ico{width:34px;height:34px;flex:none;border-radius:10px;display:grid;place-items:center;background:var(--bleu);color:#fff}
-.esp-tuile-ico svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.9}
+/* ================= EN-TÊTE 3D ================= */
+#p-espace .titre-page.esp-hero{position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(90% 140% at 75% 30%,#173a2a 0%,#0b1426 45%,#050915 100%);
+  min-height:clamp(340px,27vw,470px);display:flex;align-items:center;padding:40px 0 34px;border-bottom:1px solid rgba(227,182,76,.25)}
+#p-espace .titre-page.esp-hero::before,#p-espace .titre-page.esp-hero::after{content:none}
+#p-espace .titre-page.esp-hero .wrap{width:100%;max-width:1320px;position:relative;z-index:2}
+#p-espace .esp-3d{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+#p-espace .esp-hero-voile{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(3,7,20,.92) 0%,rgba(3,7,20,.74) 24%,rgba(3,7,20,.22) 46%,rgba(3,7,20,0) 60%),
+             linear-gradient(0deg,rgba(3,7,20,.55) 0%,rgba(3,7,20,0) 28%)}
+#p-espace .titre-page.esp-hero h1{text-shadow:0 6px 30px rgba(0,0,0,.55)}
+#p-espace .titre-page.esp-hero p{max-width:34ch;font-size:19px;color:#E6ECFF;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.esp-moi{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:22px;padding:10px 12px 10px 10px;border-radius:20px;
+  background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.22);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 18px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.18);
+  animation:monte .8s .2s cubic-bezier(.2,.8,.2,1) both}
+.esp-moi-av{width:48px;height:48px;border-radius:50%;flex:none;display:grid;place-items:center;overflow:hidden;font:800 18px var(--display);color:#0B1633;
+  background:linear-gradient(135deg,#F7D774,#C9A227);box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.esp-moi-av img{width:100%;height:100%;object-fit:cover}
+.esp-moi-txt{display:grid;line-height:1.2;min-width:0;margin-right:6px}
+.esp-moi-txt b{font:800 18px var(--display);color:#fff;letter-spacing:.2px}
+.esp-moi-txt small{font:600 13.5px var(--corps);color:#C9D4F2}
+.esp-moi-bts{display:flex;gap:8px;flex-wrap:wrap}
+.esp-moi-bt{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:9px 15px;border-radius:12px;font:700 14.5px var(--corps);cursor:pointer;
+  text-decoration:none;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);transition:background .15s,border-color .15s,transform .12s}
+.esp-moi-bt:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.55)}
+.esp-moi-bt:active{transform:scale(.97)}
+.esp-moi-bt.sortir{background:rgba(220,38,38,.18);border-color:rgba(248,113,113,.5)}
+.esp-moi-bt.sortir:hover{background:rgba(220,38,38,.32)}
+/* ================= PLUS DE MENU À GAUCHE ================= */
+body.sur-espace .app.esp-app{grid-template-columns:minmax(0,1fr);max-width:1320px;margin:0 auto}
+body.sur-espace .app.esp-app>.app-nav{display:none}
+body.sur-espace footer .defile{display:none}
+#p-espace .bloc{background:radial-gradient(1200px 500px at 70% -10%,rgba(37,87,196,.16),transparent 70%)}
+/* ================= ACCUEIL : OÙ VEUX-TU ALLER ? ================= */
+body.sur-espace .esp-sur-accueil .app-tete.esp-bandeau{display:none}
+.esp-lanceur{margin:6px 0 30px}
+.esp-lanceur h2{font:900 30px var(--display);font-style:italic;text-transform:uppercase;letter-spacing:.3px;margin:0 0 16px;display:flex;align-items:center;gap:12px}
+.esp-lanceur h2::after{content:"";flex:1;height:2px;background:linear-gradient(90deg,rgba(227,182,76,.6),transparent)}
+.esp-rubs{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px;perspective:1200px}
+.esp-rub{--teinte:#2F6BFF;position:relative;display:grid;gap:10px;align-content:start;padding:16px;border-radius:22px;overflow:hidden;
+  background:linear-gradient(160deg,#16275a,#0b1530);border:1px solid rgba(143,168,240,.25);
+  background:linear-gradient(160deg,color-mix(in srgb,var(--teinte) 22%,#14234d) 0%,#101c3f 45%,#0b1530 100%);
+  border:1px solid color-mix(in srgb,var(--teinte) 35%,rgba(143,168,240,.25));
+  box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 22px 44px rgba(3,8,24,.45),0 4px 10px rgba(3,8,24,.3);
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transform-style:preserve-3d;transition:transform .25s ease-out,box-shadow .25s}
+.esp-rub::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:radial-gradient(420px circle at var(--mx,30%) var(--my,0%),rgba(255,255,255,.10),transparent 45%)}
+.esp-rub:hover{box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 30px 60px rgba(3,8,24,.55),0 0 0 1px color-mix(in srgb,var(--teinte) 50%,transparent)}
+.esp-rub-t{display:flex;align-items:center;gap:12px;color:#fff;transform:translateZ(30px)}
+.esp-rub-t b{display:block;font:800 21px var(--display);letter-spacing:.2px;line-height:1.1}
+.esp-rub-t small{display:block;font:500 13px var(--corps);color:#AFC0EA;margin-top:2px}
+.esp-rub-ico{width:52px;height:52px;flex:none;border-radius:16px;display:grid;place-items:center;font-size:27px;
+  background:var(--teinte);
+  background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.55),transparent 42%),linear-gradient(145deg,var(--teinte),color-mix(in srgb,var(--teinte) 45%,#050a1c));
+  box-shadow:0 10px 22px color-mix(in srgb,var(--teinte) 45%,transparent),inset 0 -3px 6px rgba(0,0,0,.25),inset 0 2px 2px rgba(255,255,255,.35)}
+.esp-tuiles{display:grid;gap:8px;transform:translateZ(18px)}
+.esp-tuile{display:flex;align-items:center;gap:12px;width:100%;text-align:left;color:#fff;cursor:pointer;min-height:60px;padding:10px 12px;border-radius:14px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);transition:background .15s,border-color .15s,transform .12s}
+.esp-tuile:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);transform:translateX(3px)}
+.esp-tuile:active{transform:scale(.98)}
+.esp-tuile:focus-visible{outline:3px solid #8FC2FF;outline-offset:2px}
+.esp-tuile-ico{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;color:#fff;
+  background:var(--teinte);
+  background:linear-gradient(145deg,color-mix(in srgb,var(--teinte) 85%,#fff),color-mix(in srgb,var(--teinte) 70%,#000));box-shadow:0 6px 14px color-mix(in srgb,var(--teinte) 35%,transparent)}
+.esp-tuile-ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9}
 .esp-tuile-txt{flex:1;min-width:0;display:grid;gap:2px}
-.esp-tuile-txt b{font:700 16px var(--corps);display:flex;align-items:center;gap:8px}
-.esp-tuile-txt small{font:500 13px var(--corps);color:var(--texte-doux);line-height:1.35}
-.esp-fl{font:700 22px var(--corps);color:var(--texte-doux);flex:none}
-/* ---------- en-tête de chaque page : un bandeau ---------- */
-body.sur-espace .app-tete.esp-bandeau{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 16px;padding:20px 24px;
-  border-radius:22px;color:#fff;background:radial-gradient(120% 140% at 0% 0%,#2557C4 0%,#14418E 38%,#0F2257 72%,#0A1A45 100%);
-  box-shadow:0 18px 40px rgba(7,18,48,.28);position:relative;overflow:hidden}
-body.sur-espace .app-tete.esp-bandeau::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;
-  background:radial-gradient(circle,rgba(227,182,76,.28),transparent 65%);pointer-events:none}
-body.sur-espace .app-tete.esp-bandeau h1{display:flex;align-items:center;gap:12px;color:#fff;font-size:34px}
-body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:rgba(255,255,255,.14);flex:none}
-body.sur-espace .app-tete.esp-bandeau p{color:#C9D4F2;margin-top:6px;font-size:15.5px}
-.esp-accueil{flex:none;min-height:42px;position:relative;z-index:1}
-body.sur-espace .app-tete.esp-bandeau .esp-accueil{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
-body.sur-espace .app-tete.esp-bandeau .esp-accueil:hover{background:rgba(255,255,255,.22)}
-/* ---------- ordinateur : menu de gauche en arbre ---------- */
-.esp-marque{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;margin-bottom:6px;border-bottom:1px solid var(--ligne)}
-.esp-marque img{width:40px;height:40px;object-fit:contain}
-.esp-marque b{display:block;font:800 18px var(--display);line-height:1.1}
-.esp-marque small{color:var(--texte-doux);font-size:12.5px}
-.esp-arbre{display:grid;gap:4px}
-.esp-nav-rub{display:grid;gap:2px;padding:8px 0 4px}
-.esp-nav-t{display:flex;align-items:center;gap:8px;padding:4px 10px;font:800 11.5px var(--corps);letter-spacing:.14em;text-transform:uppercase;color:var(--texte-doux)}
-.esp-nav-o{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:var(--texte);text-align:left;cursor:pointer;
-  padding:9px 12px;border-radius:11px;font:600 15px var(--corps);min-height:40px;transition:background .12s}
-.esp-nav-o svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.8}
-.esp-nav-o span{flex:1;min-width:0}
-.esp-nav-o:hover{background:rgba(143,168,240,.14)}
-.esp-nav-o[aria-current="page"]{background:var(--bleu);color:#fff;box-shadow:0 8px 18px rgba(28,63,158,.3)}
-.esp-nav-o[aria-current="page"] svg{opacity:1}
-.esp-nav-accueil{font-weight:800}
-.esp-nav-ico{width:22px;text-align:center}
-body.sur-espace .app-nav{max-height:calc(100vh - 100px);overflow-y:auto;scrollbar-width:thin}
-/* ---------- téléphone : barre des rubriques en bas ---------- */
-#esp-barre{display:none}
-.esp-relais{display:none}
-.esp-version{margin:28px 0 6px;text-align:center;color:var(--texte-doux);font:600 12px var(--corps);letter-spacing:.04em;opacity:.8}
-.esp-aide{margin:-6px 0 18px;padding:10px 14px;border-radius:12px;background:rgba(143,168,240,.08);color:var(--texte-doux);font:500 14.5px var(--corps);border:1px solid var(--ligne)}
-.esp-aide::before{content:"💡 "}
-/* ---------- onglets de la rubrique : grands, faciles à toucher, toujours visibles ---------- */
-body.sur-espace .rub-onglets{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 14px;padding:6px;
-  background:var(--carte);border:1px solid var(--ligne);border-radius:16px}
+.esp-tuile-txt b{font:700 16.5px var(--corps);display:flex;align-items:center;gap:8px}
+.esp-tuile-txt small{font:500 13px var(--corps);color:#AFC0EA;line-height:1.35}
+.esp-fl{font:700 22px var(--corps);color:#AFC0EA;flex:none;transition:transform .15s}
+.esp-tuile:hover .esp-fl{transform:translateX(3px);color:#fff}
+/* ================= BANDEAU DE CHAQUE PAGE ================= */
+body.sur-espace .app-tete.esp-bandeau{--teinte:#2F6BFF;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 14px;padding:18px 22px;
+  border-radius:22px;color:#fff;position:relative;overflow:hidden;
+  background:linear-gradient(120deg,#1a3270,#0f1e46 55%,#0a1532);
+  background:linear-gradient(120deg,color-mix(in srgb,var(--teinte) 40%,#0f1e46) 0%,#0f1e46 55%,#0a1532 100%);
+  border:1px solid color-mix(in srgb,var(--teinte) 40%,rgba(143,168,240,.2));box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 18px 40px rgba(3,8,24,.4)}
+body.sur-espace .app-tete.esp-bandeau::after{content:"";position:absolute;right:-60px;top:-80px;width:280px;height:280px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,color-mix(in srgb,var(--teinte) 45%,transparent),transparent 65%);opacity:.6}
+body.sur-espace .app-tete.esp-bandeau>div{position:relative;z-index:1;min-width:0}
+body.sur-espace .app-tete.esp-bandeau h1{display:flex;align-items:center;gap:14px;color:#fff;font-size:32px;font-style:italic;text-transform:uppercase;font-weight:900}
+body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:54px;height:54px;border-radius:17px;display:grid;place-items:center;font-size:28px;flex:none;font-style:normal;
+  background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.55),transparent 42%),linear-gradient(145deg,var(--teinte),color-mix(in srgb,var(--teinte) 45%,#050a1c));
+  box-shadow:0 10px 22px color-mix(in srgb,var(--teinte) 45%,transparent),inset 0 -3px 6px rgba(0,0,0,.25)}
+body.sur-espace .app-tete.esp-bandeau p{color:#D5DEFA;margin-top:6px;font-size:16px}
+.esp-accueil{position:relative;z-index:1;flex:none;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 18px;border-radius:13px;cursor:pointer;
+  font:800 15px var(--corps);color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);transition:background .15s,transform .12s}
+.esp-accueil:hover{background:rgba(255,255,255,.22)}
+.esp-accueil:active{transform:scale(.97)}
+/* onglets de la rubrique : un sélecteur clair */
+body.sur-espace .rub-onglets{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 22px;padding:6px;
+  background:rgba(10,20,48,.75);border:1px solid rgba(143,168,240,.2);border-radius:16px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 body.sur-espace .rub-onglets::-webkit-scrollbar{display:none}
-body.sur-espace .rub-onglets button{flex:none;min-height:44px;padding:10px 16px;border-radius:11px;border:0;background:none;color:var(--texte);
-  font:700 15px var(--corps);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;transition:background .15s}
-body.sur-espace .rub-onglets button:hover{background:rgba(143,168,240,.14)}
-body.sur-espace .rub-onglets button[aria-selected="true"]{background:var(--bleu);color:#fff;box-shadow:0 6px 16px rgba(28,63,158,.3)}
-/* ---------- partout : cadres, boutons et champs réguliers ---------- */
-body.sur-espace #panneau .carte{border-radius:18px}
-body.sur-espace #panneau .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
-body.sur-espace #panneau .btn.petit{min-height:38px}
-body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
-body.sur-espace #panneau select,body.sur-espace #panneau textarea{border-radius:10px;min-height:44px}
+body.sur-espace .rub-onglets button{flex:1 0 auto;min-height:46px;padding:10px 18px;border-radius:12px;border:0;background:none;color:#C9D4F2;
+  font:700 15.5px var(--corps);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,color .15s}
+body.sur-espace .rub-onglets button:hover{background:rgba(143,168,240,.14);color:#fff}
+body.sur-espace .rub-onglets button[aria-selected="true"]{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);color:#fff;box-shadow:0 8px 20px rgba(47,107,255,.35),inset 0 1px 0 rgba(255,255,255,.25)}
+/* ================= L'INTÉRIEUR DES ONGLETS : PROPRE ET RÉGULIER ================= */
+body.sur-espace #panneau{display:block}
+body.sur-espace #panneau .carte,body.sur-espace #panneau .pli{border-radius:20px;border:1px solid rgba(143,168,240,.2);
+  background:linear-gradient(180deg,rgba(26,44,96,.55),rgba(14,26,60,.55)),var(--carte);box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 16px 36px rgba(3,8,24,.32)}
+body.sur-espace #panneau .carte{padding:22px 24px;margin-bottom:18px}
+body.sur-espace #panneau .carte>h2:first-child{display:flex;align-items:center;gap:10px;font-size:23px;margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid rgba(143,168,240,.16)}
+body.sur-espace #panneau h3.sous{display:flex;align-items:center;gap:10px;border-left:0;padding-left:0;font-size:22px;margin:30px 0 14px}
+body.sur-espace #panneau h3.sous::before{content:"";width:6px;height:22px;border-radius:3px;background:linear-gradient(180deg,#F7D774,#C9A227);flex:none}
+/* champs : même hauteur partout, libellés alignés */
+body.sur-espace #panneau .grille{align-items:start;gap:16px 18px}
+body.sur-espace #panneau label{align-content:start}
+body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+body.sur-espace #panneau select,body.sur-espace #panneau .dp-champ{height:48px;min-height:48px;border-radius:12px;background:rgba(5,11,31,.55);border:1px solid rgba(143,168,240,.28);padding:0 14px;font-size:16px}
+body.sur-espace #panneau textarea{border-radius:12px;background:rgba(5,11,31,.55);border:1px solid rgba(143,168,240,.28);min-height:44px;padding:12px 14px}
+body.sur-espace #panneau .dp-champ{margin:0}
+body.sur-espace #panneau input:hover,body.sur-espace #panneau select:hover,body.sur-espace #panneau textarea:hover,body.sur-espace #panneau .dp-champ:hover{border-color:rgba(143,168,240,.55)}
 body.sur-espace #panneau input:focus-visible,body.sur-espace #panneau select:focus-visible,body.sur-espace #panneau textarea:focus-visible{
-  outline:3px solid rgba(143,168,240,.45);outline-offset:1px;border-color:var(--bleu-texte,#8FC2FF)}
-body.sur-espace #panneau label{font-weight:600}
-body.sur-espace #panneau table{border-collapse:separate;border-spacing:0}
+  outline:0;border-color:#5B8CFF;box-shadow:0 0 0 4px rgba(91,140,255,.25)}
+body.sur-espace #panneau input::placeholder,body.sur-espace #panneau textarea::placeholder{color:#7F90BE}
+/* boutons : l'action principale se voit tout de suite */
+body.sur-espace #panneau .btn{min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:13px;font:800 15.5px var(--corps);letter-spacing:.1px;padding:10px 18px}
+body.sur-espace #panneau .btn.petit{min-height:40px;font-size:14.5px;padding:8px 14px;border-radius:11px}
+body.sur-espace #panneau .btn.bleu{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);border-color:transparent;color:#fff;box-shadow:0 10px 22px rgba(47,107,255,.3),inset 0 1px 0 rgba(255,255,255,.25)}
+body.sur-espace #panneau .btn.bleu:hover{filter:brightness(1.08);transform:translateY(-1px)}
+body.sur-espace #panneau .btn.contour{background:rgba(255,255,255,.05);border:1px solid rgba(143,168,240,.4);color:#E6ECFF}
+body.sur-espace #panneau .btn.contour:hover{background:rgba(143,168,240,.14);border-color:rgba(143,168,240,.7)}
+body.sur-espace #panneau .btn.danger{background:rgba(220,38,38,.08);border:1px solid rgba(248,113,113,.55);color:#FCA5A5}
+body.sur-espace #panneau .btn.danger:hover{background:rgba(220,38,38,.2)}
+body.sur-espace #panneau .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;filter:none}
+body.sur-espace #panneau .carte>div:last-child>.btn.bleu:only-child,body.sur-espace #panneau form.carte>div:last-child>.btn.bleu{min-width:220px;min-height:50px;font-size:16.5px}
+/* lignes de liste et éléments */
+body.sur-espace #panneau .rangee{border-radius:16px;background:linear-gradient(180deg,rgba(26,44,96,.45),rgba(14,26,60,.45));border:1px solid rgba(143,168,240,.18);padding:14px 18px;margin-bottom:10px}
+body.sur-espace #panneau .rangee:hover{border-color:rgba(143,168,240,.45)}
+body.sur-espace #panneau .rangee .txt{flex:1;min-width:200px}
+body.sur-espace #panneau .item{border-radius:18px;background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5));border:1px solid rgba(143,168,240,.18)}
+body.sur-espace #panneau .statut,body.sur-espace #panneau .etiq{border-radius:999px}
+/* messages vides : clairs et aérés */
+body.sur-espace #panneau .vide,body.sur-espace #panneau .etat-vide{border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
+body.sur-espace #panneau .etat-vide b{color:#fff}
+/* tableaux */
+body.sur-espace #panneau table{border-collapse:separate;border-spacing:0;border:1px solid rgba(143,168,240,.2);border-radius:16px;overflow:hidden}
+body.sur-espace #panneau th{background:rgba(143,168,240,.1)}
 body.sur-espace #panneau tbody tr:nth-child(even) td{background:rgba(143,168,240,.05)}
+body.sur-espace #panneau tbody tr:hover td{background:rgba(143,168,240,.1)}
+/* textes d'aide plus lisibles */
+body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace #panneau .aide{color:#AFC0EA;line-height:1.5}
+.esp-relais{display:none}
+#esp-barre{display:none}
+.esp-version{margin:30px 0 6px;text-align:center;color:var(--texte-doux);font:600 12px var(--corps);letter-spacing:.04em;opacity:.75}
+/* ================= THÈME CLAIR ================= */
+:root[data-theme="light"] body.sur-espace #panneau .carte,:root[data-theme="light"] body.sur-espace #panneau .pli,
+:root[data-theme="light"] body.sur-espace #panneau .rangee,:root[data-theme="light"] body.sur-espace #panneau .item{background:var(--carte);box-shadow:0 10px 26px rgba(7,18,48,.08)}
+:root[data-theme="light"] body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]),:root[data-theme="light"] body.sur-espace #panneau select,
+:root[data-theme="light"] body.sur-espace #panneau textarea,:root[data-theme="light"] body.sur-espace #panneau .dp-champ{background:#fff;border-color:#C9D4F2}
+:root[data-theme="light"] body.sur-espace #panneau .btn.contour{color:var(--texte)}
+:root[data-theme="light"] body.sur-espace #panneau .quoi{color:var(--texte-doux)}
+:root[data-theme="light"] body.sur-espace .rub-onglets{background:var(--carte)}
+:root[data-theme="light"] body.sur-espace .rub-onglets button{color:var(--texte)}
+:root[data-theme="light"] body.sur-espace .rub-onglets button[aria-selected="true"]{color:#fff}
+/* ================= TABLETTE ET TÉLÉPHONE ================= */
 @media (max-width:1140px){
   #esp-barre{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;position:fixed;left:0;right:0;bottom:0;z-index:40;
-    background:rgba(8,18,46,.96);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-top:1px solid rgba(143,168,240,.25);
-    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 28px rgba(0,0,0,.3)}
+    background:rgba(6,12,32,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid rgba(143,168,240,.25);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 28px rgba(0,0,0,.35)}
   #esp-barre button{position:relative;display:grid;justify-items:center;gap:2px;border:0;background:none;color:#C9D4F2;cursor:pointer;
     padding:6px 2px;border-radius:12px;font:700 11px var(--corps);min-height:54px}
   #esp-barre .esp-barre-ico{font-size:22px;line-height:1.1;filter:grayscale(.35);opacity:.85}
-  #esp-barre button.on{color:#fff;background:rgba(37,87,196,.45)}
+  #esp-barre button.on{color:#fff;background:rgba(47,107,255,.35)}
   #esp-barre button.on .esp-barre-ico{filter:none;opacity:1}
   #esp-barre .menu-badge{position:absolute;top:2px;right:18%}
   body.avec-barre{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
-  body.sur-espace .app-tete.esp-bandeau{padding:16px 16px;border-radius:18px}
-  body.sur-espace .app-tete.esp-bandeau h1{font-size:26px}
-  body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:42px;height:42px;font-size:23px;border-radius:13px}
-  body.sur-espace .rub-onglets{position:sticky;top:60px;z-index:6;box-shadow:0 10px 22px rgba(7,18,48,.18)}
-  body.sur-espace .app-tete{margin-bottom:12px}
-  body.sur-espace .app-tete h1{font-size:28px}
-  body.sur-espace .app-tete p{font-size:14.5px;margin-top:4px}
+  body.sur-espace .rub-onglets{position:sticky;top:60px;z-index:6;box-shadow:0 10px 22px rgba(3,8,24,.35)}
+  body.sur-espace .rub-onglets button{flex:none}
+  body.sur-espace .app-tete.esp-bandeau{padding:16px;border-radius:18px;margin-bottom:12px}
+  body.sur-espace .app-tete.esp-bandeau h1{font-size:25px;gap:12px}
+  body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:44px;height:44px;font-size:23px;border-radius:14px}
+  body.sur-espace .app-tete.esp-bandeau p{font-size:14.5px}
 }
-@media (max-width:620px){
-  .esp-rubs{grid-template-columns:minmax(0,1fr)}
-  .esp-lanceur h2{font-size:21px}
-  .esp-accueil{padding:8px 12px}
-  body.sur-espace .app-tete h1{font-size:25px}
-  body.sur-espace .rub-onglets button{padding:10px 13px;font-size:14.5px}
+@media (max-width:700px){
+  #p-espace .titre-page.esp-hero{min-height:0;padding:30px 0 22px}
+  #p-espace .esp-hero-voile{background:linear-gradient(180deg,rgba(3,7,20,.82) 0%,rgba(3,7,20,.45) 45%,rgba(3,7,20,.8) 100%)}
+  #p-espace .titre-page.esp-hero p{font-size:16.5px}
+  .esp-moi{display:flex;margin-top:16px;padding:10px;gap:10px}
+  .esp-moi-av{width:42px;height:42px;font-size:16px}
+  .esp-moi-txt{flex:1}
+  .esp-moi-bts{width:100%}
+  .esp-moi-bt{flex:1;justify-content:center}
+  .esp-rubs{grid-template-columns:minmax(0,1fr);gap:14px}
+  .esp-lanceur h2{font-size:24px}
+  .esp-accueil{padding:8px 13px;min-height:40px}
+  body.sur-espace .rub-onglets button{padding:10px 14px;font-size:14.5px}
   body.sur-espace #panneau .carte{padding:16px}
+  body.sur-espace #panneau .carte>div:last-child>.btn.bleu:only-child,body.sur-espace #panneau form.carte>div:last-child>.btn.bleu{width:100%}
 }`;
   document.head.appendChild(css);
   // l'espace est peut-être déjà affiché : on l'habille tout de suite
