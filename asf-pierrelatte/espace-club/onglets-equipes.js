@@ -273,7 +273,7 @@
       if (fermer) fermer.textContent = "← Retour aux compos";
       const br = act && act.querySelector('[data-pub="0"]'); if (br) br.textContent = "Enregistrer le brouillon";
       const t = titreCompo(c);
-      const haut = el(`<div class="ong-cmp-haut"><div class="ong-cmp-titre"><b>${t.t}</b><small>${t.s}<span class="etiq ${t.pub ? "ok" : "attente"}">${t.pub ? "Publiée" : "Brouillon"}</span></small></div></div>`);
+      const haut = el(`<div class="ong-cmp-haut"><div class="ong-cmp-titre" data-ong-affiche="titre"><b>${t.t}</b><small>${t.s}<span class="etiq ${t.pub ? "ok" : "attente"}">${t.pub ? "Publiée" : "Brouillon"}</span></small></div></div>`);
       if (fermer) haut.prepend(fermer);
       if (act) haut.appendChild(act);
       const regl = el(`<div class="ong-cmp-regl"></div>`);
@@ -307,6 +307,9 @@
     if (etape === 1){
       const [premiere] = cartes;
       if (premiere && !premiere.querySelector("h2")) premiere.insertAdjacentHTML("afterbegin", `<h2>Le match</h2>`);
+      // le résumé du match (adversaire, quand, où) : remis à jour après une saisie, voir « le premier toucher » plus bas
+      const resume = premiere && premiere.querySelector(":scope > .mb-resume, :scope > p.quoi");
+      if (resume) resume.dataset.ongAffiche = "resume";
       const main = cartes.find(x => /match à la main/i.test((x.querySelector("h2") || {}).textContent || ""));
       if (main && premiere){ main.removeAttribute("style"); texte(main.querySelector("h2"), "Pas dans la liste ? Saisis le match"); premiere.after(main); }
       const conv = cartes.find(x => /convocation/i.test((x.querySelector("h2") || {}).textContent || ""));
@@ -324,6 +327,76 @@
       if (hb){ const m = /(\d+)/.exec(hb.textContent); hb.innerHTML = `Banc et capitaine${m ? `<span class="ong-nb">${m[1]}</span>` : ""}`; }
     }
   }
+
+  /* =====================================================================
+     ÉDITEUR DE COMPO : le premier toucher après une saisie ne se perd plus
+     L'application garde chaque frappe dans S.ui.compo (événement input), puis, quand le champ perd le focus (événement change),
+     redessine tout l'onglet (rendrePanneau). Or le champ perd le focus au moment où le doigt (ou la souris) s'enfonce sur un
+     bouton : ce bouton est remplacé entre l'appui et le clic, et le clic se perd (« Suivant », « Brouillon », « Valider et
+     prévenir », « ← Compos », une place du terrain, le champ suivant…). Il fallait toucher deux fois.
+     Pour les champs texte de l'éditeur (adversaire, lieu du rendez-vous, mot du coach) : l'application enregistre la valeur
+     exactement comme avant, mais on retient son redessin pendant ce « change ». Une fois le clic passé, on remet à jour ce qui
+     affiche ces champs (le titre au PC, le résumé du match au téléphone), sans toucher aux champs ni aux boutons. Si le bouton
+     touché a déjà redessiné l'onglet (étape suivante, enregistrement…), il n'y a rien à faire.
+     ===================================================================== */
+  const CHAMP_TEXTE = 'input[data-c]:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea[data-c]';
+  let retenir = false, retenu = false, appui = false, apres = null, secours = 0;
+  if (typeof window.rendrePanneau === "function"){
+    const rendreAvant = window.rendrePanneau;
+    window.rendrePanneau = function(){
+      if (retenir){ retenu = true; return; }                                // le redessin demandé pendant ce change attend le clic
+      return rendreAvant.apply(this, arguments);
+    };
+  }
+  // ce qui ne fait qu'afficher la compo ([data-ong-affiche]) : remplacé par sa nouvelle version, si l'éditeur est toujours là
+  function majAffichage(racine){
+    if (!racine || !racine.isConnected || !S.ui.compo || S.ui.onglet !== "compos") return;
+    const vieux = racine.querySelectorAll("[data-ong-affiche]"); if (!vieux.length) return;
+    let neuf; try { neuf = el(`<div>${window.panCompoEditeur()}</div>`); } catch(err){ return; }
+    vieux.forEach(x => {
+      const n = neuf && neuf.querySelector(`[data-ong-affiche="${x.dataset.ongAffiche}"]`);
+      if (n && n.outerHTML !== x.outerHTML) x.replaceWith(n);
+    });
+  }
+  // l'appui fini (souris relâchée, doigt levé : le clic vient d'être envoyé), on lance la mise à jour
+  const lancer = () => { clearTimeout(secours); const f = apres; apres = null; if (f) setTimeout(f, 0); };
+  window.addEventListener("mousedown", () => { appui = true; }, true);
+  ["mouseup", "dragend", "pointercancel"].forEach(t => window.addEventListener(t, () => { appui = false; if (apres) lancer(); }, true));
+  // fin du change : si l'application voulait redessiner, la mise à jour de l'affichage attend la fin de l'appui
+  function finChange(){
+    if (!retenir) return;
+    retenir = false;
+    if (!retenu) return;
+    const racine = document.querySelector("#panneau .cmp, #panneau .mb");
+    apres = () => majAffichage(racine);
+    if (appui){ clearTimeout(secours); secours = setTimeout(lancer, 3000); } else lancer();   // filet : jamais plus de 3 s d'attente
+  }
+  window.addEventListener("change", ev => {                                // avant tous les écouteurs de la page
+    const t = ev.target, p = document.getElementById("panneau");
+    if (!S.ui.compo || S.ui.onglet !== "compos" || !p || !t || !t.matches || !t.matches(CHAMP_TEXTE) || !p.contains(t)) return;
+    retenir = true; retenu = false;
+    setTimeout(finChange, 0);                                              // filet, si l'événement n'arrivait pas jusqu'en haut
+  }, true);
+  window.addEventListener("change", finChange);                            // après tous les écouteurs de la page
+
+  /* ---------- une recherche sans lettre ni chiffre (« - », « . », « ' ») ----------
+     L'application compare avec slug(recherche), qui vaut « x » quand il ne reste aucune lettre : tout le monde disparaissait.
+     On la traite comme une recherche vide ; le champ garde ce qui a été tapé. */
+  const sansMot = q => !/[0-9a-z]/i.test(String(q || "").normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  const rechercheSansMot = (nom, cle, champ) => {
+    if (typeof window[nom] !== "function") return;
+    const avant = window[nom];
+    window[nom] = function(){
+      const q = S.ui[cle];
+      if (typeof q !== "string" || !q.trim() || !sansMot(q)) return avant.apply(this, arguments);
+      S.ui[cle] = "";
+      let h; try { h = avant.apply(this, arguments); } finally { S.ui[cle] = q; }
+      return champ ? ONG.transformer(h, r => { const c = r.querySelector(champ); if (c) c.setAttribute("value", q); }) : h;
+    };
+  };
+  rechercheSansMot("panEffectifs", "chercheEff", "[data-cherche-eff]");          // Effectifs
+  rechercheSansMot("panCompoEditeur", "chercheJoueur", "[data-cherche-joueur]"); // compo, liste des joueurs (PC)
+  rechercheSansMot("listeChoixHtml", "chercheChoix", null);                      // compo, fenêtre « choisir un joueur »
 
   /* ---------- branchements ---------- */
   const brancher = (nom, fn) => {
