@@ -226,7 +226,7 @@ body.sur-espace .rub-onglets button{flex:1 0 auto;min-height:46px;padding:10px 1
 body.sur-espace .rub-onglets button:hover{background:rgba(143,168,240,.14);color:#fff}
 body.sur-espace .rub-onglets button[aria-selected="true"]{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);color:#fff;box-shadow:0 8px 20px rgba(47,107,255,.35),inset 0 1px 0 rgba(255,255,255,.25)}
 /* ================= L'INTÉRIEUR DES ONGLETS : PROPRE ET RÉGULIER ================= */
-body.sur-espace #panneau{display:block}
+body.sur-espace #panneau{display:block;overflow-x:clip}   /* clip (et non hidden) : les barres « collantes » des onglets restent en place */
 body.sur-espace #panneau .carte,body.sur-espace #panneau .pli{border-radius:20px;border:1px solid rgba(143,168,240,.2);
   background:linear-gradient(180deg,rgba(26,44,96,.55),rgba(14,26,60,.55)),var(--carte);box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 16px 36px rgba(3,8,24,.32)}
 body.sur-espace #panneau .carte{padding:22px 24px;margin-bottom:18px}
