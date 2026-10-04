@@ -1,5 +1,7 @@
 <?php
 // Affiches dessinées par le serveur, et publication sur la page Facebook du club.
+//  - stories des compos (V34) : la story des convoqués quand le coach valide sa compo, la story de la composition
+//    30 minutes avant le match (cron des 5 minutes : php …/api/affiches.php compos), en story seulement.
 //  - depuis la V33 : affiches « stade de nuit » quand img/fond-domicile.jpg et img/fond-exterieur.jpg sont les nouveaux fonds
 //    (1520 x 2180, voir la section du même nom), faites pour chaque format : story 1080 x 1920, publication Instagram
 //    1080 x 1350, publication Facebook 1080 x 2160 ; avec les anciens fonds (feuilles 1080 x 1620), rien ne change.
@@ -3074,6 +3076,1664 @@ function afn_plan_route(): void {
     exit;
 }
 
+/* ================= Affiches des compos : convocation et composition (stories 1080 x 1920) =================
+   Quand le coach valide sa compo, la story « convocation » annonce les joueurs convoqués ; 30 minutes avant le coup
+   d'envoi, la story « composition » montre le onze de départ sur le terrain, puis les remplaçants.
+   Trois styles au choix (ACP_STYLES) :
+     - « nuit »    : le stade de nuit des autres affiches du club (fond, blason et « 1923 », or à domicile, argent à l'extérieur) ;
+     - « tableau » : le tableau magnétique du coach (feutre vert, cadre alu, aimants bleus, feuille de match punaisée) ;
+     - « club »    : affiche éditoriale aux couleurs du club (bleu profond, blanc, or, rayures en biais, grand blason en filigrane).
+   Tout ce qui compte reste dans la zone sûre de la story (y 230 → 1690) : Instagram et Facebook posent leurs boutons
+   au-dessus et en dessous. Le contenu est dessiné deux fois plus grand sur un calque transparent puis réduit (bords lisses),
+   le fond est posé à la taille réelle. Les noms des jeunes (U13, U15…) s'écrivent « Lucas M. » par défaut (mineurs).
+   Rien ne doit faire planter l'affiche : heure, rendez-vous ou postes manquants, formation inconnue (liste à la place
+   du terrain), 25 convoqués, noms très longs, accents, apostrophes. */
+const ACP_STYLES = ['nuit' => 'Stade de nuit', 'tableau' => 'Tableau tactique', 'club' => 'Bleu club'];
+/* copie des formations de l'application : [poste, x % (de gauche à droite), y % (du but adverse, en haut, à notre but, en bas)] */
+const ACP_FORMATIONS = [
+    '4-4-2' => [['GB', 50, 90], ['DG', 14, 71], ['DC', 37, 75], ['DC', 63, 75], ['DD', 86, 71], ['MG', 14, 49], ['MC', 37, 52], ['MC', 63, 52], ['MD', 86, 49], ['BU', 37, 24], ['BU', 63, 24]],
+    '4-3-3' => [['GB', 50, 90], ['DG', 14, 71], ['DC', 37, 75], ['DC', 63, 75], ['DD', 86, 71], ['MC', 28, 51], ['MC', 50, 55], ['MC', 72, 51], ['AG', 16, 26], ['BU', 50, 20], ['AD', 84, 26]],
+    '4-2-3-1' => [['GB', 50, 90], ['DG', 14, 71], ['DC', 37, 75], ['DC', 63, 75], ['DD', 86, 71], ['MDC', 36, 59], ['MDC', 64, 59], ['MG', 16, 39], ['MOC', 50, 40], ['MD', 84, 39], ['BU', 50, 19]],
+    '3-5-2' => [['GB', 50, 90], ['DC', 26, 74], ['DC', 50, 77], ['DC', 74, 74], ['MG', 12, 49], ['MC', 31, 54], ['MC', 50, 46], ['MC', 69, 54], ['MD', 88, 49], ['BU', 37, 23], ['BU', 63, 23]],
+    '4-1-4-1' => [['GB', 50, 90], ['DG', 14, 71], ['DC', 37, 75], ['DC', 63, 75], ['DD', 86, 71], ['MDC', 50, 60], ['MG', 14, 44], ['MC', 37, 46], ['MC', 63, 46], ['MD', 86, 44], ['BU', 50, 20]],
+    '4-4-1-1' => [['GB', 50, 90], ['DG', 14, 71], ['DC', 37, 75], ['DC', 63, 75], ['DD', 86, 71], ['MG', 14, 51], ['MC', 37, 54], ['MC', 63, 54], ['MD', 86, 51], ['MOC', 50, 34], ['BU', 50, 18]],
+    '3-4-3' => [['GB', 50, 90], ['DC', 26, 74], ['DC', 50, 77], ['DC', 74, 74], ['MG', 13, 52], ['MC', 38, 55], ['MC', 62, 55], ['MD', 87, 52], ['AG', 18, 25], ['BU', 50, 19], ['AD', 82, 25]],
+    '5-3-2' => [['GB', 50, 90], ['DG', 10, 66], ['DC', 30, 76], ['DC', 50, 79], ['DC', 70, 76], ['DD', 90, 66], ['MC', 30, 51], ['MC', 50, 46], ['MC', 70, 51], ['BU', 37, 22], ['BU', 63, 22]],
+    '5-4-1' => [['GB', 50, 90], ['DG', 10, 66], ['DC', 30, 76], ['DC', 50, 79], ['DC', 70, 76], ['DD', 90, 66], ['MG', 16, 49], ['MC', 39, 52], ['MC', 61, 52], ['MD', 84, 49], ['BU', 50, 21]],
+    'Foot à 8 (3-3-1)' => [['GB', 50, 90], ['DG', 20, 72], ['DC', 50, 75], ['DD', 80, 72], ['MG', 20, 49], ['MC', 50, 52], ['MD', 80, 49], ['BU', 50, 24]],
+    'Foot à 8 (3-1-3)' => [['GB', 50, 90], ['DG', 20, 73], ['DC', 50, 76], ['DD', 80, 73], ['MC', 50, 52], ['AG', 20, 27], ['BU', 50, 22], ['AD', 80, 27]],
+    'Foot à 8 (2-3-2)' => [['GB', 50, 90], ['DG', 32, 74], ['DD', 68, 74], ['MG', 18, 50], ['MC', 50, 53], ['MD', 82, 50], ['BU', 35, 24], ['BU', 65, 24]],
+    'Foot à 8 (3-2-2)' => [['GB', 50, 90], ['DG', 20, 73], ['DC', 50, 76], ['DD', 80, 73], ['MC', 33, 50], ['MC', 67, 50], ['BU', 33, 24], ['BU', 67, 24]],
+    'Foot à 7 (2-3-1)' => [['GB', 50, 89], ['DG', 30, 71], ['DD', 70, 71], ['MG', 20, 49], ['MC', 50, 52], ['MD', 80, 49], ['BU', 50, 23]],
+    'Foot à 7 (3-2-1)' => [['GB', 50, 89], ['DG', 22, 72], ['DC', 50, 75], ['DD', 78, 72], ['MC', 33, 48], ['MC', 67, 48], ['BU', 50, 23]],
+    'Foot à 5 (2-2)' => [['GB', 50, 88], ['DEF', 28, 66], ['DEF', 72, 66], ['ATT', 28, 34], ['ATT', 72, 34]],
+    'Foot à 5 (1-2-1)' => [['GB', 50, 88], ['DEF', 50, 68], ['MIL', 26, 48], ['MIL', 74, 48], ['ATT', 50, 26]],
+];
+const ACP_W = 1080, ACP_H = 1920;
+const ACP_K = 2;                                    // le contenu est dessiné deux fois plus grand, puis réduit
+const ACP_SURE = [230, 1690];                       // zone sûre de la story (sous la barre du haut, au-dessus du champ « Envoyer un message »)
+const ACP_BLEU = ['#0F2257', '#1C3F9E'];
+const ACP_OR = '#E3B64C';
+
+/* ================= les données ================= */
+function acp_jeune(string $equipe): bool { return (bool) preg_match('/^U\s?\d/iu', trim($equipe)); }
+/* texte propre : sans émoji, espaces réduits, longueur bornée */
+function acp_propre($s, int $max = 200): string {
+    if (!is_scalar($s)) return '';
+    $s = preg_replace('/\s+/u', ' ', afn_sans_emoji((string) $s)) ?? '';
+    // lettres absentes des polices (« Ć », « Ł », « ğ »…) : la lettre sans son accent
+    $s = preg_replace_callback('/[^\x{0020}-\x{007E}\x{00A0}-\x{00FF}\x{0152}\x{0153}\x{0178}\x{2018}\x{2019}\x{201C}\x{201D}\x{2013}\x{2014}\x{2026}\x{20AC}]/u', function ($m) {
+        $c = $m[0];
+        if (class_exists('Normalizer') && ($n = Normalizer::normalize($c, Normalizer::FORM_D)) !== false) $c = preg_replace('/\p{Mn}+/u', '', $n);
+        if (preg_match('/^[\x{0020}-\x{00FF}]+$/u', $c)) return $c;
+        $a = function_exists('iconv') ? @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $m[0]) : '';
+        return is_string($a) ? preg_replace('/[^\x20-\x7E]/', '', $a) : '';
+    }, $s) ?? $s;
+    return mb_substr(trim($s), 0, $max);
+}
+function acp_maj_mot(string $w): bool { return (bool) preg_match('/\p{L}/u', $w) && mb_strtoupper($w, 'UTF-8') === $w; }
+/* « Lucas MARTIN » → ['Lucas', 'MARTIN'] ; « Jean-Pierre DE LA TOUR » → ['Jean-Pierre', 'DE LA TOUR'] ; sans capitales, le dernier mot est le nom */
+function acp_decoupe(string $nom): array {
+    $m = explode(' ', $nom); $n = count($m);
+    if ($n < 2) return ['', $nom === mb_strtolower($nom, 'UTF-8') ? mb_convert_case($nom, MB_CASE_TITLE, 'UTF-8') : $nom];
+    $i = $n;
+    while ($i > 1 && acp_maj_mot($m[$i - 1])) $i--;
+    if ($i === $n) $i = $n - 1;
+    $p = implode(' ', array_slice($m, 0, $i)); $f = implode(' ', array_slice($m, $i));
+    if (acp_maj_mot($p) || $p === mb_strtolower($p, 'UTF-8')) $p = mb_convert_case(mb_strtolower($p, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');   // « LUCAS » → « Lucas »
+    return [$p, aff_maj($f)];
+}
+/* « Jean-Baptiste » → « J.-B. », « Lucas » → « L. » */
+function acp_initiales(string $prenom): string {
+    $o = '';
+    foreach (preg_split('/([\s-])/u', $prenom, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) as $b)
+        $o .= ($b === '-' || $b === ' ') ? $b : mb_substr($b, 0, 1) . '.';
+    return str_replace(' ', '', $o);
+}
+/* nom affiché : 'complet' → « Lucas MARTIN », 'initiale' → « Lucas M. », 'auto' → initiale pour les jeunes (U13, U15…) */
+function acp_nom(string $nom, string $equipe, string $mode = 'auto'): string {
+    $nom = acp_propre($nom, 80);
+    if ($nom === '') return '';
+    if ($mode !== 'complet' && $mode !== 'initiale') $mode = acp_jeune($equipe) ? 'initiale' : 'complet';
+    [$p, $f] = acp_decoupe($nom);
+    if ($p === '') return $f;
+    if ($mode === 'complet') return "$p $f";
+    return "$p " . mb_substr($f, 0, 1, 'UTF-8') . '.';
+}
+/* heure « 18:00 » → « 18h00 » ('' si absente ou illisible) */
+function acp_heure($h): string {
+    return is_scalar($h) && preg_match('/^\s*(\d{1,2})\s*[:hH]\s*(\d{2})\s*$/', (string) $h, $m) && (int) $m[1] < 24 ? sprintf('%02dh%s', $m[1], $m[2]) : '';
+}
+/* la compo enregistrée → tout ce que les affiches dessinent, déjà mis en forme */
+function acp_donnees(array $c, array $opts = []): array {
+    $eq = acp_propre($c['equipe'] ?? '', 40); if ($eq === '') $eq = 'Équipe';
+    $mode = in_array($opts['noms'] ?? 'auto', ['complet', 'initiale'], true) ? $opts['noms'] : (acp_jeune($eq) ? 'initiale' : 'complet');
+    $date = (string) ($c['date'] ?? '');
+    $okDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) && strtotime($date . ' 12:00');
+    $dom = !empty($c['dom']);
+    $stade = acp_propre($c['lieu'] ?? '', 90);
+    if ($stade === '' && $dom) $stade = aff_club()['stade'] . ', Pierrelatte';
+    $num = function ($n): string { $n = is_scalar($n) ? trim((string) $n) : ''; return preg_match('/^\d{1,3}$/', $n) ? $n : ''; };
+    $joueur = function ($j) use ($eq, $mode, $num): ?array {
+        if (!is_array($j)) return null;
+        $nom = acp_nom((string) (is_scalar($j['nom'] ?? null) ? $j['nom'] : ''), $eq, $mode);
+        if ($nom === '') return null;
+        [$p, $f] = acp_decoupe(acp_propre($j['nom'], 80));
+        // formes de plus en plus courtes pour les listes serrées : « J.-B. DE LA FONTAINE », puis « DE LA FONTAINE »
+        $formes = [$nom];
+        if ($mode === 'complet' && $p !== '') { $formes[] = acp_initiales($p) . ' ' . $f; $formes[] = $f; }
+        return ['nom' => $nom, 'formes' => $formes, 'prenom' => $p, 'famille' => $f, 'num' => $num($j['num'] ?? ''), 'cap' => !empty($j['cap']), 'poste' => acp_propre($j['poste'] ?? '', 20)];
+    };
+    // titulaires, à leur place dans la formation (null : poste laissé vide)
+    $postes = ACP_FORMATIONS[(string) ($c['formation'] ?? '')] ?? null;
+    $tit = [];
+    foreach (array_values(is_array($c['titulaires'] ?? null) ? $c['titulaires'] : []) as $i => $t) {
+        $j = $joueur($t);
+        if ($postes && $i >= count($postes)) { $postes = null; }
+        $tit[] = $j;
+    }
+    if ($postes && !array_filter($tit)) $tit = array_fill(0, count($postes), null);
+    if ($postes) {
+        $tit = array_pad(array_slice($tit, 0, count($postes)), count($postes), null);
+        foreach ($tit as $i => &$t) if ($t) { $t['x'] = $postes[$i][1]; $t['y'] = $postes[$i][2]; $t['poste'] = $postes[$i][0]; }
+        unset($t);
+    }
+    // nom court sur le terrain : le nom de famille (« L. MARTIN » s'il y a deux MARTIN), « Lucas M. » pour les jeunes
+    $familles = array_count_values(array_map(fn($t) => $t['famille'], array_filter($tit)));
+    foreach ($tit as &$t) if ($t) {
+        if ($mode === 'initiale' || $t['prenom'] === '') $t['court'] = $t['nom'];
+        else $t['court'] = ($familles[$t['famille']] > 1 ? mb_substr($t['prenom'], 0, 1) . '. ' : '') . $t['famille'];
+    }
+    unset($t);
+    $remp = array_values(array_filter(array_map($joueur, is_array($c['remplacants'] ?? null) ? $c['remplacants'] : [])));
+    foreach ($remp as &$r) $r['court'] = $mode === 'initiale' || $r['prenom'] === '' ? $r['nom'] : $r['famille'];
+    unset($r);
+    $conv = array_values(array_filter(array_map($joueur, is_array($c['convoquesListe'] ?? null) ? $c['convoquesListe'] : [])));
+    if (!$conv) $conv = array_merge(array_values(array_filter($tit)), $remp);
+    $caps = array_map(fn($t) => $t['nom'], array_filter($tit, fn($t) => $t && $t['cap']));
+    foreach ($conv as &$j) $j['cap'] = in_array($j['nom'], $caps, true);
+    unset($j);
+    $adv = acp_propre($c['adv'] ?? '', 60);
+    return [
+        'equipe' => $eq, 'mode' => $mode, 'dom' => $dom, 'lieu' => $dom ? 'dom' : 'ext',
+        'adv' => $adv !== '' ? aff_maj($adv) : 'ADVERSAIRE', 'adv_brut' => $adv,
+        'jour' => $okDate ? afn_jour($date) : '', 'quand' => $okDate ? afn_quand($date) : '',
+        'heure' => acp_heure($c['heure'] ?? ''), 'stade' => $stade,
+        'rdv' => acp_heure($c['rdvHeure'] ?? ''), 'rdvLieu' => acp_propre($c['rdvLieu'] ?? '', 80),
+        'message' => acp_propre($c['message'] ?? '', 400),
+        'formation' => $postes ? (string) $c['formation'] : '', 'terrain' => $postes !== null && array_filter($tit),
+        'tit' => $tit, 'remp' => $remp, 'conv' => $conv,
+    ];
+}
+/* une compo d'exemple réaliste (aperçus quand aucune compo n'existe encore) */
+function acp_exemple(string $equipe = 'Seniors 1'): array {
+    $jeune = acp_jeune($equipe);
+    $age = preg_match('/^U\s?(\d{1,2})/iu', $equipe, $m) ? (int) $m[1] : 99;
+    $formation = $age <= 9 ? 'Foot à 5 (1-2-1)' : ($age <= 13 ? 'Foot à 8 (3-3-1)' : '4-3-3');
+    $noms = ['Lucas MARTIN', 'Enzo BERNARD', 'Hugo PETIT', 'Nathan ROUX', 'Théo FAURE', 'Yanis BENALI', 'Mathis GIRARD', 'Léo CHABERT',
+             'Rayan HADDAD', 'Noah LEFÈVRE', "Kylian DA SILVA", 'Adam MOREL', 'Sacha VIDAL', 'Tom BRUNEL', 'Jules ARNAUD', 'Ilyes MANSOURI'];
+    $postes = ACP_FORMATIONS[$formation];
+    $n = count($postes); $nConv = $n + ($n >= 11 ? 3 : 3);
+    $nums = [1, 2, 4, 5, 3, 8, 6, 10, 7, 9, 11, 12, 14, 15, 16, 13];
+    $ids = []; $joueurs = [];
+    for ($i = 0; $i < $nConv; $i++) $joueurs[] = ['nom' => $noms[$i], 'num' => (string) $nums[$i], 'poste' => $i === 0 ? 'Gardien' : ($i < 5 ? 'Défenseur' : ($i < 8 ? 'Milieu' : 'Attaquant'))];
+    $tit = [];
+    for ($i = 0; $i < $n; $i++) $tit[] = ['nom' => $joueurs[$i]['nom'], 'num' => $joueurs[$i]['num'], 'cap' => $i === ($n >= 11 ? 7 : 2)];
+    $remp = array_slice($joueurs, $n);
+    $liste = $joueurs; usort($liste, fn($a, $b) => (int) $a['num'] <=> (int) $b['num']);
+    $samedi = date('Y-m-d', strtotime('next saturday'));
+    return ['id' => 'exemple', 'equipe' => $equipe, 'matchId' => '', 'adv' => $jeune ? 'FC Montélimar' : 'FC Péageois', 'dom' => true,
+        'date' => $samedi, 'heure' => $jeune ? '10:30' : '18:00', 'lieu' => 'Stade Gustave Jaume, Pierrelatte',
+        'rdvHeure' => $jeune ? '09:45' : '17:00', 'rdvLieu' => 'Vestiaires du stade',
+        'message' => 'Concentration et solidarité, on joue ensemble du premier au dernier ballon. Allez Pierrelatte !',
+        'formation' => $formation, 'convoques' => [], 'slots' => [], 'capitaine' => '', 'publie' => true,
+        'titulaires' => $tit, 'remplacants' => $remp, 'convoquesListe' => $liste, 'maj' => (int) (microtime(true) * 1000)];
+}
+
+/* ================= la toile : calque deux fois plus grand sur un fond à la taille réelle ================= */
+function acp_toile($fond): array {
+    $L = afn_calque(ACP_W * ACP_K, ACP_H * ACP_K);
+    return ['fond' => $fond, 'im' => $L];
+}
+/* réduit le calque et le pose sur le fond : l'image finale (1080 x 1920) */
+function acp_fin(array $T) {
+    $R = afn_calque(ACP_W, ACP_H); imagealphablending($R, false);
+    imagecopyresampled($R, $T['im'], 0, 0, 0, 0, ACP_W, ACP_H, ACP_W * ACP_K, ACP_H * ACP_K);
+    imagedestroy($T['im']);
+    $im = $T['fond']; imagealphablending($im, true);
+    imagecopy($im, $R, 0, 0, 0, 0, ACP_W, ACP_H);
+    imagedestroy($R);
+    return $im;
+}
+/* les petits outils, en pixels de l'affiche (1080 x 1920) */
+function acp_col(array $T, string $hex, float $op = 1): int { return afn_c($T['im'], afn_rgb($hex), $op); }
+function acp_l(string $t, float $px, string $p, float $ls = 0): float { return afn_larg($t, $px * ACP_K, $p, $ls * ACP_K) / ACP_K; }
+function acp_fit(string $t, float $px, string $p, float $max, float $min = .6, float $lsEm = 0): float { return afn_fit($t, $px * ACP_K, $p, $max * ACP_K, $min, $lsEm) / ACP_K; }
+/* écrit sur la ligne de base $y ; renvoie la largeur */
+function acp_t(array $T, string $t, float $x, float $y, float $px, string $p, string $hex, string $align = 'left', float $ls = 0, float $op = 1): float {
+    if ($t === '') return 0;
+    return afn_texte($T['im'], $t, $x * ACP_K, $y * ACP_K, $px * ACP_K, $p, acp_col($T, $hex, $op), $align, $ls * ACP_K) / ACP_K;
+}
+/* texte centré verticalement sur $cy (capitales) */
+function acp_tc(array $T, string $t, float $x, float $cy, float $px, string $p, string $hex, string $align = 'left', float $ls = 0, float $op = 1): float {
+    return acp_t($T, $t, $x, $cy + acp_demi($p) * $px, $px, $p, $hex, $align, $ls, $op);
+}
+/* moitié de la hauteur des capitales (ligne de base = milieu + demi × taille) */
+function acp_demi(string $p): float { return $p[0] === 's' ? .33 : .35; }
+function acp_ombre_t(array $T, string $t, float $x, float $y, float $px, string $p, float $dy, float $flou, float $op, string $align = 'left', float $ls = 0): void {
+    if ($t === '') return;
+    $w = acp_l($t, $px, $p, $ls);
+    if ($align === 'right') $x -= $w; elseif ($align === 'center') $x -= $w / 2;
+    afn_ombre_texte($T['im'], $t, $x * ACP_K, $y * ACP_K, $px * ACP_K, $p, $dy * ACP_K, $flou * ACP_K, $op, $ls * ACP_K);
+}
+function acp_degrade_t(array $T, string $t, float $x, float $y, float $px, string $p, array $arrets, string $align = 'left'): void {
+    $w = acp_l($t, $px, $p);
+    if ($align === 'right') $x -= $w; elseif ($align === 'center') $x -= $w / 2;
+    afn_texte_degrade($T['im'], $t, $x * ACP_K, $y * ACP_K, $px * ACP_K, $p, $arrets, ($y - .78 * $px) * ACP_K, ($y + .05 * $px) * ACP_K);
+}
+/* coupe un texte trop long avec « … » */
+function acp_coupe(string $t, float $px, string $p, float $max): string {
+    if (acp_l($t, $px, $p) <= $max) return $t;
+    while (mb_strlen($t) > 1 && acp_l($t . '…', $px, $p) > $max) $t = rtrim(mb_substr($t, 0, -1), " ,.;:·-");
+    return $t . '…';
+}
+/* paragraphe sur $n lignes au plus, la dernière finit par « … » si le texte est plus long */
+function acp_lignes(string $t, float $px, string $p, float $max, int $n): array {
+    $l = afn_paragraphe($t, $px * ACP_K, $p, $max * ACP_K);
+    if (count($l) <= $n) return $l;
+    $l = array_slice($l, 0, $n);
+    $l[$n - 1] = acp_coupe($l[$n - 1] . ' …', $px, $p, $max - 1);
+    if (!str_ends_with($l[$n - 1], '…')) $l[$n - 1] .= '…';
+    $l[$n - 1] = preg_replace('/\s*…+$/u', '…', $l[$n - 1]);
+    return $l;
+}
+function acp_boite(array $T, float $x, float $y, float $w, float $h, $r, $remp, float $op = 1): void {
+    $r = is_array($r) ? array_map(fn($v) => $v * ACP_K, $r) : $r * ACP_K;
+    afn_boite($T['im'], $x * ACP_K, $y * ACP_K, $w * ACP_K, $h * ACP_K, $r, $remp, $op);
+}
+function acp_lisere(array $T, float $x, float $y, float $w, float $h, float $r, float $ep, string $hex, float $op): void {
+    afn_lisere($T['im'], $x * ACP_K, $y * ACP_K, $w * ACP_K, $h * ACP_K, $r * ACP_K, $ep * ACP_K, $hex, $op);
+}
+function acp_rond(array $T, float $cx, float $cy, float $d, string $hex, float $op = 1): void {
+    imagefilledellipse($T['im'], (int) round($cx * ACP_K), (int) round($cy * ACP_K), (int) round($d * ACP_K), (int) round($d * ACP_K), acp_col($T, $hex, $op));
+}
+/* anneau (cercle épais) */
+function acp_anneau(array $T, float $cx, float $cy, float $d, float $ep, string $hex, float $op = 1): void {
+    $im = $T['im']; $c = acp_col($T, $hex, $op);
+    imagesetthickness($im, max(1, (int) round($ep * ACP_K)));
+    imagearc($im, (int) round($cx * ACP_K), (int) round($cy * ACP_K), (int) round(($d - $ep) * ACP_K), (int) round(($d - $ep) * ACP_K), 0, 360, $c);
+    imagesetthickness($im, 1);
+}
+/* disque en dégradé radial (lumière en haut à gauche) : aimants, jetons */
+function acp_rond_degrade(array $T, float $cx, float $cy, float $d, array $arrets, float $gx = .35, float $gy = .3): void {
+    $im = $T['im']; $K = ACP_K; $r = $d * $K / 2; $X = $cx * $K; $Y = $cy * $K;
+    $lx = $X - $r + 2 * $r * $gx; $ly = $Y - $r + 2 * $r * $gy; $R = 2 * $r * .95;
+    $x0 = (int) floor($X - $r); $y0 = (int) floor($Y - $r); $n = (int) ceil(2 * $r) + 2;
+    for ($j = 0; $j < $n; $j++) {
+        $py = $y0 + $j + .5; $dy2 = ($py - $Y) ** 2;
+        if ($dy2 > $r * $r) continue;
+        $dx = sqrt($r * $r - $dy2); $a = (int) ceil($X - $dx - .5); $b = (int) floor($X + $dx - .5);
+        for ($i = $a; $i <= $b; $i++) imagesetpixel($im, $i, $y0 + $j, afn_c($im, afn_mix($arrets, sqrt(($i + .5 - $lx) ** 2 + ($py - $ly) ** 2) / $R)));
+    }
+}
+function acp_poly(array $T, array $pts, string $hex, float $op = 1): void { aff_poly($T['im'], array_map(fn($v) => $v * ACP_K, $pts), acp_col($T, $hex, $op)); }
+/* trait épais entre deux points (quadrilatère) */
+function acp_trait(array $T, float $x1, float $y1, float $x2, float $y2, float $ep, string $hex, float $op = 1): void {
+    $dx = $x2 - $x1; $dy = $y2 - $y1; $l = sqrt($dx * $dx + $dy * $dy); if ($l < .01) return;
+    $nx = -$dy / $l * $ep / 2; $ny = $dx / $l * $ep / 2;
+    acp_poly($T, [$x1 + $nx, $y1 + $ny, $x2 + $nx, $y2 + $ny, $x2 - $nx, $y2 - $ny, $x1 - $nx, $y1 - $ny], $hex, $op);
+}
+/* ligne brisée épaisse (lignes du terrain) : segments et petits disques aux jointures */
+function acp_polyligne(array $T, array $pts, float $ep, string $hex, float $op = 1, bool $ferme = false): void {
+    $im = $T['im']; $c = acp_col($T, $hex, $op); $K = ACP_K;
+    imagesetthickness($im, max(1, (int) round($ep * $K)));
+    $n = count($pts) / 2;
+    for ($i = 0; $i < $n - ($ferme ? 0 : 1); $i++) {
+        $j = ($i + 1) % $n;
+        imageline($im, (int) round($pts[2 * $i] * $K), (int) round($pts[2 * $i + 1] * $K), (int) round($pts[2 * $j] * $K), (int) round($pts[2 * $j + 1] * $K), $c);
+    }
+    imagesetthickness($im, 1);
+}
+/* ombre douce sous un rectangle arrondi ou un disque */
+function acp_ombre(array $T, float $x, float $y, float $w, float $h, float $r, float $flou, float $op, float $dy = 0, string $hex = '#000000'): void {
+    $K = ACP_K; $m = 2 * $flou;
+    afn_ombre($T['im'], ($x - $m) * $K, ($y + $dy - $m) * $K, ($w + 2 * $m) * $K, ($h + 2 * $m) * $K, function ($mk, $k, $blanc) use ($m, $w, $h, $r, $K) {
+        if ($r * 2 >= min($w, $h) - .5 && abs($w - $h) < 1) imagefilledellipse($mk, (int) round(($m + $w / 2) * $K / $k), (int) round(($m + $h / 2) * $K / $k), (int) round($w * $K / $k), (int) round($h * $K / $k), $blanc);
+        else aff_coin($mk, $m * $K / $k, $m * $K / $k, $w * $K / $k, $h * $K / $k, max(1, $r * $K / $k), $blanc);
+    }, $flou * $K, $op, $hex);
+}
+function acp_blason(array $T, string $nom, bool $club, float $cx, float $cy, float $d): void { afn_blason($T['im'], $nom, $club, $cx * ACP_K, $cy * ACP_K, $d * ACP_K, ACP_K); }
+function acp_icone(array $T, string $nom, float $x, float $y, float $taille, string $hex, ?string $fond = null): void {
+    if ($nom === 'horloge') {                                         // cadran et aiguilles
+        $cx = $x + $taille / 2; $cy = $y + $taille / 2; $d = $taille * .86;
+        acp_rond($T, $cx, $cy, $d, $hex);
+        if ($fond !== null) acp_rond($T, $cx, $cy, $d - $taille * .2, $fond);
+        acp_trait($T, $cx, $cy + $taille * .04, $cx, $cy - $taille * .24, $taille * .1, $hex);
+        acp_trait($T, $cx - $taille * .03, $cy, $cx + $taille * .2, $cy, $taille * .1, $hex);
+        return;
+    }
+    if ($nom === 'bulle') {                                           // bulle de parole (le mot du coach)
+        acp_boite($T, $x, $y + $taille * .08, $taille, $taille * .66, $taille * .18, $hex);
+        acp_poly($T, [$x + $taille * .22, $y + $taille * .7, $x + $taille * .5, $y + $taille * .7, $x + $taille * .2, $y + $taille * .95], $hex);
+        return;
+    }
+    afn_icone($T['im'], $nom, $x * ACP_K, $y * ACP_K, $taille * ACP_K, acp_col($T, $hex), $fond !== null ? acp_col($T, $fond) : null);
+}
+
+/* ================= mise en page commune ================= */
+/* grille de noms : nombre de colonnes (1 à 3) et taille de police qui font tout tenir le plus gros possible ;
+   $w, $h : la place ; $extra : largeur prise par le numéro et le brassard ; $p : police des noms */
+function acp_grille(array $noms, float $w, float $h, float $pxMax, string $p, float $extraEm, float $gapCol = 24, float $ligneMax = 1.9): array {
+    $n = max(1, count($noms)); $mieux = null;
+    foreach ([1, 2, 3] as $cols) {
+        $rows = (int) ceil($n / $cols);
+        if ($cols > 1 && $rows < 3 && $n > 3) continue;
+        $cw = ($w - ($cols - 1) * $gapCol) / $cols;
+        $px = min($pxMax, $h / $rows / 1.45);
+        $ls = array_map(fn($t) => acp_l($t, 100, $p) / 100, $noms); sort($ls);
+        $long = $ls ? $ls[(int) floor((count($ls) - 1) * .85)] : 1;     // les plus longs prendront une forme courte
+        $pxw = ($cw) / ($long + $extraEm);                             // taille qui fait tenir le nom le plus long
+        $pxf = min($px, max($px * .78, $pxw));                         // les noms encore trop longs seront réduits un par un
+        $score = $pxf - ($cols - 1) * .6;
+        if (!$mieux || $score > $mieux['score'] + .01) $mieux = ['cols' => $cols, 'rows' => $rows, 'cw' => $cw, 'px' => $pxf, 'lh' => min($h / $rows, $pxf * $ligneMax), 'score' => $score];
+    }
+    return $mieux;
+}
+/* la forme du nom qui tient dans $max sans trop réduire la police : [texte, taille] */
+function acp_forme(array $j, float $px, string $p, float $max, float $seuil = .84): array {
+    $formes = $j['formes'] ?? [$j['nom']];
+    foreach ($formes as $k => $f) {
+        $s = acp_fit($f, $px, $p, $max, 0);
+        if ($s >= $px * $seuil || $k === count($formes) - 1) return [$f, max($s, min($px * .6, $s))];
+    }
+    return [$j['nom'], acp_fit($j['nom'], $px, $p, $max, 0)];
+}
+/* nom d'adversaire qui tient dans $max : sigles pour les mots longs (« ENTENTE SPORTIVE » → « ES »), sinon réduit */
+function acp_adv(string $adv, float $px, string $p, float $max, float $min = .7): array {
+    $s = $px; while ($s > $px * $min && acp_l($adv, $s, $p) > $max) $s -= .5;
+    if (acp_l($adv, $s, $p) <= $max) return [$adv, $s];
+    $court = $adv;
+    foreach (['/\bENTENTE SPORTIVE\b/u' => 'ES', '/\bUNION SPORTIVE\b/u' => 'US', '/\bASSOCIATION SPORTIVE\b/u' => 'AS', '/\bFOOTBALL CLUB\b/u' => 'FC',
+              '/\bSPORTING CLUB\b/u' => 'SC', '/\bOLYMPIQUE\b/u' => 'O.', '/\bAVENIR SPORTIF\b/u' => 'AS', '/\bSAINTE\b/u' => 'STE', '/\bSAINT\b/u' => 'ST', '/\bFOOTBALL\b/u' => 'FOOT'] as $re => $b) {
+        $court = preg_replace($re, $b, $court);
+        if (acp_l($court, $px * $min, $p) <= $max) break;
+    }
+    return [$court, acp_fit($court, $px, $p, $max, 0)];
+}
+/* la date et l'heure en une ligne : « Samedi 10 octobre · 18h00 » */
+function acp_quand(array $D, bool $heure = true): string {
+    $q = $D['quand'];
+    if ($heure && $D['heure'] !== '') $q .= ($q !== '' ? ' · ' : '') . $D['heure'];
+    return $q;
+}
+/* les jetons des titulaires sur un terrain : $P(u, v) → [x, y, échelle]. Chaque étiquette (sous son jeton) garde une
+   largeur qui ne mord pas sur ses voisines ; si elle touche le jeton du dessous, ce jeton descend un peu (jusqu'à $yMax),
+   sinon tous les jetons rapetissent. $larg(joueur) : largeur voulue de l'étiquette.
+   Renvoie [[x, y, d, largeur max, joueur, poste], …] */
+function acp_jetons(array $D, callable $P, float $d0, float $hLab, float $ecart, callable $larg, float $yMax, float $wMax = 240): array {
+    $postes = ACP_FORMATIONS[$D['formation']] ?? [];
+    $pos0 = [];
+    foreach ($D['tit'] as $i => $t) {
+        if (!isset($postes[$i])) continue;
+        $p = $P($postes[$i][1] / 100, $postes[$i][2] / 100);
+        $pos0[$i] = ['x' => $p[0], 'y' => $p[1], 'k' => $p[2] ?? 1, 't' => $t, 'poste' => $postes[$i][0], 'w' => $t ? $larg($t) : 0];
+    }
+    $lim = function (array $pos, int $i, float $d) use ($hLab, $wMax): float {      // largeur permise de l'étiquette
+        $a = $pos[$i]; $m = $wMax;
+        foreach ($pos as $j => $b) if ($j !== $i && abs($b['y'] - $a['y']) < $d * .9 + $hLab) $m = min($m, abs($b['x'] - $a['x']) - 12);
+        return max(92, $m);
+    };
+    for ($d = $d0; ; $d -= 2) {
+        $pos = $pos0; $ok = true;
+        for ($tour = 0; $tour < 12; $tour++) {
+            $ok = true;
+            foreach ($pos as $i => $a) {
+                if (!$a['t']) continue;
+                $hw = min($a['w'], $lim($pos, $i, $d)) / 2;
+                $lt = $a['y'] + $d * $a['k'] / 2 + $ecart; $lb = $lt + $hLab;
+                foreach ($pos as $j => $b) {
+                    if ($j === $i) continue;
+                    $db = $d * $b['k'];
+                    if ($b['y'] - $db / 2 < $lb + 3 && $b['y'] + $db / 2 > $lt && abs($b['x'] - $a['x']) < $hw + $db / 2) {
+                        $ok = false;
+                        $bas = $lb + 3 + $db / 2;                         // le jeton du dessous descend sous l'étiquette
+                        if ($b['y'] > $a['y'] && $bas <= $yMax) $pos[$j]['y'] = $bas;
+                    }
+                }
+            }
+            if ($ok) break;
+        }
+        if ($ok || $d <= $d0 * .8) break;
+    }
+    $o = [];
+    foreach ($pos as $i => $a) $o[$i] = [$a['x'], $a['y'], $d * $a['k'], $lim($pos, $i, $d), $a['t'], $a['poste']];
+    return $o;
+}
+/* ================= points d'entrée ================= */
+/* affiche des convoqués (story 1080 x 1920) */
+function acp_convocation(array $compo, string $style = 'nuit', array $opts = []) {
+    return acp_dessiner('convocation', $compo, $style, $opts);
+}
+/* affiche de la composition de départ (story 1080 x 1920) */
+function acp_composition(array $compo, string $style = 'nuit', array $opts = []) {
+    return acp_dessiner('composition', $compo, $style, $opts);
+}
+function acp_dessiner(string $quoi, array $compo, string $style, array $opts) {
+    if (!isset(ACP_STYLES[$style])) $style = 'nuit';
+    $h = $GLOBALS['aff_h'] ?? null; $GLOBALS['aff_h'] = ACP_H;           // les outils du stade de nuit lisent le format courant
+    $D = acp_donnees($compo, $opts);
+    $titre = acp_propre($opts['titre'] ?? '', 40);                         // titre choisi dans l'espace club (facultatif)
+    $D['titre'] = $titre !== '' ? $titre : ($quoi === 'convocation' ? 'Convocation' : 'La compo');
+    try {
+        $f = "acp_{$style}_{$quoi}";
+        $im = $f($D, $opts);
+    } finally { $GLOBALS['aff_h'] = $h ?? AFF_H; }
+    return $im;
+}
+
+/* ================= style « stade de nuit » ================= */
+/* le fond des affiches du club (stade, ballon), son voile, le bandeau du haut, le blason et « 1923 », et le bas */
+function acp_nuit_fond(array $D, array $opts): array {
+    $l = $D['lieu']; $F = AFN_FORMATS['story']; $W = ACP_W; $H = ACP_H;
+    $A = ['fmt' => 'story', 'F' => $F, 'lieu' => $l, 'acc' => AFN_ACC[$l][0], 'accl' => AFN_ACC[$l][1], 'metal' => AFN_METAL[$l]];
+    $im = imagecreatetruecolor($W, $H); imagealphablending($im, true);
+    aff_rect($im, 0, 0, $W, $H, aff_c($im, '#030817'));
+    $fond = afn_fond($l);
+    if ($fond && ($src = aff_image($fond))) {                          // même cadrage que la story du jour de match
+        [$cx, $cy, $r] = AFN_BALLON['story']; $k = imagesx($src) / AFN_MAITRE['W'];
+        $s = $r / (AFN_MAITRE['r'] * $k); $sw = $W / $s; $sh = $H / $s;
+        $sx = max(0, min(imagesx($src) - $sw, AFN_MAITRE['bx'] * $k - $cx / $s));
+        $sy = max(0, min(imagesy($src) - $sh, AFN_MAITRE['by'] * $k - $cy / $s));
+        imagecopyresampled($im, $src, 0, 0, (int) round($sx), (int) round($sy), $W, $H, (int) round($sw), (int) round($sh));
+        imagedestroy($src);
+    } else aff_degrade_vertical($im, 0, $H, [[0, '#0B1A45', 1], [.5, '#071030', 1], [1, '#030817', 1]]);
+    $A['im'] = $im;
+    // voile : sombre en haut, léger sur le ballon, de plus en plus dense sous le contenu ; côté gauche assombri sous les titres
+    $v = [[0, .9], [240, .4], [330, .12], [560, 0], [700, .62], [860, .86], [$H, .92]];
+    for ($y = 0; $y < $H; $y++) {
+        for ($i = 0; $i < count($v) - 2 && $y > $v[$i + 1][0]; $i++);
+        [$y0, $o0] = $v[$i]; [$y1, $o1] = $v[$i + 1];
+        $o = $o0 + ($o1 - $o0) * max(0, min(1, ($y - $y0) / max(1, $y1 - $y0)));
+        if ($o > .003) imageline($im, 0, $y, $W - 1, $y, afn_c($im, [3, 8, 23], $o));
+    }
+    for ($x = 0; $x < $W * .64; $x++) {
+        $t = $x / $W; $o = $t < .44 ? .7 - (.7 - .35) * $t / .44 : .35 * (1 - ($t - .44) / .20);
+        imageline($im, $x, 0, $x, 760, afn_c($im, [3, 8, 23], $o));
+    }
+    afn_tete($A);
+    // bandeau : saison · site · compte Instagram (comme les autres affiches)
+    $B = $F['barre']; $s = $B * .36; $sp = $s * .82;
+    aff_rect($im, 0, 0, $W, $B, aff_c($im, '#050B1F'));
+    aff_rect($im, 0, $B - 3, $W, 3, aff_c($im, $A['acc']));
+    $an = (int) date('Y') - ((int) date('n') < 8 ? 1 : 0);
+    $g = "SAISON $an-" . ($an + 1); $m = 'ASF-PIERRELATTE.FR'; $d = '@ASFP.OFFICIEL';
+    $wg = afn_larg($g, $sp, '800', $sp * .18); $wm = afn_larg($m, $s, '800', $s * .14); $wd = afn_larg($d, $sp, '800', $sp * .18);
+    $esp = ($W - 68 - $wg - $wm - $wd) / 2;
+    afn_texte($im, $g, 34, $B / 2 + .4 * $sp, $sp, '800', aff_c($im, $A['accl']), 'left', $sp * .18);
+    afn_texte($im, $m, 34 + $wg + $esp, $B / 2 + .4 * $s, $s, '800', aff_c($im, '#FFFFFF'), 'left', $s * .14);
+    afn_texte($im, $d, $W - 34 - $wd, $B / 2 + .4 * $sp, $sp, '800', aff_c($im, $A['accl']), 'left', $sp * .18);
+    afn_partenaires($A, !empty($opts['sponsors']));
+    return $A;
+}
+/* titres à gauche du ballon : sur-titre, grand titre blanc, équipe en « métal », puis la date */
+function acp_nuit_titres(array $T, array $A, string $titre, string $equipe, string $date): float {
+    $x = 46; $max = 610; $y = 262;
+    $fs = 20; $sur = "ATOM'SPORTS FOOTBALL PIERRELATTE";
+    acp_boite($T, $x, $y + (1.424 * $fs - 3) / 2, 40, 3, 0, ['v', $A['metal']]);
+    acp_t($T, $sur, $x + 54, $y + 1.024 * $fs, $fs, 's800', $A['accl'], 'left', $fs * .2);
+    $y += 1.424 * $fs + 10;
+    $t1 = aff_maj($titre); $s1 = acp_fit($t1, 136, '900i', $max, .5);
+    acp_ombre_t($T, $t1, $x, $y + .83 * $s1, $s1, '900i', 6, 30, .55);
+    acp_t($T, $t1, $x, $y + .83 * $s1, $s1, '900i', '#FFFFFF');
+    $y += .86 * $s1 + 6;
+    $t2 = aff_maj($equipe); $s2 = acp_fit($t2, 78, '900i', $max, .5);
+    acp_ombre_t($T, $t2, $x, $y + .875 * $s2, $s2, '900i', 4, 18, .5);
+    acp_degrade_t($T, $t2, $x, $y + .875 * $s2, $s2, '900i', $A['metal']);
+    $y += .95 * $s2 + 28;
+    if ($date !== '') {
+        $fd = acp_fit($date, 32, 's700', $max, .7);
+        acp_ombre_t($T, $date, $x, $y + 1.024 * $fd, $fd, 's700', 2, 12, .9);
+        acp_t($T, $date, $x, $y + 1.024 * $fd, $fd, 's700', '#FFFFFF');
+        $y += 1.424 * $fd;
+    }
+    return $y;
+}
+/* pastille « À DOMICILE » (maison) ou « À L'EXTÉRIEUR » (avion) */
+function acp_nuit_pastille(array $T, array $A, bool $dom, float $x, float $y, float $hp = 48): float {
+    $lib = $dom ? 'À DOMICILE' : "À L'EXTÉRIEUR"; $px = $hp * .5;
+    $w = $hp * .32 + $hp * .54 + $hp * .2 + acp_l($lib, $px, '900', $px * .07) + $hp * .44;
+    acp_ombre($T, $x, $y, $w, $hp, $hp / 2, 14, .45, 6);
+    acp_boite($T, $x, $y, $w, $hp, $hp / 2, ['v', $A['metal']]);
+    acp_icone($T, $dom ? 'maison' : 'avion', $x + $hp * .32, $y + $hp * .23, $hp * .54, '#0B1633');
+    acp_t($T, $lib, $x + $hp * (.32 + .54 + .2), $y + $hp / 2 + .36 * $px, $px, '900', '#0B1633', 'left', $px * .07);
+    return $w;
+}
+/* carte bleu nuit (comme les cartes des autres affiches), avec ou sans en-tête rayé */
+function acp_nuit_carte(array $T, array $A, float $x, float $y, float $w, float $h, string $titre = '', float $ht = 58): void {
+    $K = ACP_K;
+    acp_ombre($T, $x, $y, $w, $h, 22, 30, .5, 12);
+    afn_carte($T['im'], $x * $K, $y * $K, $w * $K, $h * $K, 22 * $K, $K, 'v', .94, .94);
+    if ($titre === '') return;
+    afn_coller_raye($T['im'], $x * $K, $y * $K, $w * $K, $ht * $K, [22 * $K, 22 * $K, 0, 0], $K);
+    acp_boite($T, $x, $y + $ht - 3, $w, 3, 0, $A['acc']);
+    $pt = acp_fit($titre, 26, '900', $w - 40, .6, .14);
+    acp_tc($T, $titre, $x + $w / 2, $y + ($ht - 3) / 2, $pt, '900', '#FFFFFF', 'center', $pt * .14);
+}
+/* l'affiche entre deux équipes : [blason] PIERRELATTE … ADVERSAIRE [blason], l'équipe qui reçoit à gauche */
+function acp_nuit_duel(array $T, array $A, array $D, float $x, float $y, float $w, float $h, float $d, string $centre, string $sous = ''): void {
+    $nous = ['nom' => 'PIERRELATTE', 'brut' => '', 'club' => true];
+    $cy = $y + $h / 2; $mil = 150; $cote = ($w - $mil) / 2;
+    $eux = ['nom' => acp_adv($D['adv'], 36 * .8, '700', ($cote - $d - 22) * 1.6, 1)[0], 'brut' => $D['adv_brut'], 'club' => false];
+    foreach ([[$D['dom'] ? $nous : $eux, 'g'], [$D['dom'] ? $eux : $nous, 'd']] as [$e, $s]) {
+        $bx = $s === 'g' ? $x + $d / 2 : $x + $w - $d / 2;
+        acp_blason($T, $e['brut'], $e['club'], $bx, $cy, $d);
+        $max = $cote - $d - 22;
+        $tx = $s === 'g' ? $x + $d + 18 : $x + $w - $d - 18;
+        acp_nom_bloc($T, $e['nom'], $tx, $cy, $max, 36, $e['club'] ? '800' : '700', $e['club'] ? '#FFFFFF' : '#D3DDF4', $s === 'g' ? 'left' : 'right');
+    }
+    $mx = $x + $w / 2;
+    if ($sous === '') { acp_degrade_t($T, $centre, $mx, $cy + .35 * 54, 54, '900i', $A['metal'], 'center'); return; }
+    acp_degrade_t($T, $centre, $mx, $cy + 6, 50, '900i', $A['metal'], 'center');
+    acp_t($T, $sous, $mx, $cy + 36, 15, 's800', $A['accl'], 'center', 15 * .18);
+}
+/* nom d'équipe sur une ou deux lignes, centré sur $cy */
+function acp_nom_bloc(array $T, string $nom, float $x, float $cy, float $max, float $px, string $p, string $hex, string $align): void {
+    $s = $px;
+    while ($s > $px * .72 && acp_l($nom, $s, $p) > $max + 1) $s -= .5;
+    if (acp_l($nom, $s, $p) <= $max + 1 || !str_contains($nom, ' ')) {
+        acp_tc($T, $nom, $x, $cy, acp_fit($nom, $s, $p, $max, 0), $p, $hex, $align);
+        return;
+    }
+    $s2 = $px * .8;
+    [$l1, $l2] = afn_deux_lignes($nom, $s2 * ACP_K, $p, $max * ACP_K);
+    $s2 = min(acp_fit($l1, $s2, $p, $max, 0), acp_fit($l2, $s2, $p, $max, 0));
+    acp_tc($T, $l1, $x, $cy - .5 * $s2, $s2, $p, $hex, $align);
+    acp_tc($T, $l2, $x, $cy + .5 * $s2, $s2, $p, $hex, $align);
+}
+/* ligne d'information : icône + texte en capitales (lieu, rendez-vous) */
+function acp_nuit_info(array $T, array $A, string $icone, string $etiquette, string $texte, float $x, float $cy, float $max, float $px = 22): void {
+    $ic = $px * 1.05;
+    acp_icone($T, $icone, $x, $cy - $ic / 2, $ic, $A['acc'], '#081230');
+    $tx = $x + $ic + 12;
+    if ($etiquette !== '') $tx += acp_tc($T, $etiquette, $tx, $cy, $px * 1.15, '900', '#FFFFFF', 'left', $px * .05) + 12;
+    $t = aff_maj($texte);
+    $s = acp_fit($t, $px, 's700', $x + $max - $tx, .75, .06);
+    acp_tc($T, acp_coupe($t, $s, 's700', $x + $max - $tx), $tx, $cy, $s, 's700', $A['accl'], 'left', $s * .06);
+}
+/* liste des joueurs en colonnes : numéro dans une pastille « métal », nom, brassard « C » */
+function acp_nuit_joueurs(array $T, array $A, array $liste, float $x, float $y, float $w, float $h): void {
+    $avecNum = (bool) array_filter($liste, fn($j) => $j['num'] !== '');
+    $noms = array_map(fn($j) => $j['nom'] . ($j['cap'] ? ' C' : ''), $liste);
+    $g = acp_grille($noms, $w, $h, 44, '800', $avecNum ? 1.75 : .9, 28, 1.62);
+    $px = $g['px']; $lh = $g['lh']; $top = $y + ($h - $g['rows'] * $lh) / 2;
+    foreach ($liste as $i => $j) {
+        $c = intdiv($i, $g['rows']); $r = $i % $g['rows'];
+        $cx = $x + $c * ($g['cw'] + 28); $cy = $top + $r * $lh + $lh / 2;
+        if ($c === 0 && $r > 0) acp_boite($T, $x, $top + $r * $lh, $w, 1, 0, '#FFFFFF', .07);
+        $tx = $cx;
+        if ($avecNum) {
+            $bw = $px * 1.32; $bh = $px * 1.12;
+            if ($j['num'] !== '') {
+                acp_boite($T, $cx, $cy - $bh / 2, $bw, $bh, $bh * .22, ['v', $A['metal']]);
+                $pn = acp_fit($j['num'], $px * .78, '900i', $bw - 6, .7);
+                acp_tc($T, $j['num'], $cx + $bw / 2 - 1, $cy, $pn, '900i', '#0B1633', 'center');
+            } else acp_boite($T, $cx + $bw / 2 - $px * .14, $cy - $px * .14, $px * .28, $px * .28, $px * .14, $A['acc'], .8);
+            $tx += $bw + $px * .38;
+        } else {
+            acp_boite($T, $cx + 2, $cy - $px * .12, $px * .24, $px * .24, $px * .12, $A['acc']);
+            $tx += $px * .62;
+        }
+        $capW = $j['cap'] ? $px * .95 : 0;
+        [$nom, $s] = acp_forme($j, $px, '800', $cx + $g['cw'] - $tx - $capW);
+        $wn = acp_tc($T, $nom, $tx, $cy, $s, '800', '#FFFFFF');
+        if ($j['cap']) acp_brassard($T, $tx + $wn + $px * .5, $cy, $px * .74, $A['acc'], '#0B1633');
+    }
+}
+/* brassard de capitaine : pastille ronde « C » */
+function acp_brassard(array $T, float $cx, float $cy, float $d, string $fond, string $texte): void {
+    acp_rond($T, $cx, $cy, $d, $fond);
+    acp_tc($T, 'C', $cx + .5, $cy, $d * .66, '900', $texte, 'center');
+}
+/* le mot du coach : deux lignes au plus, entre guillemets */
+function acp_nuit_mot(array $T, array $A, string $msg, float $x, float $y, float $w): float {
+    if ($msg === '') return 0;
+    acp_t($T, 'LE MOT DU COACH', $x, $y + 15, 15, 's800', $A['accl'], 'left', 15 * .22);
+    $l = acp_lignes('« ' . $msg . ' »', 27, 's700i', $w, 2);
+    foreach ($l as $i => $t) acp_t($T, $t, $x, $y + 30 + 30 + $i * 36, 27, 's700i', '#E6ECFA');
+    return 30 + count($l) * 36 + 6;
+}
+function acp_nuit_convocation(array $D, array $opts) {
+    $A = acp_nuit_fond($D, $opts); $T = acp_toile($A['im']);
+    $yb = acp_nuit_titres($T, $A, $D['titre'], $D['equipe'], acp_quand($D));
+    acp_nuit_pastille($T, $A, $D['dom'], 46, $yb + 14);
+    // carte du match : les deux équipes, puis le stade et le rendez-vous
+    $x = 30; $w = ACP_W - 60; $y = 744;
+    $infos = [];
+    if ($D['stade'] !== '') $infos[] = ['lieu', '', $D['stade']];
+    if ($D['rdv'] !== '' || $D['rdvLieu'] !== '') $infos[] = ['horloge', 'RDV ' . ($D['rdv'] !== '' ? $D['rdv'] : ''), $D['rdvLieu']];
+    $hDuel = 132; $hInfo = 50; $hA = 20 + $hDuel + ($infos ? 14 + count($infos) * $hInfo + 10 : 20);
+    acp_nuit_carte($T, $A, $x, $y, $w, $hA);
+    acp_nuit_duel($T, $A, $D, $x + 26, $y + 20, $w - 52, $hDuel, 104, 'VS');
+    if ($infos) {
+        $iy = $y + 20 + $hDuel + 14;
+        acp_boite($T, $x, $iy - 6, $w, 1, 0, '#FFFFFF', .1);
+        foreach ($infos as $k => [$ic, $et, $tx]) acp_nuit_info($T, $A, $ic, $et, $tx, $x + 34, $iy + $k * $hInfo + $hInfo / 2 + 2, $w - 68);
+    }
+    // carte des convoqués
+    $y2 = $y + $hA + 22; $h2 = ACP_SURE[1] - 6 - $y2; $ht = 60;
+    $n = count($D['conv']);
+    acp_nuit_carte($T, $A, $x, $y2, $w, $h2, $n ? ($n > 1 ? "LES $n CONVOQUÉS" : 'LE CONVOQUÉ') : 'CONVOCATION', $ht);
+    $hm = 0;
+    if ($D['message'] !== '') {
+        $l = acp_lignes('« ' . $D['message'] . ' »', 27, 's700i', $w - 68, 2);
+        $hm = 30 + count($l) * 36 + 24;
+    }
+    $ly = $y2 + $ht + 14; $lh = $h2 - $ht - 14 - 16 - $hm;
+    if ($n) acp_nuit_joueurs($T, $A, $D['conv'], $x + 34, $ly, $w - 68, $lh);
+    else acp_tc($T, 'LISTE À VENIR', ACP_W / 2, $ly + $lh / 2, 40, '900i', '#FFFFFF', 'center');
+    if ($hm) {
+        $my = $y2 + $h2 - $hm;
+        acp_boite($T, $x, $my, $w, 1, 0, '#FFFFFF', .1);
+        acp_nuit_mot($T, $A, $D['message'], $x + 34, $my + 16, $w - 68);
+    }
+    return acp_fin($T);
+}
+/* terrain en perspective : (u, v) entre 0 et 1 (v = 0 au but adverse) → pixels ; $r = largeur du fond / largeur du devant */
+function acp_persp(float $cx, float $y0, float $y1, float $wb, float $r): callable {
+    return function (float $u, float $v) use ($cx, $y0, $y1, $wb, $r): array {
+        $iz = $r / (1 - $v + $r * $v);                                   // 1 / profondeur : r au fond, 1 devant
+        $g = ($iz - $r) / (1 - $r);
+        return [$cx + ($u - .5) * $wb * $iz, $y0 + ($y1 - $y0) * $g, $iz];
+    };
+}
+/* pelouse rayée et lignes blanches d'un terrain entier, vu par $P (perspective ou plat) */
+function acp_pelouse(array $T, callable $P, array $teintes, string $ligne, float $opL, float $ep, int $bandes = 12): void {
+    $m = .035;                                                           // bord de pelouse autour des lignes
+    for ($i = 0; $teintes && $i < $bandes; $i++) {
+        $v0 = -$m + (1 + 2 * $m) * $i / $bandes; $v1 = -$m + (1 + 2 * $m) * ($i + 1) / $bandes;
+        [$a, $b] = $P(-$m * 1.6, $v0); [$c, $d] = $P(1 + $m * 1.6, $v0); [$e, $f] = $P(1 + $m * 1.6, $v1); [$g, $h] = $P(-$m * 1.6, $v1);
+        acp_poly($T, [$a, $b, $c, $d, $e, $f, $g, $h], $teintes[$i % 2]);
+    }
+    $seg = function (array $pts) use ($T, $P, $ligne, $opL, $ep) {   // [[u, v], …] → polyligne
+        $o = []; foreach ($pts as [$u, $v]) { [$x, $y] = $P($u, $v); $o[] = $x; $o[] = $y; }
+        acp_polyligne($T, $o, $ep, $ligne, $opL);
+    };
+    $rect = function (float $u0, float $v0, float $u1, float $v1) use ($seg) {
+        $pts = [];
+        foreach ([[$u0, $v0, $u1, $v0], [$u1, $v0, $u1, $v1], [$u1, $v1, $u0, $v1], [$u0, $v1, $u0, $v0]] as [$a, $b, $c, $d])
+            for ($k = 0; $k <= 8; $k++) $pts[] = [$a + ($c - $a) * $k / 8, $b + ($d - $b) * $k / 8];
+        $seg($pts);
+    };
+    $rect(0, 0, 1, 1);
+    $seg([[0, .5], [1, .5]]);
+    $ry = 9.15 / 105; $rx = 9.15 / 68; $pts = [];
+    for ($k = 0; $k <= 48; $k++) { $a = 2 * M_PI * $k / 48; $pts[] = [.5 + $rx * cos($a), .5 + $ry * sin($a)]; }
+    $seg($pts);
+    foreach ([0, 1] as $bout) {
+        $s = $bout ? -1 : 1; $b = (float) $bout;
+        $rect(.5 - 20.16 / 68, $b, .5 + 20.16 / 68, $b + $s * 16.5 / 105);
+        $rect(.5 - 9.16 / 68, $b, .5 + 9.16 / 68, $b + $s * 5.5 / 105);
+        $pts = [];                                                       // arc de la surface
+        for ($k = 0; $k <= 20; $k++) {
+            $a = deg2rad(-53 + 106 * $k / 20);
+            $pts[] = [.5 + $rx * sin($a), $b + $s * (11 / 105 + $ry * cos($a))];
+        }
+        $pts = array_values(array_filter($pts, fn($p) => $bout ? $p[1] <= 1 - 16.5 / 105 : $p[1] >= 16.5 / 105));
+        if (count($pts) > 1) $seg($pts);
+        [$px, $py] = $P(.5, $b + $s * 11 / 105); acp_rond($T, $px, $py, $ep * 2.2, $ligne, $opL);
+    }
+    [$px, $py] = $P(.5, .5); acp_rond($T, $px, $py, $ep * 2.2, $ligne, $opL);
+}
+function acp_nuit_composition(array $D, array $opts) {
+    $A = acp_nuit_fond($D, $opts); $T = acp_toile($A['im']);
+    $yb = acp_nuit_titres($T, $A, $D['titre'], $D['equipe'], acp_quand($D, false) . ($D['heure'] !== '' ? ' · Coup d\'envoi ' . $D['heure'] : ''));
+    acp_nuit_pastille($T, $A, $D['dom'], 46, $yb + 14);
+    $x = 30; $w = ACP_W - 60; $y = 744;
+    // remplaçants en bas
+    $remp = $D['remp']; $hR = 0;
+    if ($remp) {
+        $lignes = acp_nuit_puces_lignes($remp, $w - 52, 30);
+        $hR = 58 + 18 + count($lignes['l']) * 56 + 8;
+        if ($hR > 260) { $lignes = acp_nuit_puces_lignes($remp, $w - 52, 24); $hR = 58 + 18 + count($lignes['l']) * 48 + 8; }
+    }
+    $hP = ACP_SURE[1] - 6 - $y - ($hR ? $hR + 18 : 0);
+    [$adv] = acp_adv($D['adv'], 26, '900', $w - 40 - acp_l('PIERRELATTE  —  ', 26, '900', 26 * .14) - 26 * .14 * mb_strlen($D['adv']), .75);
+    acp_nuit_carte($T, $A, $x, $y, $w, $hP, $D['dom'] ? 'PIERRELATTE  —  ' . $adv : $adv . '  —  PIERRELATTE', 58);
+    $py0 = $y + 58;
+    if ($D['terrain']) {
+        // le terrain en perspective, dans la carte
+        $K = ACP_K; $marge = 22;
+        $P = acp_persp(ACP_W / 2, $py0 + 44, $y + $hP - 44, $w - 2 * $marge - 120, .78);
+        acp_pelouse($T, $P, ['#0E3A22', '#124428'], '#FFFFFF', .42, 2.4, 14);
+        acp_nuit_joueurs_terrain($T, $A, $D, $P, $y + $hP - 14 - 25 * 1.32 - 8 - 34);
+    } else acp_nuit_titulaires_liste($T, $A, $D, $x + 34, $py0 + 20, $w - 68, $hP - 58 - 40);
+    if ($hR) {
+        $yR = $y + $hP + 18;
+        acp_nuit_carte($T, $A, $x, $yR, $w, $hR, count($remp) > 1 ? 'REMPLAÇANTS' : 'REMPLAÇANT', 58);
+        acp_nuit_puces($T, $A, $remp, $x + 26, $yR + 58 + 18, $w - 52, $hR - 58 - 26, $lignes);
+    }
+    return acp_fin($T);
+}
+/* les titulaires sur le terrain : jeton « métal » numéroté, brassard, nom en dessous ; poste vide en pointillé */
+function acp_nuit_joueurs_terrain(array $T, array $A, array $D, callable $P, float $yMax): void {
+    $nb = count($D['tit']); $d0 = $nb >= 10 ? 76 : ($nb >= 7 ? 84 : 94); $px = 25;
+    $J = acp_jetons($D, function ($u, $v) use ($P) { [$x, $y, $iz] = $P($u, $v); return [$x, $y, .86 + .14 * ($iz - .78) / .22]; },
+        $d0, $px * 1.32, 8, fn($t) => acp_l($t['court'], $px, '800') + 22, $yMax);
+    $metal = $D['dom'] ? [[0, '#FFF3C4'], [.45, '#F2CD6C'], [1, '#B98A26']] : [[0, '#FFFFFF'], [.45, '#DCE8FB'], [1, '#8EABD9']];
+    foreach ($J as [$x, $y, $d, $maxW, $t, $poste]) {
+        if (!$t) {                                                        // poste sans joueur
+            acp_anneau($T, $x, $y, $d * .84, 3, '#FFFFFF', .45);
+            acp_tc($T, $poste, $x, $y, $d * .3, '900', '#FFFFFF', 'center', 0, .6);
+            continue;
+        }
+        acp_ombre($T, $x - $d / 2, $y - $d / 2, $d, $d, $d / 2, 12, .6, 6);
+        acp_rond($T, $x, $y, $d + 6, '#FFFFFF', .9);
+        acp_rond_degrade($T, $x, $y, $d, $metal);
+        $num = $t['num'] !== '' ? $t['num'] : aff_initiales($t['nom']);
+        acp_tc($T, $num, $x - 1, $y, acp_fit($num, $d * .5, '900i', $d * .72, .6), '900i', '#0B1633', 'center');
+        if ($t['cap']) { acp_rond($T, $x + $d * .38, $y - $d * .36, $d * .38, '#0B1633'); acp_brassard($T, $x + $d * .38, $y - $d * .36, $d * .32, '#FFFFFF', '#0B1633'); }
+        // étiquette du nom
+        [$n, $s] = acp_forme(['formes' => array_unique([$t['court'], $t['famille'] ?: $t['court']])] + $t, $px, '800', $maxW - 22, .72);
+        $lw = acp_l($n, $s, '800') + 22; $lh = $px * 1.32; $ly = $y + $d / 2 + 8;
+        $lx = max(40, min(ACP_W - 40 - $lw, $x - $lw / 2));
+        acp_boite($T, $lx, $ly, $lw, $lh, $lh / 2, '#050C22', .88);
+        acp_tc($T, $n, $lx + $lw / 2, $ly + $lh / 2, $s, '800', '#FFFFFF', 'center');
+    }
+}
+/* titulaires en liste (formation inconnue) */
+function acp_nuit_titulaires_liste(array $T, array $A, array $D, float $x, float $y, float $w, float $h): void {
+    $tit = array_values(array_filter($D['tit']));
+    acp_t($T, 'TITULAIRES', $x, $y + 18, 18, 's800', $A['accl'], 'left', 18 * .22);
+    if (!$tit) { acp_tc($T, 'COMPOSITION À VENIR', ACP_W / 2, $y + $h / 2, 40, '900i', '#FFFFFF', 'center'); return; }
+    acp_nuit_joueurs($T, $A, $tit, $x, $y + 36, $w, $h - 36);
+}
+/* remplaçants en pastilles (numéro + nom) réparties en lignes centrées */
+function acp_nuit_puces_lignes(array $liste, float $w, float $px): array {
+    $lignes = [[]]; $lw = 0;
+    foreach ($liste as $j) {
+        $pw = acp_nuit_puce_l($j, $px);
+        if ($lignes[count($lignes) - 1] && $lw + 12 + $pw > $w) { $lignes[] = []; $lw = 0; }
+        $lignes[count($lignes) - 1][] = $j; $lw += ($lw ? 12 : 0) + $pw;
+    }
+    return ['px' => $px, 'l' => $lignes];
+}
+function acp_nuit_puce_l(array $j, float $px): float { return ($j['num'] !== '' ? acp_l($j['num'], $px, '900i') + $px * .6 : 0) + acp_l($j['court'], $px * .86, '800') + $px * 1.1; }
+function acp_nuit_puces(array $T, array $A, array $remp, float $x, float $y, float $w, float $h, array $L): void {
+    $px = $L['px']; $lignes = $L['l']; $ph = $px * 1.55; $gap = (count($lignes) > 1 ? ($h - count($lignes) * $ph) / (count($lignes) - 1) : 0);
+    $gap = min($gap, $px * .5); $top = $y + ($h - count($lignes) * $ph - (count($lignes) - 1) * $gap) / 2;
+    foreach ($lignes as $k => $ligne) {
+        $tw = array_sum(array_map(fn($j) => acp_nuit_puce_l($j, $px), $ligne)) + 12 * (count($ligne) - 1);
+        $cx = $x + ($w - $tw) / 2; $cy = $top + $k * ($ph + $gap) + $ph / 2;
+        foreach ($ligne as $j) {
+            $pw = acp_nuit_puce_l($j, $px);
+            acp_boite($T, $cx, $cy - $ph / 2, $pw, $ph, $ph / 2, '#FFFFFF', .08);
+            acp_lisere($T, $cx, $cy - $ph / 2, $pw, $ph, $ph / 2, 1.5, $A['accl'], .35);
+            $tx = $cx + $px * .55;
+            if ($j['num'] !== '') $tx += acp_tc($T, $j['num'], $tx, $cy, $px, '900i', $A['acc']) + $px * .4;
+            acp_tc($T, $j['court'], $tx, $cy, $px * .86, '800', '#FFFFFF');
+            $cx += $pw + 12;
+        }
+    }
+}
+
+/* ================= style « tableau tactique » ================= */
+/* le tableau magnétique du coach : img/fond-tableau.jpg (feutre vert, cadre aluminium, rebord à feutres) ;
+   à défaut, un feutre vert uni dans un cadre gris */
+const ACP_TAB_FEUTRE = [34, 34, 1046, 1770];                      // la surface verte du fond
+const ACP_TAB_ENCRE = '#1B3A8C';                                   // encre bleue du feutre
+function acp_tab_fond() {
+    $im = imagecreatetruecolor(ACP_W, ACP_H); imagealphablending($im, true);
+    $f = dirname(__DIR__) . '/img/fond-tableau.jpg';
+    if (is_file($f) && ($src = aff_image($f))) { imagecopyresampled($im, $src, 0, 0, 0, 0, ACP_W, ACP_H, imagesx($src), imagesy($src)); imagedestroy($src); return $im; }
+    aff_rect($im, 0, 0, ACP_W, ACP_H, aff_c($im, '#B9BEC6'));
+    [$x0, $y0, $x1, $y1] = ACP_TAB_FEUTRE;
+    aff_rect($im, $x0, $y0, $x1 - $x0, $y1 - $y0, aff_c($im, '#215F38'));
+    aff_rect($im, 0, $y1, ACP_W, ACP_H - $y1, aff_c($im, '#8E949C'));
+    return $im;
+}
+/* aimant rond brillant : ombre portée, dégradé, reflet ; $teinte 'bleu' | 'rouge' | 'jaune' | 'blanc' */
+function acp_aimant(array $T, float $cx, float $cy, float $d, string $teinte = 'bleu'): void {
+    $deg = ['bleu' => [[0, '#7FA6FF'], [.35, '#2F5FD0'], [.8, '#163A9A'], [1, '#0F2A72']],
+            'rouge' => [[0, '#FF9A8E'], [.35, '#E0473A'], [.8, '#A52219'], [1, '#7E1810']],
+            'jaune' => [[0, '#FFF6C2'], [.35, '#F7D046'], [.8, '#D9A512'], [1, '#B0820A']],
+            'blanc' => [[0, '#FFFFFF'], [.5, '#EEF1F5'], [1, '#B9C0CA']]][$teinte] ?? null;
+    acp_ombre($T, $cx - $d / 2, $cy - $d / 2, $d, $d, $d / 2, max(4, $d * .09), .55, $d * .07);
+    acp_rond_degrade($T, $cx, $cy, $d, $deg, .32, .26);
+    acp_anneau($T, $cx, $cy, $d, max(1.2, $d * .03), '#000000', .18);
+    // reflet : croissant clair en haut à gauche
+    $im = $T['im']; $K = ACP_K;
+    imagefilledellipse($im, (int) round(($cx - $d * .12) * $K), (int) round(($cy - $d * .2) * $K), (int) round($d * .56 * $K), (int) round($d * .34 * $K), acp_col($T, '#FFFFFF', .22));
+}
+/* bande de papier blanc (étiquette aimantée) avec un texte */
+function acp_tab_etiquette(array $T, string $t, float $cx, float $y, float $px, string $p = '800', string $hex = '#0F2257', float $pad = 10, ?float $w = null): float {
+    $w = $w ?? acp_l($t, $px, $p) + 2 * $pad; $h = $px * 1.34; $x = max(ACP_TAB_FEUTRE[0] + 10, min(ACP_TAB_FEUTRE[2] - 10 - $w, $cx - $w / 2));
+    acp_ombre($T, $x, $y, $w, $h, 3, 5, .45, 3);
+    acp_boite($T, $x, $y, $w, $h, 3, ['v', [[0, '#FFFFFF'], [1, '#EDEDE6']]]);
+    acp_tc($T, $t, $x + $w / 2, $y + $h / 2, $px, $p, $hex, 'center');
+    return $w;
+}
+/* écriture au feutre (police manuscrite) */
+function acp_feutre(array $T, string $t, float $x, float $y, float $px, string $hex, string $align = 'left', float $op = .96): float {
+    return acp_t($T, $t, $x, $y, $px, 'script', $hex, $align, 0, $op);
+}
+/* le post-it jaune (date, heure, lieu), légèrement de travers */
+function acp_tab_postit(array $T, array $D, float $x, float $y, float $w, float $h, float $angle): void {
+    $K = ACP_K; $m = 30;
+    $C = ['im' => afn_calque((int) (($w + 2 * $m) * $K), (int) (($h + 2 * $m) * $K))];
+    acp_ombre($C, $m, $m, $w, $h, 2, 9, .45, 7);
+    acp_boite($C, $m, $m, $w, $h, 2, ['v', [[0, '#FFF59A'], [.6, '#FCEB6E'], [1, '#F4DA4E']]]);
+    acp_boite($C, $m, $m, $w, 22, 0, '#E8CF42', .55);                           // bande collante
+    $cx = $m + $w / 2; $encre = '#22264A';
+    $l1 = $D['jour'] !== '' ? $D['jour'] . ' ' . preg_replace('/^\D+/u', '', $D['quand']) : 'Match';
+    $s1 = acp_fit($l1, 34, 'script', $w - 30, .6);
+    acp_t($C, $l1, $cx, $m + 64, $s1, 'script', $encre, 'center');
+    $hh = $D['heure'] !== '' ? $D['heure'] : '--h--';
+    acp_t($C, $hh, $cx, $m + 64 + 78, acp_fit($hh, 72, 'script', $w - 30, .6), 'script', '#C8312B', 'center');
+    $l3 = $D['dom'] ? 'à domicile' : "à l'extérieur";
+    acp_t($C, $l3, $cx, $m + $h - 26, acp_fit($l3, 30, 'script', $w - 30, .6), 'script', $encre, 'center');
+    $R = imagerotate($C['im'], $angle, imagecolorallocatealpha($C['im'], 0, 0, 0, 127));
+    imagedestroy($C['im']);
+    imagealphablending($T['im'], true);
+    imagecopy($T['im'], $R, (int) round(($x + $w / 2) * $K - imagesx($R) / 2), (int) round(($y + $h / 2) * $K - imagesy($R) / 2), 0, 0, imagesx($R), imagesy($R));
+    imagedestroy($R);
+}
+/* en-tête au feutre blanc : titre, puis l'étiquette de l'équipe et « contre [blason] ADVERSAIRE » (à gauche du post-it) */
+function acp_tab_tete(array $T, array $D, string $titre): float {
+    $x = 80; $max = 680;
+    acp_feutre($T, $titre, $x, 338, acp_fit($titre, 104, 'script', $max, .6), '#FFFFFF');
+    $y = 376; $ph = 32; $hh = $ph * 1.34; $cy = $y + $hh / 2;
+    $eq = aff_maj($D['equipe']);
+    $w = acp_tab_etiquette($T, $eq, $x + (acp_l($eq, $ph, '900') + 28) / 2, $y, $ph, '900', '#0F2257', 14);
+    $cx = $x + $w + 22;
+    $cx += acp_feutre($T, $D['dom'] ? 'contre' : 'chez', $cx, $cy + 8, 32, '#FFFFFF') + 14;
+    acp_blason($T, $D['adv_brut'], false, $cx + 24, $cy, 46); $cx += 60;
+    [$adv, $s] = acp_adv($D['adv'], 32, '800', $x + $max - $cx, .62);
+    acp_tc($T, $adv, $cx, $cy, $s, '800', '#FFFFFF');
+    return $y + $hh;
+}
+/* le terrain imprimé sur le tableau : lignes blanches (vue à plat) */
+function acp_tab_terrain(array $T, float $x, float $y, float $w, float $h): callable {
+    $P = fn($u, $v) => [$x + $u * $w, $y + $v * $h, 1];
+    acp_pelouse($T, $P, [], '#FFFFFF', .8, 3.2);
+    return $P;
+}
+function acp_tableau_composition(array $D, array $opts) {
+    $T = acp_toile(acp_tab_fond());
+    acp_tab_postit($T, $D, 770, 236, 230, 210, -4);
+    $yb = acp_tab_tete($T, $D, $D['titre']);
+    // remplaçants en bas : aimants plus petits, étiquettes
+    $remp = $D['remp']; $hR = 0;
+    if ($remp) { $L = acp_tab_bancs($remp, 900); $hR = 70 + count($L['l']) * $L['lh']; }
+    $y0 = $yb + 26; $y1 = ACP_SURE[1] - ($hR ? $hR + 20 : 10);
+    if ($D['terrain']) {
+        $h = $y1 - $y0; $w = min(900, $h * .86); $x = (ACP_W - $w) / 2;
+        $P = acp_tab_terrain($T, $x, $y0, $w, $h);
+        $px = 24; $nb = count($D['tit']); $d0 = $nb >= 10 ? 74 : ($nb >= 7 ? 84 : 94);
+        $J = acp_jetons($D, $P, $d0, $px * 1.34, 7, fn($t) => acp_l($t['court'], $px, '800') + 20, $y1 - 10 - $px * 1.34 - 7 - 30);
+        foreach ($J as [$jx, $jy, $d, $maxW, $t, $poste]) {
+            if (!$t) {
+                acp_anneau($T, $jx, $jy, $d * .8, 3, '#FFFFFF', .7);
+                acp_feutre($T, $poste, $jx, $jy + 12, $d * .34, '#FFFFFF', 'center', .85);
+                continue;
+            }
+            acp_aimant($T, $jx, $jy, $d, 'bleu');
+            $num = $t['num'] !== '' ? $t['num'] : aff_initiales($t['nom']);
+            acp_tc($T, $num, $jx, $jy, acp_fit($num, $d * .48, '900', $d * .7, .6), '900', '#FFFFFF', 'center');
+            if ($t['cap']) { acp_aimant($T, $jx + $d * .4, $jy - $d * .36, $d * .4, 'jaune'); acp_tc($T, 'C', $jx + $d * .4, $jy - $d * .36, $d * .26, '900', '#5A3E00', 'center'); }
+            [$n, $s] = acp_forme(['formes' => array_unique([$t['court'], $t['famille'] ?: $t['court']])] + $t, $px, '800', $maxW - 20, .72);
+            $lw = acp_l($n, $s, '800') + 20;
+            acp_tab_etiquette($T, $n, $jx, $jy + $d / 2 + 7, $s, '800', '#0F2257', 10, $lw);
+        }
+    } else acp_tab_liste_titulaires($T, $D, 80, $y0 + 34, 920, $y1 - $y0 - 34);     // sous le post-it
+    if ($hR) {
+        $yR = $y1 + 20;
+        acp_feutre($T, count($remp) > 1 ? 'Remplaçants' : 'Remplaçant', 80, $yR + 44, 46, '#FFFFFF');
+        acp_boite($T, 80, $yR + 58, 300, 3, 1.5, '#FFFFFF', .7);
+        acp_tab_banc($T, $remp, 90, $yR + 72, 900, $L);
+    }
+    return acp_fin($T);
+}
+/* remplaçants : petits aimants et étiquettes, répartis en lignes */
+function acp_tab_bancs(array $remp, float $w): array {
+    foreach ([[24, 52], [21, 46], [19, 42]] as [$px, $d]) {
+        $l = [[]]; $lw = 0;
+        foreach ($remp as $j) {
+            $jw = acp_tab_banc_l($j, $px, $d);
+            if ($l[count($l) - 1] && $lw + 18 + $jw > $w) { $l[] = []; $lw = 0; }
+            $l[count($l) - 1][] = $j; $lw += ($lw ? 18 : 0) + $jw;
+        }
+        if (count($l) <= 2) break;
+    }
+    return ['l' => $l, 'px' => $px, 'd' => $d, 'lh' => $d + 18];
+}
+function acp_tab_banc_l(array $j, float $px, float $d): float { return $d + 10 + acp_l($j['court'], $px, '800') + 14; }
+function acp_tab_banc(array $T, array $remp, float $x, float $y, float $w, array $L): void {
+    $px = $L['px']; $d = $L['d']; $lh = $px * 1.34;
+    foreach ($L['l'] as $k => $ligne) {
+        $cx = $x; $cy = $y + $k * $L['lh'] + $d / 2 + 4;
+        foreach ($ligne as $j) {
+            $jw = acp_tab_banc_l($j, $px, $d); $ex = $cx + $d / 2;           // l'étiquette part du centre de l'aimant
+            acp_ombre($T, $ex, $cy - $lh / 2, $jw - $d / 2, $lh, 3, 5, .45, 3);
+            acp_boite($T, $ex, $cy - $lh / 2, $jw - $d / 2, $lh, 3, ['v', [[0, '#FFFFFF'], [1, '#EDEDE6']]]);
+            acp_tc($T, $j['court'], $cx + $d + 10, $cy, $px, '800', '#0F2257');
+            acp_aimant($T, $cx + $d / 2, $cy, $d, 'bleu');
+            $num = $j['num'] !== '' ? $j['num'] : aff_initiales($j['nom']);
+            acp_tc($T, $num, $cx + $d / 2, $cy, acp_fit($num, $d * .46, '900', $d * .7, .6), '900', '#FFFFFF', 'center');
+            $cx += $jw + 18;
+        }
+    }
+}
+/* titulaires en liste sur une feuille (formation inconnue) */
+function acp_tab_liste_titulaires(array $T, array $D, float $x, float $y, float $w, float $h): void {
+    $tit = array_values(array_filter($D['tit']));
+    acp_tab_feuille($T, $x, $y, $w, $h);
+    acp_t($T, 'TITULAIRES', $x + 40, $y + 84, 34, '900', '#0F2257', 'left', 34 * .06);
+    acp_boite($T, $x + 40, $y + 100, $w - 80, 3, 0, '#0F2257');
+    if (!$tit) { acp_feutre($T, 'Composition à venir', $x + $w / 2, $y + $h / 2, 48, ACP_TAB_ENCRE, 'center'); return; }
+    acp_tab_lignes($T, $tit, $x + 40, $y + 116, $w - 80, $h - 146, false);
+}
+/* feuille de papier aimantée : ombre douce, deux aimants en haut */
+function acp_tab_feuille(array $T, float $x, float $y, float $w, float $h): void {
+    acp_ombre($T, $x, $y, $w, $h, 3, 16, .55, 10);
+    acp_boite($T, $x, $y, $w, $h, 3, ['v', [[0, '#FFFFFF'], [1, '#F4F2EA']]]);
+    acp_aimant($T, $x + 46, $y + 22, 40, 'rouge');
+    acp_aimant($T, $x + $w - 46, $y + 22, 40, 'bleu');
+}
+/* lignes réglées de la feuille : numéro dans une case, nom, coche bleue ; brassard entouré au feutre rouge */
+function acp_tab_lignes(array $T, array $liste, float $x, float $y, float $w, float $h, bool $coches = true): float {
+    $avecNum = (bool) array_filter($liste, fn($j) => $j['num'] !== '');
+    $noms = array_map(fn($j) => $j['nom'] . ($j['cap'] ? ' (C)' : ''), $liste);
+    $g = acp_grille($noms, $w, $h, 42, '800', ($avecNum ? 1.55 : .4) + ($coches ? .9 : 0), 34, 1.7);
+    $px = $g['px']; $lh = $g['lh'];
+    foreach ($liste as $i => $j) {
+        $c = intdiv($i, $g['rows']); $r = $i % $g['rows'];
+        $cx = $x + $c * ($g['cw'] + 34); $cy = $y + $r * $lh + $lh / 2;
+        acp_boite($T, $cx, $y + ($r + 1) * $lh - 1, $g['cw'], 1.5, 0, '#8FA6D6', .55);          // ligne réglée
+        $tx = $cx;
+        if ($avecNum) {
+            $bw = $px * 1.2;
+            acp_lisere($T, $cx, $cy - $bw / 2, $bw, $bw, 3, 2, '#0F2257', .8);
+            if ($j['num'] !== '') acp_tc($T, $j['num'], $cx + $bw / 2, $cy, acp_fit($j['num'], $px * .72, '900', $bw - 6, .6), '900', '#0F2257', 'center');
+            $tx += $bw + $px * .35;
+        }
+        $fin = $cx + $g['cw'] - ($coches ? $px * .9 : 0);
+        $capW = $j['cap'] ? $px * 1.25 : 0;
+        [$nom, $s] = acp_forme($j, $px, '800', $fin - $tx - $capW - 6);
+        $wn = acp_tc($T, $nom, $tx, $cy, $s, '800', '#14204A');
+        if ($j['cap']) {                                                  // « C » entouré au feutre rouge
+            $kx = $tx + $wn + $px * .7;
+            acp_tc($T, 'C', $kx, $cy, $px * .76, 'script', '#C8312B', 'center');
+            acp_anneau($T, $kx + 1, $cy - 1, $px * 1.0, 2.2, '#C8312B', .9);
+        }
+        if ($coches) acp_coche($T, $fin + $px * .45, $cy, $px * .62);
+    }
+    return $g['rows'] * $lh;
+}
+/* coche au feutre bleu */
+function acp_coche(array $T, float $cx, float $cy, float $t): void {
+    $pts = [[-.5, .02], [-.12, .42], [.55, -.5]];
+    $ep = $t * .2;
+    acp_trait($T, $cx + $pts[0][0] * $t, $cy + $pts[0][1] * $t, $cx + $pts[1][0] * $t, $cy + $pts[1][1] * $t, $ep, ACP_TAB_ENCRE, .9);
+    acp_trait($T, $cx + $pts[1][0] * $t, $cy + $pts[1][1] * $t, $cx + $pts[2][0] * $t, $cy + $pts[2][1] * $t, $ep * .85, ACP_TAB_ENCRE, .9);
+    acp_rond($T, $cx + $pts[1][0] * $t, $cy + $pts[1][1] * $t, $ep, ACP_TAB_ENCRE, .9);
+}
+/* la feuille de match punaisée : en-tête, informations, liste cochée, mot du coach écrit à la main */
+function acp_tableau_convocation(array $D, array $opts) {
+    $T = acp_toile(acp_tab_fond());
+    $x = 84; $w = ACP_W - 168; $y = 236; $h = ACP_SURE[1] + 4 - $y;
+    acp_tab_feuille($T, $x, $y, $w, $h);
+    $ix = $x + 44; $iw = $w - 88; $navy = '#0F2257';
+    // en-tête : blason, « CONVOCATION », équipe
+    acp_blason($T, '', true, $ix + 52, $y + 112, 100);
+    $tx = $ix + 124;
+    $t1 = aff_maj($D['titre']);
+    acp_t($T, $t1, $tx, $y + 112, acp_fit($t1, 70, '900', $iw - 124, .45), '900', $navy, 'left', 1);
+    $eq = aff_maj($D['equipe']);
+    acp_t($T, $eq, $tx, $y + 154, acp_fit($eq, 32, '800', $iw - 124, .6), '800', '#2F5FD0', 'left', 32 * .12);
+    $ry = $y + 188;
+    acp_boite($T, $ix, $ry, $iw, 4, 0, $navy); acp_boite($T, $ix, $ry + 8, $iw, 1.5, 0, $navy);
+    // fiche du match : libellé à gauche, valeur à droite, pointillés
+    $lignes = [['MATCH', ($D['dom'] ? 'PIERRELATTE – ' . $D['adv'] : $D['adv'] . ' – PIERRELATTE')]];
+    $q = aff_maj(acp_quand($D, false)); $hh = $D['heure'] !== '' ? 'COUP D\'ENVOI ' . aff_maj($D['heure']) : '';
+    if ($q !== '' || $hh !== '') $lignes[] = ['DATE', trim($q . ($q !== '' && $hh !== '' ? ' · ' : '') . $hh)];
+    $lignes[] = ['LIEU', ($D['stade'] !== '' ? aff_maj($D['stade']) . ' · ' : '') . ($D['dom'] ? 'À DOMICILE' : "À L'EXTÉRIEUR")];
+    if ($D['rdv'] !== '' || $D['rdvLieu'] !== '') $lignes[] = ['RENDEZ-VOUS', aff_maj(trim($D['rdv'] . ($D['rdv'] !== '' && $D['rdvLieu'] !== '' ? ' · ' : '') . $D['rdvLieu']))];
+    $ly = $ry + 26; $lab = 178;
+    foreach ($lignes as [$l, $v]) {
+        $cy = $ly + 26;
+        acp_tc($T, $l, $ix, $cy, 18, 's800', '#6A7591', 'left', 18 * .14);
+        if ($l === 'MATCH') {
+            [$adv, $s] = acp_adv($D['adv'], 30, '800', $iw - $lab - acp_l('PIERRELATTE – ', 30 * .8, '800'), .8);
+            $v = $D['dom'] ? "PIERRELATTE – $adv" : "$adv – PIERRELATTE";
+        }
+        $s = acp_fit($v, 30, '800', $iw - $lab, .62);
+        acp_tc($T, acp_coupe($v, $s, '800', $iw - $lab), $ix + $lab, $cy, $s, '800', '#14204A');
+        for ($k = $ix + $lab; $k < $ix + $iw; $k += 9) acp_boite($T, $k, $ly + 50, 4, 1.5, 0, '#6A7591', .5);
+        $ly += 54;
+    }
+    // la liste
+    $n = count($D['conv']);
+    $ty = $ly + 34;
+    acp_t($T, $n > 1 ? "LES $n CONVOQUÉS" : ($n ? 'LE CONVOQUÉ' : 'CONVOQUÉS'), $ix, $ty + 14, 30, '900', $navy, 'left', 30 * .06);
+    acp_boite($T, $ix, $ty + 26, $iw, 3, 0, $navy);
+    $hm = 0; $mot = [];
+    if ($D['message'] !== '') { $mot = acp_lignes($D['message'], 34, 'script', $iw, 2); $hm = 44 + count($mot) * 46 + 10; }
+    $lt = $ty + 40; $lhh = $y + $h - 30 - $hm - $lt;
+    $hl = $n ? acp_tab_lignes($T, $D['conv'], $ix, $lt, $iw, $lhh) : 0;
+    if (!$n) { acp_feutre($T, 'Liste à venir', ACP_W / 2, $lt + 80, 48, ACP_TAB_ENCRE, 'center'); $hl = 120; }
+    if ($hm) {
+        $my = min($y + $h - 30 - $hm + 18, $lt + $hl + 34);                // le mot suit la liste, comme écrit sur la feuille
+        acp_feutre($T, 'Le mot du coach :', $ix, $my + 26, 30, '#C8312B');
+        foreach ($mot as $i => $l) acp_feutre($T, $l, $ix, $my + 26 + 46 + $i * 46, 34, ACP_TAB_ENCRE);
+    }
+    return acp_fin($T);
+}
+
+/* ================= style « bleu club » ================= */
+/* fond : dégradé bleu profond, grand blason en filigrane, bandeau du bas ; les rayures en biais sont sur le calque */
+function acp_club_fond() {
+    $W = ACP_W; $H = ACP_H;
+    $im = imagecreatetruecolor($W, $H); imagealphablending($im, true);
+    for ($y = 0; $y < $H; $y++) imageline($im, 0, $y, $W - 1, $y, afn_c($im, afn_mix([[0, '#0A1740'], [.32, '#16348A'], [.62, '#1C3F9E'], [1, '#0F2257']], $y / ($H - 1))));
+    for ($x = 0; $x < $W; $x++) {                                       // lumière venue de la droite
+        $o = .16 * max(0, ($x / $W - .35) / .65) ** 1.5;
+        if ($o > .003) imageline($im, $x, 0, $x, $H - 1, afn_c($im, [70, 120, 230], $o));
+    }
+    // blason en filigrane : silhouette blanche très légère, à cheval sur le bord droit
+    $b = aff_image(dirname(__DIR__) . '/img/blason.png');
+    if ($b) {
+        $d = 1180; $s = imagecreatetruecolor($d, $d); imagealphablending($s, false); imagesavealpha($s, true);
+        imagecopyresampled($s, $b, 0, 0, 0, 0, $d, $d, imagesx($b), imagesy($b)); imagedestroy($b);
+        $l = afn_calque($d, $d); imagealphablending($l, false);
+        for ($j = 0; $j < $d; $j += 1) for ($i = 0; $i < $d; $i++) {
+            $c = imagecolorat($s, $i, $j); $a = ($c >> 24) & 127;
+            if ($a >= 127) continue;
+            $lum = ((($c >> 16) & 255) + (($c >> 8) & 255) + ($c & 255)) / 765;
+            $op = (1 - $a / 127) * (.035 + .05 * $lum);
+            imagesetpixel($l, $i, $j, imagecolorallocatealpha($l, 255, 255, 255, 127 - (int) round(127 * $op)));
+        }
+        imagedestroy($s);
+        imagealphablending($im, true); imagecopy($im, $l, $W - $d * .62, 760, 0, 0, $d, $d); imagedestroy($l);
+    }
+    // bas de l'affiche (sous la zone sûre) : filet or, site du club
+    aff_rect($im, 0, 1712, $W, $H - 1712, aff_c($im, '#0A1740'));
+    aff_rect($im, 0, 1712, $W, 4, aff_c($im, ACP_OR));
+    afn_texte($im, 'ASF-PIERRELATTE.FR', $W / 2, 1800, 52, '900i', aff_c($im, '#FFFFFF'), 'center', 2);
+    afn_texte($im, "ATOM'SPORTS FOOTBALL PIERRELATTE · DEPUIS 1923", $W / 2, 1846, 19, 's800', aff_c($im, ACP_OR), 'center', 19 * .22);
+    return $im;
+}
+/* rayures en biais qui montent vers la droite, derrière le titre, et filet or : la signature graphique du style ;
+   elles s'effacent avant le contenu ($fin) */
+function acp_club_rayures(array $T, float $fin = 560): void {
+    $t = tan(deg2rad(58)); $pas = 12;
+    $bande = function (float $xb, float $larg, string $hex, float $op) use ($T, $t, $fin, $pas) {
+        // $xb : abscisse du bord gauche à la hauteur $fin ; tranches horizontales de plus en plus pâles vers le bas
+        for ($y = -10; $y < $fin; $y += $pas) {
+            $y2 = min($fin, $y + $pas); $k = max(0, min(1, ($fin - $y2) / 260));
+            $xa = $xb + ($fin - $y) / $t; $xc = $xb + ($fin - $y2) / $t;
+            acp_poly($T, [$xc, $y2, $xc + $larg, $y2, $xa + $larg, $y, $xa, $y], $hex, $op * (.15 + .85 * $k));
+        }
+    };
+    $bande(400, 150, '#FFFFFF', .05);
+    $bande(588, 46, '#FFFFFF', .08);
+    $bande(668, 12, ACP_OR, .9);
+    $bande(712, 240, '#FFFFFF', .04);
+}
+/* parallélogramme (étiquette penchée) ; renvoie sa largeur */
+function acp_biais(array $T, float $x, float $y, float $w, float $h, string $hex, float $op = 1, float $pente = .26): void {
+    $k = $h * $pente;
+    acp_poly($T, [$x + $k, $y, $x + $w + $k, $y, $x + $w - $k + $k, $y + $h, $x, $y + $h], $hex, $op);
+}
+/* sur-titre, très grand titre, étiquette or de l'équipe, pastille domicile / extérieur ; renvoie le bas */
+function acp_club_titres(array $T, array $D, string $titre): float {
+    $x = 56; $y = 250;
+    acp_boite($T, $x, $y + 10, 44, 4, 0, ACP_OR);
+    acp_t($T, "ATOM'SPORTS FOOTBALL PIERRELATTE", $x + 58, $y + 20, 20, 's800', ACP_OR, 'left', 20 * .22);
+    $t = aff_maj($titre); $s = acp_fit($t, 190, '900i', ACP_W - 2 * $x, .4);
+    $by = $y + 40 + .8 * $s;
+    acp_ombre_t($T, $t, $x - 4, $by, $s, '900i', 8, 26, .45);
+    acp_t($T, $t, $x - 4, $by, $s, '900i', '#FFFFFF');
+    $y = $by + 26;
+    // étiquette or (équipe) et pastille (lieu)
+    $eq = aff_maj($D['equipe']); $pe = acp_fit($eq, 44, '900i', 520, .6); $he = 64;
+    $we = acp_l($eq, $pe, '900i') + 52;
+    acp_ombre($T, $x, $y, $we + $he * .26, $he, 4, 14, .45, 8);
+    acp_biais($T, $x, $y, $we, $he, ACP_OR);
+    acp_tc($T, $eq, $x + $he * .13 + $we / 2, $y + $he / 2, $pe, '900i', '#0F2257', 'center');
+    $lib = $D['dom'] ? 'À DOMICILE' : "À L'EXTÉRIEUR"; $pl = 24;
+    $wl = acp_l($lib, $pl, '900', $pl * .1) + 40 + 34; $lx = $x + $we + 28;
+    acp_biais($T, $lx, $y, $wl, $he, '#FFFFFF', .12);
+    acp_icone($T, $D['dom'] ? 'maison' : 'avion', $lx + 24, $y + $he / 2 - 13, 26, '#FFFFFF');
+    acp_tc($T, $lib, $lx + 60, $y + $he / 2, $pl, '900', '#FFFFFF', 'left', $pl * .1);
+    return $y + $he;
+}
+/* carte blanche à coins arrondis, ombre bleu nuit */
+function acp_club_carte(array $T, float $x, float $y, float $w, float $h, float $r = 18): void {
+    acp_ombre($T, $x, $y, $w, $h, $r, 26, .5, 14, '#040B26');
+    acp_boite($T, $x, $y, $w, $h, $r, ['v', [[0, '#FFFFFF'], [1, '#F1F4FB']]]);
+}
+/* les deux équipes sur une ligne : blason, nom, « VS » or au milieu (l'équipe qui reçoit à gauche) */
+function acp_club_duel(array $T, array $D, float $x, float $cy, float $w, float $d, float $px, string $hexNom, string $centre = 'VS'): void {
+    $nous = ['PIERRELATTE', '', true]; $eux = [$D['adv'], $D['adv_brut'], false];
+    $mil = 110; $cote = ($w - $mil) / 2;
+    foreach ([[$D['dom'] ? $nous : $eux, 'g'], [$D['dom'] ? $eux : $nous, 'd']] as [[$nom, $brut, $club], $s]) {
+        $bx = $s === 'g' ? $x + $d / 2 : $x + $w - $d / 2;
+        acp_blason($T, $brut, $club, $bx, $cy, $d);
+        $max = $cote - $d - 16;
+        if (!$club) [$nom] = acp_adv($nom, $px * .8, '800', $max * 1.7, 1);
+        acp_nom_bloc($T, $nom, $s === 'g' ? $x + $d + 14 : $x + $w - $d - 14, $cy, $max, $px, '800', $hexNom, $s === 'g' ? 'left' : 'right');
+    }
+    acp_tc($T, $centre, $x + $w / 2, $cy, 46, '900i', ACP_OR, 'center');
+}
+/* tuiles d'information (libellé or, valeur blanche) côte à côte */
+function acp_club_tuiles(array $T, array $tuiles, float $x, float $y, float $w, float $h): void {
+    $n = count($tuiles); if (!$n) return;
+    $g = 14; $tw = ($w - ($n - 1) * $g) / $n;
+    foreach ($tuiles as $i => [$lab, $val]) {
+        $tx = $x + $i * ($tw + $g);
+        acp_boite($T, $tx, $y, $tw, $h, 14, '#FFFFFF', .08);
+        acp_lisere($T, $tx, $y, $tw, $h, 14, 1.5, '#FFFFFF', .22);
+        acp_boite($T, $tx + 22, $y + 22, 30, 3, 0, ACP_OR);
+        acp_t($T, $lab, $tx + 22, $y + 50, 17, 's800', ACP_OR, 'left', 17 * .18);
+        $s = acp_fit($val, 46, '900i', $tw - 44, .55);
+        acp_t($T, $val, $tx + 22, $y + $h - 22, $s, '900i', '#FFFFFF');
+    }
+}
+function acp_club_convocation(array $D, array $opts) {
+    $T = acp_toile(acp_club_fond());
+    acp_club_rayures($T);
+    $yb = acp_club_titres($T, $D, $D['titre']);
+    $x = 44; $w = ACP_W - 88;
+    // tuiles : date, coup d'envoi, rendez-vous
+    $tuiles = [];
+    if ($D['quand'] !== '') $tuiles[] = ['DATE', aff_maj(preg_replace('/^(\S+) (\S+) (\S+)$/u', '$1 $2 $3', $D['quand']))];
+    if ($D['heure'] !== '') $tuiles[] = ["COUP D'ENVOI", aff_maj($D['heure'])];
+    if ($D['rdv'] !== '') $tuiles[] = ['RENDEZ-VOUS', aff_maj($D['rdv'])];
+    if (count($tuiles) === 3) { $tuiles[0][1] = aff_maj(preg_replace('/^(\S+) /u', '', $D['quand'])); $tuiles[0][0] = aff_maj($D['jour']); }
+    $y = $yb + 30;
+    if ($tuiles) { acp_club_tuiles($T, $tuiles, $x, $y, $w, 112); $y += 112 + 16; }
+    // lieu et lieu du rendez-vous
+    $lieux = [];
+    if ($D['stade'] !== '') $lieux[] = ['lieu', aff_maj($D['stade'])];
+    if ($D['rdvLieu'] !== '') $lieux[] = ['horloge', 'RDV : ' . aff_maj($D['rdvLieu'])];
+    foreach ($lieux as [$ic, $t]) {
+        acp_icone($T, $ic, $x + 4, $y + 4, 24, ACP_OR, '#16348A');
+        $s = acp_fit($t, 22, 's700', $w - 44, .7, .06);
+        acp_tc($T, acp_coupe($t, $s, 's700', $w - 44), $x + 40, $y + 16, $s, 's700', '#FFFFFF', 'left', $s * .06);
+        $y += 40;
+    }
+    $y += 12;
+    // carte blanche : le match, puis la liste
+    $hm = 0; $mot = [];
+    if ($D['message'] !== '') { $mot = acp_lignes($D['message'], 28, 's700i', $w - 96, 2); $hm = 22 + count($mot) * 36 + 6; }
+    $hC = ACP_SURE[1] - 4 - $hm - $y;
+    acp_club_carte($T, $x, $y, $w, $hC);
+    acp_club_duel($T, $D, $x + 30, $y + 66, $w - 60, 84, 36, '#0F2257');
+    $n = count($D['conv']);
+    $hy = $y + 128;
+    acp_boite($T, $x, $hy, $w, 52, 0, '#0F2257');
+    acp_biais($T, $x + $w - 214 - 52 * .26, $hy, 214, 52, ACP_OR);
+    $lib = $n > 1 ? "LES $n CONVOQUÉS" : ($n ? 'LE CONVOQUÉ' : 'CONVOQUÉS');
+    acp_tc($T, $lib, $x + 30, $hy + 26, 26, '900', '#FFFFFF', 'left', 26 * .12);
+    acp_tc($T, aff_maj($D['equipe']), $x + $w - 24, $hy + 26, acp_fit(aff_maj($D['equipe']), 22, '900i', 170, .6), '900i', '#0F2257', 'right');
+    $ly = $hy + 52 + 14; $lh = $y + $hC - 18 - $ly;
+    if ($n) acp_club_joueurs($T, $D['conv'], $x + 30, $ly, $w - 60, $lh);
+    else acp_tc($T, 'LISTE À VENIR', ACP_W / 2, $ly + $lh / 2, 40, '900i', '#0F2257', 'center');
+    // le mot du coach, sur le bleu
+    if ($hm) {
+        $my = $y + $hC + 22;
+        acp_t($T, '«', $x, $my + 58, 84, '900i', ACP_OR);
+        foreach ($mot as $i => $l) acp_t($T, $l, $x + 56, $my + 28 + $i * 36, 28, 's700i', '#FFFFFF');
+    }
+    // la carte blanche cache le bas des rayures : on remet le haut au-dessus de rien d'autre
+    return acp_fin($T);
+}
+/* liste des joueurs sur la carte blanche : numéro bleu en italique, nom bleu nuit, brassard or */
+function acp_club_joueurs(array $T, array $liste, float $x, float $y, float $w, float $h): void {
+    $avecNum = (bool) array_filter($liste, fn($j) => $j['num'] !== '');
+    $noms = array_map(fn($j) => $j['nom'] . ($j['cap'] ? ' C' : ''), $liste);
+    $g = acp_grille($noms, $w, $h, 42, '800', $avecNum ? 1.45 : .5, 30, 1.9);
+    $px = $g['px']; $lh = $g['lh']; $top = $y + min(($h - $g['rows'] * $lh) / 2, $lh * .8);
+    foreach ($liste as $i => $j) {
+        $c = intdiv($i, $g['rows']); $r = $i % $g['rows'];
+        $cx = $x + $c * ($g['cw'] + 30); $cy = $top + $r * $lh + $lh / 2;
+        if ($r % 2 === 0) acp_boite($T, $cx - 12, $cy - $lh / 2 + 2, $g['cw'] + 24, $lh - 4, 8, '#E3E9F6', .7);
+        $tx = $cx;
+        if ($avecNum) {
+            if ($j['num'] !== '') acp_tc($T, $j['num'], $cx + $px * .95, $cy, acp_fit($j['num'], $px * 1.02, '900i', $px * 1.15, .6), '900i', '#2F5FD0', 'right');
+            $tx += $px * 1.3;
+        } else { acp_biais($T, $cx, $cy - $px * .3, $px * .36, $px * .6, ACP_OR); $tx += $px * .7; }
+        $capW = $j['cap'] ? $px * 1.0 : 0;
+        [$nom, $s] = acp_forme($j, $px, '800', $cx + $g['cw'] - $tx - $capW);
+        $wn = acp_tc($T, $nom, $tx, $cy, $s, '800', '#0F2257');
+        if ($j['cap']) acp_brassard($T, $tx + $wn + $px * .55, $cy, $px * .76, ACP_OR, '#0F2257');
+    }
+}
+function acp_club_composition(array $D, array $opts) {
+    $T = acp_toile(acp_club_fond());
+    acp_club_rayures($T);
+    $yb = acp_club_titres($T, $D, $D['titre']);
+    $x = 44; $w = ACP_W - 88;
+    // ligne du match : PIERRELATTE vs ADVERSAIRE, puis la date et l'heure
+    $y = $yb + 26;
+    acp_club_duel($T, $D, $x, $y + 34, $w, 68, 32, '#FFFFFF');
+    $y += 80;
+    $q = aff_maj(acp_quand($D, false)) . ($D['heure'] !== '' ? ($D['quand'] !== '' ? ' · ' : '') . "COUP D'ENVOI " . aff_maj($D['heure']) : '');
+    if ($q !== '') { acp_tc($T, $q, ACP_W / 2, $y + 14, acp_fit($q, 22, 's800', $w, .7, .14), 's800', '#C9D6F5', 'center', 22 * .14); $y += 34; }
+    // remplaçants : en bas, sur le bleu
+    $remp = $D['remp']; $hR = 0; $lr = [];
+    if ($remp) {
+        $items = array_map(fn($j) => trim(($j['num'] !== '' ? $j['num'] . ' ' : '') . $j['court']), $remp);
+        foreach ([30, 27, 24, 21] as $pr) { $lr = acp_club_flux($remp, $pr, $w); if (count($lr) <= ($pr > 27 ? 1 : ($pr > 24 ? 2 : 3))) break; }
+        $hR = 44 + count($lr) * $pr * 1.5;
+    }
+    $yP = $y + 16; $hP = ACP_SURE[1] - 4 - $yP - ($hR ? $hR + 20 : 0);
+    acp_club_carte($T, $x, $yP, $w, $hP, 22);
+    if ($D['terrain']) {
+        $ph = $hP - 40; $pw = min($w - 60, $ph * .8); $px0 = ACP_W / 2 - $pw / 2; $py0 = $yP + 20;
+        $P = fn($u, $v) => [$px0 + $u * $pw, $py0 + $v * $ph, 1];
+        for ($i = 0, $nb = 14; $i < $nb; $i++) if ($i % 2) acp_boite($T, $x, $py0 - $ph * .035 + ($ph * 1.07) * $i / $nb, $w, $ph * 1.07 / $nb, 0, '#E8EDF8', .8);
+        acp_pelouse($T, $P, [], '#1C3F9E', .32, 2.6);
+        acp_blason_filigrane($T, ACP_W / 2, $py0 + $ph / 2, $ph * .17);
+        $px = 24; $nb = count($D['tit']); $d0 = $nb >= 10 ? 72 : ($nb >= 7 ? 82 : 92);
+        $J = acp_jetons($D, $P, $d0, $px * 1.1, 6, fn($t) => acp_l($t['court'], $px, '800') + 8, $yP + $hP - 14 - $px * 1.1 - 6 - 30);
+        foreach ($J as [$jx, $jy, $d, $maxW, $t, $poste]) {
+            if (!$t) {
+                acp_anneau($T, $jx, $jy, $d * .84, 2.5, '#1C3F9E', .45);
+                acp_tc($T, $poste, $jx, $jy, $d * .3, '900', '#1C3F9E', 'center', 0, .55);
+                continue;
+            }
+            acp_ombre($T, $jx - $d / 2, $jy - $d / 2, $d, $d, $d / 2, 8, .35, 5, '#0A1740');
+            if ($t['cap']) acp_rond($T, $jx, $jy, $d + 10, ACP_OR);
+            acp_rond_degrade($T, $jx, $jy, $d, [[0, '#2F5FD0'], [.6, '#1C3F9E'], [1, '#0F2257']]);
+            $num = $t['num'] !== '' ? $t['num'] : aff_initiales($t['nom']);
+            acp_tc($T, $num, $jx - 1, $jy, acp_fit($num, $d * .5, '900i', $d * .72, .6), '900i', '#FFFFFF', 'center');
+            if ($t['cap']) acp_brassard($T, $jx + $d * .4, $jy - $d * .38, $d * .36, ACP_OR, '#0F2257');
+            [$n, $s] = acp_forme(['formes' => array_unique([$t['court'], $t['famille'] ?: $t['court']])] + $t, $px, '800', $maxW - 8, .72);
+            $ly = $jy + $d / 2 + 6 + $px * .55;
+            $lx = max($x + 16 + acp_l($n, $s, '800') / 2, min($x + $w - 16 - acp_l($n, $s, '800') / 2, $jx));
+            acp_tc($T, $n, $lx, $ly, $s, '800', '#0F2257', 'center');
+        }
+    } else {
+        $tit = array_values(array_filter($D['tit']));
+        acp_t($T, 'TITULAIRES', $x + 30, $yP + 50, 26, '900', '#0F2257', 'left', 26 * .12);
+        acp_boite($T, $x + 30, $yP + 62, 60, 4, 0, ACP_OR);
+        if ($tit) acp_club_joueurs($T, $tit, $x + 30, $yP + 80, $w - 60, $hP - 100);
+        else acp_tc($T, 'COMPOSITION À VENIR', ACP_W / 2, $yP + $hP / 2, 40, '900i', '#0F2257', 'center');
+    }
+    if ($hR) {
+        $yR = $yP + $hP + 22;
+        acp_boite($T, $x, $yR + 8, 44, 4, 0, ACP_OR);
+        acp_t($T, count($remp) > 1 ? 'REMPLAÇANTS' : 'REMPLAÇANT', $x + 58, $yR + 18, 20, 's800', ACP_OR, 'left', 20 * .22);
+        foreach ($lr as $k => $ligne) {
+            $cx = $x; $cy = $yR + 44 + $k * $pr * 1.5 + $pr * .75;
+            foreach ($ligne as $i => $j) {
+                if ($i) { acp_biais($T, $cx + 6, $cy - $pr * .3, $pr * .22, $pr * .6, ACP_OR); $cx += $pr * .22 + 22; }
+                if ($j['num'] !== '') $cx += acp_tc($T, $j['num'], $cx, $cy, $pr, '900i', ACP_OR) + $pr * .3;
+                $cx += acp_tc($T, $j['court'], $cx, $cy, $pr, '800', '#FFFFFF') + 10;
+            }
+        }
+    }
+    return acp_fin($T);
+}
+/* remplaçants en texte courant : lignes qui tiennent dans $w */
+function acp_club_flux(array $liste, float $px, float $w): array {
+    $l = [[]]; $lw = 0;
+    foreach ($liste as $j) {
+        $jw = ($j['num'] !== '' ? acp_l($j['num'], $px, '900i') + $px * .3 : 0) + acp_l($j['court'], $px, '800') + 10;
+        $sep = $l[count($l) - 1] ? $px * .22 + 28 : 0;
+        if ($l[count($l) - 1] && $lw + $sep + $jw > $w) { $l[] = []; $lw = 0; $sep = 0; }
+        $l[count($l) - 1][] = $j; $lw += $sep + $jw;
+    }
+    return $l;
+}
+/* blason du club en filigrane au rond central (terrain clair) */
+function acp_blason_filigrane(array $T, float $cx, float $cy, float $d): void {
+    $b = aff_image(dirname(__DIR__) . '/img/blason.png'); if (!$b) return;
+    $K = ACP_K; $n = (int) round($d * $K);
+    $s = afn_calque($n, $n); imagealphablending($s, false);
+    imagecopyresampled($s, $b, 0, 0, 0, 0, $n, $n, imagesx($b), imagesy($b)); imagedestroy($b);
+    for ($j = 0; $j < $n; $j++) for ($i = 0; $i < $n; $i++) {
+        $c = imagecolorat($s, $i, $j); $a = ($c >> 24) & 127;
+        if ($a < 127) imagesetpixel($s, $i, $j, ($c & 0xFFFFFF) | ((127 - (int) round((127 - $a) * .14)) << 24));
+    }
+    imagealphablending($T['im'], true);
+    imagecopy($T['im'], $s, (int) round($cx * $K - $n / 2), (int) round($cy * $K - $n / 2), 0, 0, $n, $n);
+    imagedestroy($s);
+}
+
+/* ---------- stories des compos : publication (convocation à la validation, composition avant le match) ----------
+   Les affiches elles-mêmes sont dessinées par compo-affiches.php (acp_convocation, acp_composition, acp_exemple).
+   Ici : les réglages du bureau, la publication en STORY SEULEMENT (Facebook + Instagram, jamais dans le fil),
+   le passage du cron et les adresses utilisées par l'espace club.
+   - Réglages : document « site/affiches-compo »
+       { actif, convocation, composition, minutesAvant, style, noms, exclues: [équipes sans story] }
+   - Convocation : publiée quand le coach valide sa compo (l'application appelle POST ?compo_story=<id>) ;
+     le cron la rattrape en journée (8 h – 21 h 30) si l'appel n'a pas pu partir. Une seule fois par compo.
+   - Composition : publiée minutesAvant (30 min) avant le coup d'envoi par le cron des 5 minutes
+     (php …/api/affiches.php compos, ou ?cron_compos=1&cle=…) ; avec le seul cron horaire, dans l'heure qui précède.
+   - Adresses (coach ou bureau) :
+       GET  ?apercu=convocation|composition&id=<compo>[&style=][&noms=][&l=largeur]   aperçu JPEG
+       GET  ?apercu=convocation|composition&exemple=1&style=…                        aperçu sur une compo d'exemple
+       POST ?compo_story=<compo>[&quoi=composition][&forcer=1]                        publier maintenant (JSON)
+       GET  ?compo_etat=<compo>                                                       où en sont les deux stories (JSON)
+       GET  ?compo_info=1                                                             réglages, cron, ligne à donner à l'hébergeur (JSON) */
+
+const ACP_REGLAGES_DEFAUT = ['actif' => true, 'convocation' => true, 'composition' => true, 'minutesAvant' => 30, 'style' => 'nuit', 'noms' => 'auto', 'exclues' => []];
+const ACP_JOUR_DEBUT = 8 * 60, ACP_JOUR_FIN = 21 * 60 + 30;        // convocations de rattrapage : de 8 h à 21 h 30 seulement
+const ACP_APRES = 600;                                              // la composition peut encore partir jusqu'à 10 min après le coup d'envoi
+const ACP_CRON_FREQUENT = 1200;                                     // cron des 5 minutes vu il y a moins de 20 min : horaire précis
+
+function acp_styles(): array { return defined('ACP_STYLES') ? ACP_STYLES : ['nuit' => 'Stade de nuit', 'tableau' => 'Tableau tactique', 'club' => 'Bleu club']; }
+/* l'heure de référence : time(), ou l'heure imposée par les tests (voyage dans le temps) */
+function acp_maintenant(): int { return (int) ($GLOBALS['acp_maintenant'] ?? time()); }
+
+function acp_reglages(): array {
+    $d = aff_doc('site/affiches-compo');
+    $r = ACP_REGLAGES_DEFAUT;
+    foreach (['actif', 'convocation', 'composition'] as $k) if (array_key_exists($k, $d)) $r[$k] = (bool) $d[$k];
+    if (isset($d['minutesAvant']) && is_numeric($d['minutesAvant'])) $r['minutesAvant'] = max(5, min(180, (int) $d['minutesAvant']));
+    if (isset($d['style']) && isset(acp_styles()[$d['style']])) $r['style'] = (string) $d['style'];
+    if (isset($d['noms']) && in_array($d['noms'], ['auto', 'complet', 'initiale'], true)) $r['noms'] = $d['noms'];
+    if (isset($d['exclues']) && is_array($d['exclues'])) $r['exclues'] = array_values(array_filter(array_map(fn($e) => trim((string) $e), $d['exclues']), 'strlen'));
+    return $r;
+}
+
+/* ---------- les compos ---------- */
+function acp_id($v): string { $v = trim((string) $v); return preg_match('/^[A-Za-z0-9_-]{1,64}$/', $v) ? $v : ''; }
+function acp_compo(string $id): ?array {
+    if (acp_id($id) === '') return null;
+    $c = aff_doc("compos/$id");
+    return $c ? ['id' => $id] + $c : null;
+}
+function acp_compos_publiees(): array {
+    $l = [];
+    foreach (base()->query("SELECT path, data FROM documents WHERE path LIKE 'compos/%'") as $r) {
+        $c = json_decode((string) $r['data'], true);
+        if (!is_array($c) || empty($c['publie'])) continue;
+        $id = substr((string) $r['path'], 7);
+        if (acp_id($id) === '') continue;
+        $l[] = ['id' => $id] + $c;
+    }
+    usort($l, fn($a, $b) => strcmp(($a['date'] ?? '') . ($a['heure'] ?? ''), ($b['date'] ?? '') . ($b['heure'] ?? '')));
+    return $l;
+}
+/* coup d'envoi (horodatage), null sans date ou sans heure valables */
+function acp_coup_envoi(array $c): ?int {
+    $d = (string) ($c['date'] ?? ''); $h = (string) ($c['heure'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) || !preg_match('/^([01]?\d|2[0-3])[:h]([0-5]\d)$/', $h, $m)) return null;
+    $t = strtotime(sprintf('%s %02d:%02d:00', $d, $m[1], $m[2]));
+    return $t === false ? null : $t;
+}
+function acp_exclue(string $equipe, array $reg): bool {
+    $n = fn($s) => mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $s)), 'UTF-8');
+    foreach ($reg['exclues'] as $e) if ($n($e) === $n($equipe)) return true;
+    return false;
+}
+function acp_de_jour(int $t): bool { $m = (int) date('G', $t) * 60 + (int) date('i', $t); return $m >= ACP_JOUR_DEBUT && $m <= ACP_JOUR_FIN; }
+function acp_cle(string $quoi, string $id): string { return ($quoi === 'composition' ? 'compo-' : 'convoc-') . $id; }
+function acp_fait(string $quoi, string $id): bool { return reglage('pub_' . acp_cle($quoi, $id)) === 'fait'; }
+
+/* pourquoi cette story ne peut pas partir (null : elle peut partir) ; la fenêtre horaire de la composition est vue à part */
+function acp_motif(string $quoi, array $c, array $reg, int $t): ?string {
+    if (!$reg['actif']) return 'stories des compos désactivées par le bureau';
+    if (!$reg[$quoi]) return $quoi === 'convocation' ? 'story des convoqués désactivée par le bureau' : 'story de la composition désactivée par le bureau';
+    if (empty($c['publie'])) return 'compo pas encore publiée';
+    if (acp_exclue((string) ($c['equipe'] ?? ''), $reg)) return 'pas de story pour cette équipe (réglage du bureau)';
+    $d = (string) ($c['date'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) return 'date du match inconnue';
+    if ($d < date('Y-m-d', $t)) return 'match passé';
+    $k = acp_coup_envoi($c);
+    $titulaires = array_filter(is_array($c['titulaires'] ?? null) ? $c['titulaires'] : [], fn($x) => is_array($x) && trim((string) ($x['nom'] ?? '')) !== '');
+    if ($quoi === 'composition') {
+        if ($k === null) return "heure du coup d'envoi inconnue";
+        if (!$titulaires) return 'aucun titulaire placé sur le terrain';
+        if ($t > $k + ACP_APRES) return 'match commencé';
+    } else {
+        $joueurs = array_merge(is_array($c['convoquesListe'] ?? null) ? $c['convoquesListe'] : [], $titulaires, is_array($c['remplacants'] ?? null) ? $c['remplacants'] : []);
+        if (!$joueurs) return 'aucun joueur convoqué';
+        if ($k !== null && $t > $k) return 'match commencé';
+    }
+    return null;
+}
+
+/* fenêtre de la story de composition : [début, fin], ou null sans heure */
+function acp_fenetre(array $c, array $reg, bool $frequent): ?array {
+    $k = acp_coup_envoi($c);
+    if ($k === null) return null;
+    $debut = $k - $reg['minutesAvant'] * 60 - ($frequent ? 0 : 3600);   // cron horaire seul : dans l'heure qui précède
+    return [$debut, $k + ACP_APRES];
+}
+function acp_cron_frequent(int $t): bool { return (int) reglage('cron_compos_vu', '0') > $t - ACP_CRON_FREQUENT; }
+/* première mise en route : les compos publiées avant ne reçoivent pas de convocation de rattrapage (pas de rafale le premier jour) */
+function acp_depuis(int $t): int {
+    $v = (int) reglage('acp_depuis', '0');
+    if ($v <= 0) { $v = $t; reglage_ecrire('acp_depuis', (string) $v); }
+    return $v;
+}
+function acp_rattrapage_ok(array $c, int $depuis): bool {
+    if (reglage('acp_attente_' . acp_cle('convocation', $c['id'])) === '1') return true;     // reportée (nuit, publication en cours)
+    $maj = is_numeric($c['maj'] ?? null) ? (int) floor($c['maj'] / 1000) : 0;
+    return $maj >= $depuis - 86400;
+}
+
+/* verrou : le cron des 5 minutes, le cron horaire et le bouton du coach ne publient jamais en même temps */
+function acp_verrou(): bool {
+    $v = &$GLOBALS['acp_verrou'];
+    if (!empty($v['n'])) { $v['n']++; return true; }
+    $dossier = dirname(__DIR__) . '/affiches';
+    if (!is_dir($dossier)) @mkdir($dossier, 0755, true);
+    $f = @fopen("$dossier/.stories-compos.verrou", 'c');
+    if (!$f) return true;                                     // pas de fichier possible : on publie quand même (l'anti-doublon reste)
+    if (!flock($f, LOCK_EX | LOCK_NB)) { fclose($f); return false; }
+    $v = ['n' => 1, 'f' => $f];
+    return true;
+}
+function acp_liberer(): void {
+    $v = &$GLOBALS['acp_verrou'];
+    if (empty($v['n']) || --$v['n'] > 0) return;
+    if (!empty($v['f'])) { flock($v['f'], LOCK_UN); fclose($v['f']); }
+    $v = [];
+}
+
+/* ---------- dessin et publication ---------- */
+function acp_image(string $quoi, array $c, string $style, string $noms) {
+    if (!function_exists('acp_convocation')) throw new RuntimeException('affiches des compos absentes (compo-affiches.php)');
+    aff_format('story');
+    return $quoi === 'composition' ? acp_composition($c, $style, ['noms' => $noms]) : acp_convocation($c, $style, ['noms' => $noms]);
+}
+/* une story sur un réseau ; les tests branchent $GLOBALS['acp_test_publier'] pour capturer l'envoi au lieu d'appeler Meta */
+function acp_story(string $reseau, string $fichier): void {
+    if (isset($GLOBALS['acp_test_publier']) && is_callable($GLOBALS['acp_test_publier'])) { ($GLOBALS['acp_test_publier'])($reseau, 'story', $fichier); return; }
+    if ($reseau === 'Facebook') fb_story($fichier); else ig_story($fichier);
+}
+function acp_suivi(string $cle): array { return json_decode((string) reglage("acp_suivi_$cle", ''), true) ?: []; }
+function acp_titre(string $quoi, array $c): string { return ($quoi === 'composition' ? 'Composition · ' : 'Convocation · ') . trim((string) ($c['equipe'] ?? '')); }
+
+/* publie la story (Facebook + Instagram) une seule fois grâce à aff_traiter ; rend les états pour l'espace club */
+function acp_publier(string $quoi, array $c, array $reg, array &$journal): array {
+    $cle = acp_cle($quoi, $c['id']);
+    if (reglage("pub_$cle") === 'fait') return acp_suivi($cle)['etats'] ?? ['story déjà publiée'];
+    if (!aff_polices_ok()) return ['polices introuvables dans api/polices : story non dessinée'];
+    $nom = 'story-' . (function_exists('cle_club') ? cle_club($cle) : preg_replace('/[^a-z0-9-]+/i', '-', $cle));
+    $avant = count($journal);
+    try {
+        aff_traiter($cle, acp_titre($quoi, $c), function () use ($quoi, $c, $reg, $nom) {
+            return ['story' => aff_enregistrer(acp_image($quoi, $c, $reg['style'], $reg['noms']), $nom)];
+        }, [
+            'Facebook' => function (array $f) { acp_story('Facebook', $f['story']); },
+            'Instagram' => function (array $f) { acp_story('Instagram', $f['story']); },
+        ], $journal);
+    } catch (Throwable $e) {                                  // affiche impossible à dessiner : 3 essais, puis on abandonne
+        $n = (int) reglage("acp_err_$cle", '0') + 1; reglage_ecrire("acp_err_$cle", (string) $n);
+        if ($n >= 3) reglage_ecrire("pub_$cle", 'fait');
+        $etats = ['affiche impossible à dessiner : ' . $e->getMessage() . ($n >= 3 ? ' (abandon)' : ' (nouvel essai au prochain passage)')];
+        reglage_ecrire("acp_suivi_$cle", json_encode(['quand' => date('c', acp_maintenant()), 'etats' => $etats, 'publiee' => false], JSON_UNESCAPED_UNICODE));
+        $journal[] = acp_titre($quoi, $c) . ' : ' . $etats[0];
+        return $etats;
+    }
+    // les états écrits par aff_traiter dans l'historique des affiches (« Facebook : publié · Instagram : pas relié »)
+    $etats = [];
+    foreach (aff_doc('site/affiches')['liste'] ?? [] as $x) if (($x['cle'] ?? '') === $cle) { $etats = array_values(array_filter(explode(' · ', (string) ($x['etat'] ?? '')))); break; }
+    if (!$etats) $etats = ['aucun réseau relié'];
+    $publiee = (bool) array_filter($etats, fn($e) => str_ends_with($e, ': publié'));
+    $ancien = acp_suivi($cle);
+    reglage_ecrire("acp_suivi_$cle", json_encode(['quand' => ($ancien['publiee'] ?? false) ? $ancien['quand'] : date('c', acp_maintenant()), 'etats' => $etats, 'publiee' => $publiee || !empty($ancien['publiee'])], JSON_UNESCAPED_UNICODE));
+    if (reglage("pub_$cle") === 'fait') reglage_ecrire('acp_attente_' . $cle, null);
+    if (count($journal) === $avant) $journal[] = acp_titre($quoi, $c) . ' : ' . implode(', ', $etats);
+    return $etats;
+}
+
+/* convocation : appelée quand le coach valide sa compo (et par le cron en rattrapage). $force : même la nuit. */
+function acp_publier_convocation(string $id, array &$journal, bool $force = false): array {
+    $c = acp_compo($id);
+    if (!$c) return ['compo introuvable'];
+    $cle = acp_cle('convocation', $c['id']);
+    if (acp_fait('convocation', $c['id'])) return acp_suivi($cle)['etats'] ?? ['story des convoqués déjà publiée'];
+    $reg = acp_reglages(); $t = acp_maintenant();
+    if (($m = acp_motif('convocation', $c, $reg, $t)) !== null) return ["pas de story des convoqués : $m"];
+    if (!$force && !acp_de_jour($t)) {
+        reglage_ecrire("acp_attente_$cle", '1');
+        acp_depuis($t);
+        return ['il est tard : la story des convoqués partira ' . ((int) date('G', $t) >= 12 ? 'demain' : 'ce matin') . ' à 8 h'];
+    }
+    if (!acp_verrou()) { reglage_ecrire("acp_attente_$cle", '1'); return ['une publication est déjà en cours : la story des convoqués partira dans quelques minutes']; }
+    try { acp_depuis($t); return acp_publier('convocation', $c, $reg, $journal); }
+    finally { acp_liberer(); }
+}
+/* composition : par le cron dans sa fenêtre ; $force (bouton « Publier maintenant ») : hors fenêtre */
+function acp_publier_composition(string $id, array &$journal, bool $force = false): array {
+    $c = acp_compo($id);
+    if (!$c) return ['compo introuvable'];
+    $cle = acp_cle('composition', $c['id']);
+    if (acp_fait('composition', $c['id'])) return acp_suivi($cle)['etats'] ?? ['story de la composition déjà publiée'];
+    $reg = acp_reglages(); $t = acp_maintenant();
+    if (($m = acp_motif('composition', $c, $reg, $t)) !== null) return ["pas de story de la composition : $m"];
+    if (!$force) {
+        $f = acp_fenetre($c, $reg, acp_cron_frequent($t));
+        if (!$f || $t < $f[0] || $t > $f[1]) return ['story de la composition pas encore à l\'heure'];
+    }
+    if (!acp_verrou()) return ['une publication est déjà en cours : réessaie dans une minute'];
+    try { return acp_publier('composition', $c, $reg, $journal); }
+    finally { acp_liberer(); }
+}
+
+/* ---------- passage du cron (toutes les 5 minutes, et à chaque passage du cron horaire) ---------- */
+function acp_cron(array &$journal, ?int $maintenant = null): void {
+    $t = $maintenant ?? acp_maintenant();
+    $avant = $GLOBALS['acp_maintenant'] ?? null;
+    $GLOBALS['acp_maintenant'] = $t;
+    $verrou = false;
+    try {
+        $reg = acp_reglages();
+        if (!$reg['actif'] || (!$reg['convocation'] && !$reg['composition'])) return;
+        if (!function_exists('acp_convocation')) { $journal[] = 'stories des compos : affiches absentes (compo-affiches.php)'; return; }
+        if (!aff_polices_ok()) { $journal[] = 'stories des compos : polices introuvables dans api/polices'; return; }
+        $auj = date('Y-m-d', $t);
+        $compos = array_values(array_filter(acp_compos_publiees(), fn($c) => (string) ($c['date'] ?? '') >= $auj));
+        if (!$compos) return;
+        if (!($verrou = acp_verrou())) { $journal[] = 'stories des compos : une publication est déjà en cours'; return; }
+        $frequent = acp_cron_frequent($t);
+        $depuis = acp_depuis($t);
+        foreach ($compos as $c) {
+            // a) convocation de rattrapage (l'appel de l'application n'est pas parti, compo publiée par « Publier », soirée…)
+            if ($reg['convocation'] && acp_de_jour($t) && !acp_fait('convocation', $c['id']) && acp_rattrapage_ok($c, $depuis)
+                && acp_motif('convocation', $c, $reg, $t) === null)
+                acp_publier('convocation', $c, $reg, $journal);
+            // b) composition : minutesAvant avant le coup d'envoi (cron des 5 minutes), sinon dans l'heure qui précède
+            $f = acp_fenetre($c, $reg, $frequent);
+            if ($reg['composition'] && $f && $t >= $f[0] && $t <= $f[1] && !acp_fait('composition', $c['id'])
+                && acp_motif('composition', $c, $reg, $t) === null)
+                acp_publier('composition', $c, $reg, $journal);
+        }
+    } finally {
+        if ($verrou) acp_liberer();
+        if ($avant === null) unset($GLOBALS['acp_maintenant']); else $GLOBALS['acp_maintenant'] = $avant;
+    }
+}
+
+/* ---------- où en sont les stories d'une compo (pour l'espace club) ---------- */
+function acp_etat(string $id): array {
+    $c = acp_compo($id);
+    if (!$c) return ['id' => $id, 'existe' => false];
+    $reg = acp_reglages(); $t = acp_maintenant();
+    $frequent = acp_cron_frequent($t);
+    $r = ['id' => $id, 'existe' => true, 'equipe' => (string) ($c['equipe'] ?? ''), 'publie' => !empty($c['publie']),
+          'actif' => $reg['actif'], 'style' => $reg['style'], 'cronFrequent' => $frequent];
+    foreach (['convocation', 'composition'] as $quoi) {
+        $cle = acp_cle($quoi, $id); $s = acp_suivi($cle);
+        $fait = reglage("pub_$cle") === 'fait';
+        $e = ['publiee' => !empty($s['publiee']), 'fait' => $fait, 'quand' => $s['quand'] ?? null, 'etats' => $s['etats'] ?? [],
+              'motif' => $fait ? null : acp_motif($quoi, $c, $reg, $t)];
+        if ($quoi === 'convocation') $e['attente'] = !$fait && reglage("acp_attente_$cle") === '1';
+        else {
+            $f = acp_fenetre($c, $reg, $frequent);
+            $e['prevue'] = $f ? $f[0] + ($frequent ? 0 : 3600) : null;          // l'heure visée : minutesAvant avant le coup d'envoi
+            $e['debut'] = $f[0] ?? null; $e['fin'] = $f[1] ?? null; $e['precise'] = $frequent;
+            $e['minutesAvant'] = $reg['minutesAvant'];
+        }
+        $r[$quoi] = $e;
+    }
+    return $r;
+}
+function acp_info(): array {
+    $vu = (int) reglage('cron_compos_vu', '0');
+    $hote = $_SERVER['HTTP_HOST'] ?? 'asf-pierrelatte.fr';
+    $r = ['reglages' => acp_reglages(), 'styles' => acp_styles(), 'affiches' => function_exists('acp_convocation'),
+          'cron' => ['vu' => $vu ? date('c', $vu) : null, 'frequent' => acp_cron_frequent(time())],
+          'url' => 'https://' . $hote . (defined('BASE') ? BASE : '') . '/api/affiches.php?cron_compos=1&cle=TA_CLE', 'cleDefinie' => defined('CLE_ECRITURE')];
+    if (rang_effectif() >= 3) $r['commande'] = '/usr/local/bin/php ' . __FILE__ . ' compos > /dev/null 2>&1';
+    return $r;
+}
+
+/* ---------- réponses ---------- */
+function acp_json(array $d, int $code = 200): void {
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
+    echo json_encode($d, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+function acp_texte(string $t, int $code): void {
+    http_response_code($code);
+    header('Content-Type: text/plain; charset=utf-8'); header('Cache-Control: no-store');
+    echo $t;
+    exit;
+}
+
+/* cron des 5 minutes : php …/api/affiches.php compos (ligne de commande), ou ?cron_compos=1&cle=<CLE_ECRITURE>.
+   Appelé AVANT la vérification du compte (pas de session dans un cron). */
+function acp_entree_cron(): void {
+    $cli = PHP_SAPI === 'cli' && in_array('compos', array_slice((array) ($_SERVER['argv'] ?? []), 1), true);
+    $url = !$cli && PHP_SAPI !== 'cli' && isset($_GET['cron_compos']);
+    if (!$cli && !$url) return;
+    if ($url && (!defined('CLE_ECRITURE') || !is_string($_GET['cle'] ?? null) || !hash_equals((string) CLE_ECRITURE, $_GET['cle'])))
+        acp_json(['erreur' => 'Clé absente ou refusée : ajoute &cle= suivi de la clé d\'écriture du site.'], 403);
+    @set_time_limit(240);
+    reglage_ecrire('cron_compos_vu', (string) time());
+    $journal = [];
+    try { acp_cron($journal); } catch (Throwable $e) { $journal[] = 'stories des compos : erreur ' . $e->getMessage(); }
+    if ($cli) { if ($journal) echo date('d/m/Y H:i') . "\n" . implode("\n", $journal) . "\n"; exit; }
+    acp_json(['ok' => true, 'journal' => $journal]);
+}
+
+/* adresses de l'espace club (après la vérification coach ou bureau) */
+function acp_route(): void {
+    $ap = $_GET['apercu'] ?? null;
+    if ($ap === 'convocation' || $ap === 'composition') acp_route_apercu($ap);
+    if (isset($_GET['compo_story'])) acp_route_story();
+    if (isset($_GET['compo_etat'])) {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') acp_json(['erreur' => 'Utilise GET pour lire l\'état des stories.'], 405);
+        $id = acp_id($_GET['compo_etat']);
+        if ($id === '') acp_json(['erreur' => 'Identifiant de compo manquant ou invalide.'], 400);
+        $e = acp_etat($id);
+        if (empty($e['existe'])) acp_json(['erreur' => 'Compo introuvable.'], 404);
+        acp_json($e);
+    }
+    if (isset($_GET['compo_info'])) acp_json(acp_info());
+}
+function acp_route_apercu(string $quoi): void {
+    if (!function_exists('acp_convocation')) acp_texte('Affiches des compos absentes : dépose compo-affiches.php et reconstruis affiches.php.', 500);
+    $reg = acp_reglages();
+    $style = is_string($_GET['style'] ?? null) && isset(acp_styles()[$_GET['style']]) ? $_GET['style'] : $reg['style'];
+    $noms = in_array($_GET['noms'] ?? '', ['auto', 'complet', 'initiale'], true) ? $_GET['noms'] : $reg['noms'];
+    $exemple = !empty($_GET['exemple']);
+    if ($exemple) $c = acp_exemple(mb_substr(trim((string) ($_GET['equipe'] ?? '')), 0, 60) ?: 'Seniors 1');
+    else {
+        $id = acp_id($_GET['id'] ?? '');
+        if ($id === '') acp_texte('Identifiant de compo manquant (&id=…).', 400);
+        $c = acp_compo($id);
+        if (!$c) acp_texte('Compo introuvable.', 404);
+    }
+    try { $im = acp_image($quoi, $c, $style, $noms); }
+    catch (Throwable $e) { acp_texte('Affiche impossible à dessiner : ' . $e->getMessage(), 500); }
+    $l = (int) ($_GET['l'] ?? 0);                               // vignette : largeur demandée (la story garde ses proportions)
+    if ($l >= 120 && $l < imagesx($im)) {
+        $h = (int) round($l * imagesy($im) / imagesx($im));
+        $p = imagecreatetruecolor($l, $h);
+        imagecopyresampled($p, $im, 0, 0, 0, 0, $l, $h, imagesx($im), imagesy($im));
+        imagedestroy($im); $im = $p;
+    }
+    header('Content-Type: image/jpeg');
+    header('Cache-Control: ' . ($exemple ? 'private, max-age=86400' : 'no-store'));
+    if (!empty($_GET['telecharger'])) header('Content-Disposition: attachment; filename="asf-pierrelatte-' . $quoi . '.jpg"');
+    imagejpeg($im, null, $l ? 85 : 92);
+    imagedestroy($im);
+    exit;
+}
+function acp_route_story(): void {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') acp_json(['erreur' => 'Utilise POST pour publier une story.'], 405);
+    $id = acp_id($_GET['compo_story']);
+    if ($id === '') acp_json(['erreur' => 'Identifiant de compo manquant ou invalide.'], 400);
+    if (!acp_compo($id)) acp_json(['erreur' => 'Compo introuvable.'], 404);
+    @set_time_limit(120);
+    $journal = [];
+    try {
+        $etats = ($_GET['quoi'] ?? '') === 'composition' ? acp_publier_composition($id, $journal, true)
+            : acp_publier_convocation($id, $journal, !empty($_GET['forcer']));
+    } catch (Throwable $e) { acp_json(['erreur' => 'Publication impossible : ' . $e->getMessage()], 500); }
+    acp_json(['etats' => $etats, 'etat' => acp_etat($id)]);
+}
+
 /* ---------- Facebook ---------- */
 /* images d'une annonce Facebook : les deux feuilles en 1080 x 2160 (Facebook les montre en entier côte à côte) ;
    une feuille seule en 1080 x 1350, car Facebook coupe dans le fil une image seule plus haute que 4:5 */
@@ -3511,6 +5171,7 @@ function aff_publier_choix(array $annonces, array $o, array &$journal): void {
     }
 }
 function affiches_cron(array &$journal, bool $force = false): void {
+    try { acp_cron($journal); } catch (Throwable $e) { $journal[] = 'stories des compos : ' . $e->getMessage(); }   // stories des compos (convocation, composition)
     if (!aff_polices_ok()) { $journal[] = 'affiches : polices introuvables dans api/polices, ou FreeType absent'; return; }
     $maintenant = time();
     if (!$force && (int) date('G', $maintenant) < 9) return;
@@ -3547,8 +5208,10 @@ function affiches_cron(array &$journal, bool $force = false): void {
    /api/affiches.php?apercu=programme|resultats|match|score|evenement
      &date=AAAA-MM-JJ &id=… &titre=… &sous=… &texte=… &heure=… &lieu=… &sponsors=0 &telecharger=1 */
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    acp_entree_cron();                                                  // cron des stories des compos (sans session)
     if (rang_effectif() < 2) { http_response_code(403); header('Content-Type: text/plain; charset=utf-8'); echo 'Connecte-toi avec un compte coach ou bureau.'; exit; }
     @set_time_limit(60);
+    acp_route();                                                        // stories des compos : ?apercu=convocation|composition, ?compo_story, ?compo_etat, ?compo_info
     // /api/affiches.php?verif=1&date=AAAA-MM-JJ : chaque match du week-end, et pourquoi il est (ou n'est pas) sur les affiches
     if (isset($_GET['verif'])) {
         header('Content-Type: text/plain; charset=utf-8');
@@ -3624,7 +5287,10 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
         }
         echo "Autres fichiers dans img : " . implode(', ', array_map('basename', array_filter(glob(dirname(__DIR__) . '/img/*') ?: [], 'is_file'))) . "\n";
         foreach (['domicile', 'exterieur'] as $n) echo "Image $n : " . (($p = aff_fond_lieu($n === 'domicile' ? 'dom' : 'ext')) && str_contains($p, "fond-$n") ? basename($p) . ' · présente' : "MANQUANTE (attendu : img/fond-$n.jpg)") . "\n";
-        echo "Version du moteur : V33 du 02/10 · affiches « stade de nuit »\n";
+        echo "Version du moteur : V34 du 04/10 · stories des compos\n";
+        $vuC = (int) reglage('cron_compos_vu', '0');
+        echo "Stories des compos : " . (function_exists('acp_convocation') ? 'affiches présentes' : 'AFFICHES ABSENTES (compo-affiches.php)')
+           . " · cron des 5 minutes : " . ($vuC ? 'dernier passage le ' . date('d/m à H:i', $vuC) . (acp_cron_frequent(time()) ? ' (actif)' : ' (ARRÊTÉ ?)') : 'jamais vu') . "\n";
         echo "Affiches « stade de nuit » : " . (afn_actif('dom') || afn_actif('ext') ? 'ACTIVES' : 'inactives (anciens fonds : anciennes affiches)') . "\n";
         foreach (['dom' => 'domicile', 'ext' => 'extérieur'] as $l => $n)
             echo "  fond $n : " . (afn_fond($l) ? 'nouveau fond « stade de nuit » (' . basename(afn_fond($l)) . ')' : 'ancien fond ou absent') . "\n";
