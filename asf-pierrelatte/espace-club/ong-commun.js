@@ -62,6 +62,9 @@ body.sur-espace .ong-pli-t{flex:1;min-width:0}
 body.sur-espace .ong-pli-fl{opacity:.7;transition:transform .2s}
 body.sur-espace .ong-pli[open] .ong-pli-fl{transform:rotate(180deg)}
 body.sur-espace .ong-pli[open]>summary .plus{transform:none}
+/* le « + » des blocs dépliants : la règle générale .plus du site (bouton flottant du téléphone) le mettait en position fixe en bas à gauche, ou le cachait */
+body.sur-espace .pli>summary .plus{position:static!important;display:grid!important;inset:auto!important;width:30px;height:30px;padding:0;margin:0;border:0;box-shadow:none;z-index:auto;flex:none}
+body.sur-espace .ong-pli>summary{font-size:21px}
 /* liste vide */
 body.sur-espace .ong-vide{display:grid;justify-items:center;gap:6px;text-align:center;padding:30px 20px;border:1.5px dashed rgba(143,168,240,.3);border-radius:18px;background:rgba(10,20,48,.4);color:#AFC0EA}
 body.sur-espace .ong-vide b{font:800 20px var(--display);color:#fff}
@@ -74,6 +77,7 @@ body.sur-espace .ong-groupe-l{font:800 12px var(--corps);letter-spacing:.12em;te
 body.sur-espace .ong-groupe-c{display:flex;flex-wrap:wrap;gap:8px}
 :root[data-theme="light"] body.sur-espace .ong-barre p,:root[data-theme="light"] body.sur-espace .ong-groupe-l{color:var(--texte-doux)}
 :root[data-theme="light"] body.sur-espace .ong-vide b{color:var(--texte)}
+:root[data-theme="light"] body.sur-espace .ong-nb{background:rgba(28,63,158,.12);color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide-corps{color:var(--texte)}
 :root[data-theme="light"] body.sur-espace .ong-aide>summary{color:#7A5B00}
 @media (max-width:700px){

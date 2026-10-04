@@ -277,9 +277,11 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
 /* ================= THÈME CLAIR ================= */
 :root[data-theme="light"] body.sur-espace #panneau .carte,:root[data-theme="light"] body.sur-espace #panneau .pli,
 :root[data-theme="light"] body.sur-espace #panneau .rangee,:root[data-theme="light"] body.sur-espace #panneau .item{background:var(--carte);box-shadow:0 10px 26px rgba(7,18,48,.08)}
-:root[data-theme="light"] body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]),:root[data-theme="light"] body.sur-espace #panneau select,
+:root[data-theme="light"] body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),:root[data-theme="light"] body.sur-espace #panneau select,
 :root[data-theme="light"] body.sur-espace #panneau textarea,:root[data-theme="light"] body.sur-espace #panneau .dp-champ{background:#fff;border-color:#C9D4F2}
 :root[data-theme="light"] body.sur-espace #panneau .btn.contour{color:var(--texte)}
+:root[data-theme="light"] body.sur-espace #panneau .btn.danger{background:#fff;color:#B91C1C;border-color:#F87171}
+:root[data-theme="light"] body.sur-espace #panneau .btn.danger:hover{background:#FEE2E2}
 :root[data-theme="light"] body.sur-espace #panneau .quoi{color:var(--texte-doux)}
 :root[data-theme="light"] body.sur-espace .rub-onglets{background:var(--carte)}
 :root[data-theme="light"] body.sur-espace .rub-onglets button{color:var(--texte)}
