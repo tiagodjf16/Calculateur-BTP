@@ -11798,10 +11798,46 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
     window.panTableau = function(){ return raccourcis() + avant.apply(this, arguments); };
   }
 
-  /* chaque page : « Accueil » dans l'en-tête, et à quoi sert l'onglet ouvert */
+  const COURT = { accueil: "Accueil", equipes: "Équipes", matchs: "Matchs", com: "Com.", vie: "Vie club", reglages: "Réglages" };
+  const rubsDuCompte = () => { try { return rubriquesVisibles(ongletsVisibles()); } catch(err){ return []; } };
+  /* ordinateur : le menu de gauche montre chaque rubrique avec tous ses onglets, un clic suffit */
+  function menuArbre(z){
+    const nav = z.querySelector(".app-nav"); if (!nav || nav.querySelector(".esp-arbre")) return;
+    const rubs = rubsDuCompte(); if (!rubs.length) return;
+    nav.querySelectorAll(":scope > .lien.rub, :scope > .rub-groupe").forEach(b => b.remove());
+    nav.insertAdjacentHTML("afterbegin", `<div class="esp-marque"><img src="img/blason.png" alt=""><div><b>Espace club</b><small>ASF Pierrelatte</small></div></div>
+      <nav class="esp-arbre" aria-label="Rubriques">${rubs.map(([k, l, ico, tabs]) => k === "accueil"
+        ? `<button type="button" class="esp-nav-o esp-nav-accueil" aria-current="${S.ui.onglet === tabs[0] ? "page" : "false"}" data-a="onglet" data-k="${esc(tabs[0])}"><span class="esp-nav-ico">${ico}</span>Accueil</button>`
+        : `<div class="esp-nav-rub"><div class="esp-nav-t"><span aria-hidden="true">${ico}</span>${esc(l)}</div>${tabs.map(t => `<button type="button" class="esp-nav-o" aria-current="${S.ui.onglet === t ? "page" : "false"}" data-a="onglet" data-k="${esc(t)}">${icone(t)}<span>${esc(nom(t))}</span>${badge(t)}</button>`).join("")}</div>`).join("")}</nav>`);
+  }
+  /* téléphone : une barre en bas avec les rubriques, toujours à portée du pouce */
+  function barreBas(){
+    let b = document.getElementById("esp-barre");
+    if (location.hash !== "#espace" || !document.getElementById("panneau")){ if (b) b.remove(); document.body.classList.remove("avec-barre"); return; }
+    const rubs = rubsDuCompte(); if (!rubs.length) return;
+    const act = (rubs.find(r => r[3].includes(S.ui.onglet)) || [])[0];
+    const html = rubs.map(([k, l, ico, tabs]) => `<button type="button" class="${k === act ? "on" : ""}" aria-current="${k === act ? "page" : "false"}" data-a="${tabs.length > 1 ? "rubrique" : "onglet"}" data-k="${esc(tabs.length > 1 ? k : tabs[0])}"><span class="esp-barre-ico" aria-hidden="true">${ico}</span><span>${esc(COURT[k] || l)}</span>${tabs.includes("messages") ? badge("messages") : ""}</button>`).join("");
+    if (!b){ b = document.createElement("nav"); b.id = "esp-barre"; b.setAttribute("aria-label", "Rubriques de l'espace club"); document.body.appendChild(b); }
+    b.innerHTML = html; document.body.classList.add("avec-barre");
+  }
+  window.addEventListener("hashchange", () => setTimeout(barreBas, 0));
+  // la barre du bas est hors de #espace : on relaie ses boutons au gestionnaire de l'application (qui écoute les [data-a])
+  document.addEventListener("click", ev => {
+    const b = ev.target.closest && ev.target.closest("#esp-barre button"); if (!b) return;
+    ev.preventDefault();
+    const proxy = document.querySelector("#espace .esp-relais") || (() => { const x = document.createElement("button"); x.type = "button"; x.className = "esp-relais"; x.hidden = true; const z = document.getElementById("espace"); if (z) z.appendChild(x); return x; })();
+    proxy.dataset.a = b.dataset.a; proxy.dataset.k = b.dataset.k; proxy.click();
+    setTimeout(() => window.scrollTo({ top: 0 }), 0);
+  });
+
+  /* chaque page : un bandeau (rubrique, explication, « Accueil »), et à quoi sert l'onglet ouvert */
   function habiller(){
     const z = document.getElementById("espace"); if (!z) return;
+    menuArbre(z); barreBas();
+    const main = z.querySelector(".app-main");
+    if (main && !main.querySelector(".esp-version")) main.insertAdjacentHTML("beforeend", `<p class="esp-version">Espace club · version du 4 octobre 2026</p>`);
     const tete = z.querySelector(".app-tete"); if (!tete) return;
+    tete.classList.add("esp-bandeau");
     if (S.ui.onglet !== "tableau" && !tete.querySelector(".esp-accueil"))
       tete.insertAdjacentHTML("beforeend", `<button type="button" class="btn contour petit esp-accueil" data-a="onglet" data-k="tableau">🏠 Accueil</button>`);
     const ongs = z.querySelector(".rub-onglets");
@@ -11846,10 +11882,40 @@ body.sur-espace .ev-grille>.carte{margin:0 0 18px}
 .esp-tuile-txt b{font:700 16px var(--corps);display:flex;align-items:center;gap:8px}
 .esp-tuile-txt small{font:500 13px var(--corps);color:var(--texte-doux);line-height:1.35}
 .esp-fl{font:700 22px var(--corps);color:var(--texte-doux);flex:none}
-/* ---------- en-tête de chaque page ---------- */
-body.sur-espace .app-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
-body.sur-espace .app-tete h1{display:flex;align-items:center;gap:10px}
-.esp-accueil{flex:none;align-self:center;min-height:42px}
+/* ---------- en-tête de chaque page : un bandeau ---------- */
+body.sur-espace .app-tete.esp-bandeau{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 16px;padding:20px 24px;
+  border-radius:22px;color:#fff;background:radial-gradient(120% 140% at 0% 0%,#2557C4 0%,#14418E 38%,#0F2257 72%,#0A1A45 100%);
+  box-shadow:0 18px 40px rgba(7,18,48,.28);position:relative;overflow:hidden}
+body.sur-espace .app-tete.esp-bandeau::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(227,182,76,.28),transparent 65%);pointer-events:none}
+body.sur-espace .app-tete.esp-bandeau h1{display:flex;align-items:center;gap:12px;color:#fff;font-size:34px}
+body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:rgba(255,255,255,.14);flex:none}
+body.sur-espace .app-tete.esp-bandeau p{color:#C9D4F2;margin-top:6px;font-size:15.5px}
+.esp-accueil{flex:none;min-height:42px;position:relative;z-index:1}
+body.sur-espace .app-tete.esp-bandeau .esp-accueil{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
+body.sur-espace .app-tete.esp-bandeau .esp-accueil:hover{background:rgba(255,255,255,.22)}
+/* ---------- ordinateur : menu de gauche en arbre ---------- */
+.esp-marque{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;margin-bottom:6px;border-bottom:1px solid var(--ligne)}
+.esp-marque img{width:40px;height:40px;object-fit:contain}
+.esp-marque b{display:block;font:800 18px var(--display);line-height:1.1}
+.esp-marque small{color:var(--texte-doux);font-size:12.5px}
+.esp-arbre{display:grid;gap:4px}
+.esp-nav-rub{display:grid;gap:2px;padding:8px 0 4px}
+.esp-nav-t{display:flex;align-items:center;gap:8px;padding:4px 10px;font:800 11.5px var(--corps);letter-spacing:.14em;text-transform:uppercase;color:var(--texte-doux)}
+.esp-nav-o{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:var(--texte);text-align:left;cursor:pointer;
+  padding:9px 12px;border-radius:11px;font:600 15px var(--corps);min-height:40px;transition:background .12s}
+.esp-nav-o svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.8}
+.esp-nav-o span{flex:1;min-width:0}
+.esp-nav-o:hover{background:rgba(143,168,240,.14)}
+.esp-nav-o[aria-current="page"]{background:var(--bleu);color:#fff;box-shadow:0 8px 18px rgba(28,63,158,.3)}
+.esp-nav-o[aria-current="page"] svg{opacity:1}
+.esp-nav-accueil{font-weight:800}
+.esp-nav-ico{width:22px;text-align:center}
+body.sur-espace .app-nav{max-height:calc(100vh - 100px);overflow-y:auto;scrollbar-width:thin}
+/* ---------- téléphone : barre des rubriques en bas ---------- */
+#esp-barre{display:none}
+.esp-relais{display:none}
+.esp-version{margin:28px 0 6px;text-align:center;color:var(--texte-doux);font:600 12px var(--corps);letter-spacing:.04em;opacity:.8}
 .esp-aide{margin:-6px 0 18px;padding:10px 14px;border-radius:12px;background:rgba(143,168,240,.08);color:var(--texte-doux);font:500 14.5px var(--corps);border:1px solid var(--ligne)}
 .esp-aide::before{content:"💡 "}
 /* ---------- onglets de la rubrique : grands, faciles à toucher, toujours visibles ---------- */
@@ -11872,6 +11938,19 @@ body.sur-espace #panneau label{font-weight:600}
 body.sur-espace #panneau table{border-collapse:separate;border-spacing:0}
 body.sur-espace #panneau tbody tr:nth-child(even) td{background:rgba(143,168,240,.05)}
 @media (max-width:1140px){
+  #esp-barre{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:rgba(8,18,46,.96);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-top:1px solid rgba(143,168,240,.25);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 28px rgba(0,0,0,.3)}
+  #esp-barre button{position:relative;display:grid;justify-items:center;gap:2px;border:0;background:none;color:#C9D4F2;cursor:pointer;
+    padding:6px 2px;border-radius:12px;font:700 11px var(--corps);min-height:54px}
+  #esp-barre .esp-barre-ico{font-size:22px;line-height:1.1;filter:grayscale(.35);opacity:.85}
+  #esp-barre button.on{color:#fff;background:rgba(37,87,196,.45)}
+  #esp-barre button.on .esp-barre-ico{filter:none;opacity:1}
+  #esp-barre .menu-badge{position:absolute;top:2px;right:18%}
+  body.avec-barre{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
+  body.sur-espace .app-tete.esp-bandeau{padding:16px 16px;border-radius:18px}
+  body.sur-espace .app-tete.esp-bandeau h1{font-size:26px}
+  body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{width:42px;height:42px;font-size:23px;border-radius:13px}
   body.sur-espace .rub-onglets{position:sticky;top:60px;z-index:6;box-shadow:0 10px 22px rgba(7,18,48,.18)}
   body.sur-espace .app-tete{margin-bottom:12px}
   body.sur-espace .app-tete h1{font-size:28px}
