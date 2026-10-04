@@ -148,3 +148,23 @@ wget -q -O /dev/null "https://asf-pierrelatte.fr/api/affiches.php?cron_compos=1&
 5. **Un souci ?** La ligne d'état de la compo donne la raison. Par exemple : « pas de story · équipe exclue », « heure du coup d'envoi inconnue », « Facebook : pas relié ». Si Facebook n'est pas relié ou est en pause, va dans *Réglages Facebook et Instagram*.
 
 Pour tout arrêter d'un coup, coupe l'interrupteur **« Stories des compos »**.
+
+## Toujours servir la dernière version des pages
+
+Le service worker du site (`sw.js`) ne garde rien en cache : il ne sert qu'aux notifications. Quand un téléphone affiche
+encore l'ancienne page, c'est le cache du navigateur. Pour qu'il revérifie à chaque visite (sans tout retélécharger :
+le serveur répond « rien n'a changé » quand c'est le cas), ajouter en haut du fichier `.htaccess` à la racine du site :
+
+```
+<IfModule mod_headers.c>
+  <FilesMatch "\.html?$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>
+```
+
+En plus, l'espace club et le site affichent « ✨ Nouvelle version du site disponible — Recharger » quand une nouvelle
+version de `index.html` est en ligne.
