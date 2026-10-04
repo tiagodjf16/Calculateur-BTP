@@ -60,7 +60,7 @@ body.sur-espace .ong-aide-corps ol,body.sur-espace .ong-aide-corps ul{margin:4px
 body.sur-espace .ong-pli>summary{gap:12px}
 body.sur-espace .ong-pli-t{flex:1;min-width:0}
 body.sur-espace .ong-pli-fl{opacity:.7;transition:transform .2s}
-body.sur-espace .ong-pli[open] .ong-pli-fl{transform:rotate(180deg)}
+body.sur-espace .ong-pli[open]>summary .ong-pli-fl{transform:rotate(180deg)}
 body.sur-espace .ong-pli[open]>summary .plus{transform:none}
 /* le « + » des blocs dépliants : la règle générale .plus du site (bouton flottant du téléphone) le mettait en position fixe en bas à gauche, ou le cachait */
 body.sur-espace .pli>summary .plus{position:static!important;display:grid!important;inset:auto!important;width:30px;height:30px;padding:0;margin:0;border:0;box-shadow:none;z-index:auto;flex:none}
