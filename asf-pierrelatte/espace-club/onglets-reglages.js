@@ -383,6 +383,13 @@
         placeholder="10 chiffres" value="${e(licC || licE)}"></label>`));
     const sansLic = c.role === "joueur" && (c.sansLicence === true || (c.sansLicence === undefined && !licC && !licE));
     // changer un rôle : seulement les comptes « Joueur, coach et bureau » (et l'administrateur)
+    // son équipe enregistrée n'est plus dans la liste (ancienne « U6 à U11 ») : elle reste choisie, « Enregistrer » ne l'efface pas
+    const selEq = champs.querySelector('[data-cpt-champ="equipe"]');
+    if (selEq && c.equipe && ![...selEq.options].some(o => o.value === c.equipe)){
+      const o = document.createElement("option"); o.value = c.equipe; o.setAttribute("selected", "");
+      o.textContent = estEcoleTout(c.equipe) ? `${c.equipe} (ancienne : U6 · U7, U8 · U9, U10 · U11)` : c.equipe;
+      selEq.appendChild(o); selEq.value = c.equipe;
+    }
     const selRole = champs.querySelector('[data-cpt-champ="role"]');
     if (selRole && S.ui.cptDonner === false){ selRole.disabled = true; selRole.title = "Seules les personnes qui ont tous les rôles (joueur, coach et bureau) peuvent changer un rôle."; }
     if (sansLic && sum) sum.querySelector(".cpt-qui small")?.insertAdjacentHTML("beforeend", `<span class="ong-reg-sanslic">⚠ Sans licence</span>`);

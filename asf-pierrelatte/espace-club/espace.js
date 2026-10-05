@@ -597,6 +597,11 @@ body.sur-espace #btn-menu,body.sur-espace #drawer{display:none!important}
   body.sur-espace #panneau .carte{padding:16px}
   body.sur-espace #panneau .carte>div:last-child>.btn.bleu:only-child,body.sur-espace #panneau form.carte>div:last-child>.btn.bleu{width:100%}
 }
+/* téléphone : les onglets de la rubrique passent sur deux lignes plutôt que d'en cacher un sur le côté */
+@media (max-width:700px){
+  body.sur-espace .rub-onglets{flex-wrap:wrap;overflow-x:visible}
+  body.sur-espace .rub-onglets button{flex:1 1 auto;padding:9px 12px}
+}
 /* le nom de la rubrique sur une ligne (sa taille est ajustée par ajusterTitre quand il est long) */
 @media (max-width:700px){
   body.sur-espace .app-tete.esp-bandeau h1.esp-h1-ligne{white-space:nowrap}
