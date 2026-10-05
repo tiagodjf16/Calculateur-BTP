@@ -42,7 +42,7 @@ function mg_preparer(PDO $pdo): void {
     // les emojis demandent une connexion en utf8mb4 (utf8 tout court n'en prend que 3 octets)
     $cs = strtolower((string) $pdo->query('SELECT @@character_set_connection')->fetchColumn());
     if ($cs === 'utf8' || $cs === 'utf8mb3') $pdo->exec('SET NAMES utf8mb4');
-    if ($pdo->query("SHOW TABLES LIKE 'msg\\_msg'")->fetchColumn()) return;
+    if ($pdo->query("SHOW TABLES LIKE 'msg\\_msg'")->fetchColumn()) { mg_migrer($pdo); return; }
     $pdo->exec("CREATE TABLE IF NOT EXISTS msg_conv (
         id INT AUTO_INCREMENT PRIMARY KEY,
         type VARCHAR(10) NOT NULL,
@@ -71,7 +71,17 @@ function mg_preparer(PDO $pdo): void {
         INDEX (conv_id, id),
         INDEX (compte_id, cree)
     ) DEFAULT CHARSET=utf8mb4");
+    mg_migrer($pdo);
 }
+/* Colonnes ajoutées après la première version (tables déjà créées sur le serveur) :
+   msg_part.efface : la conversation supprimée par ce compte (il ne voit plus les messages jusqu'à cet id) ;
+   msg_conv.efface : le groupe vidé par un coach ou le bureau (personne ne voit plus les messages jusqu'à cet id). */
+function mg_migrer(PDO $pdo): void {
+    if (!$pdo->query("SHOW COLUMNS FROM msg_part LIKE 'efface'")->fetchColumn()) $pdo->exec("ALTER TABLE msg_part ADD COLUMN efface INT NOT NULL DEFAULT 0");
+    if (!$pdo->query("SHOW COLUMNS FROM msg_conv LIKE 'efface'")->fetchColumn()) $pdo->exec("ALTER TABLE msg_conv ADD COLUMN efface INT NOT NULL DEFAULT 0");
+}
+/* À partir de quel message ce compte voit la conversation (après une suppression) */
+function mg_borne(array $c): int { return max((int) ($c['ceff'] ?? 0), (int) ($c['peff'] ?? 0)); }
 
 /* ===== petits outils ===== */
 
@@ -161,6 +171,8 @@ function mg_equipes(PDO $pdo, array $c): array {
     $l = [];
     foreach (array_merge([(string) ($c['equipe'] ?? '')], mg_equipes_cochees($pdo, $c)) as $x)
         if (($k = mg_simple($x)) !== '' && !isset($l[$k])) $l[$k] = mb_substr(trim($x), 0, 80);
+    // un coach sans aucune équipe gère tout le club (comme dans l'espace club) : toutes les équipes
+    if (!$l && ($c['role'] ?? '') === 'entraineur') $l = mg_noms_equipes($pdo);
     return $cache[$id] = $l;
 }
 /* Les équipes cochées pour un coach ou un membre du bureau dans site/permissions (rien pour un joueur). */
@@ -233,7 +245,8 @@ function mg_trier_personnes(array $l): array {
 function mg_peut_ecrire_a(PDO $pdo, array $a, ?array $b): bool {
     if (!$b || (int) $a['id'] === (int) $b['id'] || !mg_joignable($a) || !mg_joignable($b)) return false;
     if ($a['role'] === 'bureau' || $b['role'] === 'bureau') return true;                       // le bureau : avec tout le monde
-    if ($a['role'] === 'entraineur' && $b['role'] === 'entraineur') return true;               // entre coachs
+    // entre coachs : seulement ceux qui ont une équipe en commun (un coach qui a accès à toutes les équipes : avec tous)
+    if ($a['role'] === 'entraineur' && $b['role'] === 'entraineur') return (bool) array_intersect_key(mg_equipes($pdo, $a), mg_equipes($pdo, $b));
     if ($a['role'] === 'joueur' && $b['role'] === 'joueur') return false;                      // jamais entre deux joueurs
     // un joueur et un coach : seulement si le coach encadre l'équipe du joueur
     [$joueur, $coach] = $a['role'] === 'joueur' ? [$a, $b] : [$b, $a];
@@ -253,7 +266,8 @@ function mg_peut_lire(PDO $pdo, array $moi, array $c): bool {
 function mg_groupe_lance(PDO $pdo, int $conv): bool {
     static $memo = [];
     if (isset($memo[$conv])) return $memo[$conv];
-    $st = $pdo->prepare("SELECT 1 FROM msg_msg m JOIN comptes k ON k.id = m.compte_id WHERE m.conv_id = ? AND k.role <> 'joueur' LIMIT 1");
+    $st = $pdo->prepare("SELECT 1 FROM msg_msg m JOIN comptes k ON k.id = m.compte_id JOIN msg_conv c ON c.id = m.conv_id
+        WHERE m.conv_id = ? AND k.role <> 'joueur' AND m.supprime = 0 AND m.id > c.efface LIMIT 1");
     $st->execute([$conv]);
     return $memo[$conv] = (bool) $st->fetchColumn();
 }
@@ -275,7 +289,7 @@ function mg_peut_ecrire(PDO $pdo, array $moi, array $c): bool {
 /* Une conversation, avec l'état du compte (part = participant, lu, muet). */
 function mg_conv(PDO $pdo, int $id, int $moi): ?array {
     if ($id <= 0) return null;
-    $st = $pdo->prepare('SELECT c.id, c.type, c.cle, c.equipe, c.cree, c.maj, p.compte_id AS part, p.lu, p.muet
+    $st = $pdo->prepare('SELECT c.id, c.type, c.cle, c.equipe, c.cree, c.maj, c.efface AS ceff, p.compte_id AS part, p.lu, p.muet, p.efface AS peff
         FROM msg_conv c LEFT JOIN msg_part p ON p.conv_id = c.id AND p.compte_id = ? WHERE c.id = ?');
     $st->execute([$moi, $id]);
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -308,7 +322,7 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
     $me = (int) $moi['id'];
     $eqs = mg_equipes($pdo, $moi);
     if ($creer) foreach ($eqs as $k => $nom) mg_groupe($pdo, (string) $k, mg_nom_equipe($pdo, (string) $k, $nom));
-    $champs = 'c.id, c.type, c.cle, c.equipe, c.cree, c.maj, p.compte_id AS part, p.lu, p.muet';
+    $champs = 'c.id, c.type, c.cle, c.equipe, c.cree, c.maj, c.efface AS ceff, p.compte_id AS part, p.lu, p.muet, p.efface AS peff';
     // celles où il est participant…
     $st = $pdo->prepare("SELECT $champs FROM msg_part p JOIN msg_conv c ON c.id = p.conv_id WHERE p.compte_id = ?");
     $st->execute([$me]);
@@ -331,26 +345,39 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
         else continue;
         $l[(int) $c['id']] = $c;
     }
+    // conversation privée supprimée par ce compte : elle ne revient que si un nouveau message arrive
+    $effaces = array_filter($l, fn($c) => $c['type'] === 'prive' && (int) ($c['peff'] ?? 0) > 0);
+    if ($effaces) {
+        $st = $pdo->prepare('SELECT conv_id, MAX(id) FROM msg_msg WHERE conv_id IN (' . implode(',', array_fill(0, count($effaces), '?')) . ') GROUP BY conv_id');
+        $st->execute(array_keys($effaces));
+        $max = [];
+        foreach ($st->fetchAll(PDO::FETCH_NUM) as [$cid, $m]) $max[(int) $cid] = (int) $m;
+        foreach ($effaces as $id => $c) if (($max[$id] ?? 0) <= (int) $c['peff']) unset($l[$id]);
+    }
     return $l;
 }
 /* Messages non lus [conv_id => nombre] : ceux des autres, plus récents que le dernier lu, pas supprimés. */
 function mg_nonlus(PDO $pdo, int $me, array $ids): array {
     if (!$ids) return [];
-    $st = $pdo->prepare('SELECT m.conv_id, COUNT(*) FROM msg_msg m LEFT JOIN msg_part p ON p.conv_id = m.conv_id AND p.compte_id = ?
-        WHERE m.conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND m.compte_id <> ? AND m.supprime = 0 AND m.id > COALESCE(p.lu, 0)
+    $st = $pdo->prepare('SELECT m.conv_id, COUNT(*) FROM msg_msg m JOIN msg_conv c ON c.id = m.conv_id LEFT JOIN msg_part p ON p.conv_id = m.conv_id AND p.compte_id = ?
+        WHERE m.conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND m.compte_id <> ? AND m.supprime = 0
+          AND m.id > GREATEST(COALESCE(p.lu, 0), COALESCE(p.efface, 0), c.efface)
         GROUP BY m.conv_id');
     $st->execute(array_merge([$me], array_values($ids), [$me]));
     $l = [];
     foreach ($st->fetchAll(PDO::FETCH_NUM) as [$conv, $n]) $l[(int) $conv] = (int) $n;
     return $l;
 }
-/* Dernier message (non supprimé) de chaque conversation [conv_id => message]. */
-function mg_derniers(PDO $pdo, array $ids): array {
+/* Dernier message (non supprimé) de chaque conversation [conv_id => message], que ce compte voit encore (après ses suppressions). */
+function mg_derniers(PDO $pdo, int $me, array $ids): array {
     if (!$ids) return [];
     $st = $pdo->prepare('SELECT m.id, m.conv_id, m.compte_id, m.texte, m.cree FROM msg_msg m
-        JOIN (SELECT conv_id, MAX(id) AS mid FROM msg_msg WHERE conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND supprime = 0 GROUP BY conv_id) x
+        JOIN (SELECT x1.conv_id, MAX(x1.id) AS mid FROM msg_msg x1 JOIN msg_conv c1 ON c1.id = x1.conv_id
+              LEFT JOIN msg_part p1 ON p1.conv_id = x1.conv_id AND p1.compte_id = ?
+              WHERE x1.conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND x1.supprime = 0
+                AND x1.id > GREATEST(c1.efface, COALESCE(p1.efface, 0)) GROUP BY x1.conv_id) x
         ON x.mid = m.id');
-    $st->execute(array_values($ids));
+    $st->execute(array_merge([$me], array_values($ids)));
     $l = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $m) $l[(int) $m['conv_id']] = $m;
     return $l;
@@ -448,7 +475,7 @@ try {
             $vis = mg_visibles($pdo, $moi, true);
             $ids = array_keys($vis);
             $nonlus = mg_nonlus($pdo, $me, $ids);
-            $derniers = mg_derniers($pdo, $ids);
+            $derniers = mg_derniers($pdo, $me, $ids);
             $l = [];
             foreach ($vis as $id => $c) $l[] = mg_element($pdo, $moi, $c, $derniers[$id] ?? null, $nonlus[$id] ?? 0);
             usort($l, fn($a, $b) => [$b['maj'] ? strtotime($b['maj']) : 0, $b['id']] <=> [$a['maj'] ? strtotime($a['maj']) : 0, $a['id']]);
@@ -488,7 +515,8 @@ try {
             $id = (int) $c['id'];
             $avant = mg_entier($_GET['avant'] ?? null);
             $apres = mg_entier($_GET['apres'] ?? null);
-            $champs = 'SELECT id, conv_id, compte_id, IF(supprime = 1, \'\', texte) AS texte, cree, supprime FROM msg_msg WHERE conv_id = ?';
+            $borne = mg_borne($c);                                // après une suppression : seulement les messages plus récents
+            $champs = 'SELECT id, conv_id, compte_id, IF(supprime = 1, \'\', texte) AS texte, cree, supprime FROM msg_msg WHERE conv_id = ? AND id > ' . $borne;
             if ($apres > 0) {                                     // seulement les nouveaux (appelé toutes les 5 s)
                 $st = $pdo->prepare("$champs AND id > ? ORDER BY id ASC LIMIT " . MG_NOUVEAUX);
                 $st->execute([$id, $apres]);
@@ -499,22 +527,22 @@ try {
                 $msgs = array_reverse($st->fetchAll(PDO::FETCH_ASSOC));
             }
             // plusAnciens : il existe des messages plus anciens que le plus ancien renvoyé (ou que MSGID si &apres ne renvoie rien)
-            $borne = $msgs ? (int) $msgs[0]['id'] : ($apres > 0 ? $apres + 1 : 0);
+            $haut = $msgs ? (int) $msgs[0]['id'] : ($apres > 0 ? $apres + 1 : 0);
             $plus = false;
-            if ($borne > 0) {
-                $st = $pdo->prepare('SELECT 1 FROM msg_msg WHERE conv_id = ? AND id < ? LIMIT 1');
-                $st->execute([$id, $borne]);
+            if ($haut > 0) {
+                $st = $pdo->prepare('SELECT 1 FROM msg_msg WHERE conv_id = ? AND id < ? AND id > ' . $borne . ' LIMIT 1');
+                $st->execute([$id, $haut]);
                 $plus = (bool) $st->fetchColumn();
             }
             $sanslire = isset($_GET['sanslire']) && !in_array((string) $_GET['sanslire'], ['', '0'], true);
             if (!$sanslire) { mg_marquer_lu($pdo, $moi, $c); $c = mg_conv($pdo, $id, $me) ?? $c; }
-            $el = mg_element($pdo, $moi, $c, mg_derniers($pdo, [$id])[$id] ?? null, mg_nonlus($pdo, $me, [$id])[$id] ?? 0);
+            $el = mg_element($pdo, $moi, $c, mg_derniers($pdo, $me, [$id])[$id] ?? null, mg_nonlus($pdo, $me, [$id])[$id] ?? 0);
             $membres = $c['type'] === 'prive' ? mg_ids_prive((string) $c['cle']) : mg_membres_groupe($pdo, $c);
             $el['membres'] = mg_trier_personnes(array_map(fn($i) => mg_personne($pdo, (int) $i), $membres));
             mg_sortir(200, ['conv' => $el, 'messages' => array_map(fn($m) => mg_message($pdo, $m, $me), $msgs), 'plusAnciens' => $plus]);
         }
 
-        foreach (['ouvrir', 'envoyer', 'lu', 'supprimer', 'muet'] as $a) if (isset($_GET[$a])) mg_sortir(405, ['erreur' => 'Méthode refusée.']);
+        foreach (['ouvrir', 'envoyer', 'lu', 'supprimer', 'muet', 'effacer'] as $a) if (isset($_GET[$a])) mg_sortir(405, ['erreur' => 'Méthode refusée.']);
         mg_sortir(400, ['erreur' => 'Action inconnue.']);
     }
 
@@ -558,6 +586,28 @@ try {
             mg_sortir(200, ['id' => $gid]);
         }
         mg_sortir(400, ['erreur' => 'Indique à qui tu veux écrire.']);
+    }
+
+    // supprimer une conversation : une privée disparaît de MA liste (l'autre personne la garde) ;
+    // un groupe est vidé pour tout le monde, par un coach de l'équipe ou le bureau
+    if (isset($_GET['effacer'])) {
+        $c = mg_conv($pdo, mg_entier($corps['conv'] ?? null), $me);
+        if (!$c || !mg_peut_lire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => $refus]);
+        $id = (int) $c['id'];
+        $st = $pdo->prepare('SELECT COALESCE(MAX(id), 0) FROM msg_msg WHERE conv_id = ?');
+        $st->execute([$id]);
+        $max = (int) $st->fetchColumn();
+        if ($c['type'] === 'prive') {
+            if ($max === 0) $pdo->prepare('DELETE FROM msg_part WHERE conv_id = ? AND compte_id = ?')->execute([$id, $me]);
+            else $pdo->prepare('INSERT INTO msg_part (conv_id, compte_id, lu, efface) VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE lu = GREATEST(lu, VALUES(lu)), efface = VALUES(efface)')->execute([$id, $me, $max, $max]);
+            mg_sortir(200, ['ok' => true, 'pourTous' => false]);
+        }
+        $coachDuGroupe = ($moi['role'] ?? '') === 'entraineur' && mg_membre($pdo, $moi, mg_eq_conv($c));
+        if (rang($moi) < 3 && !$coachDuGroupe) mg_sortir(403, ['erreur' => 'Seul un coach de l\'équipe ou le bureau peut supprimer la conversation du groupe.']);
+        // les messages restent en base (preuve en cas d'abus) mais plus personne ne les voit ; le groupe est à relancer par un coach
+        $pdo->prepare('UPDATE msg_conv SET efface = ?, maj = ? WHERE id = ?')->execute([$max, mg_maintenant(), $id]);
+        mg_sortir(200, ['ok' => true, 'pourTous' => true]);
     }
 
     // les autres actions portent sur une conversation que le compte peut lire
