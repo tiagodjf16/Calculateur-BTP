@@ -365,9 +365,8 @@
       ${groupe ? `<button type="button" class="mg-muet ${c.muet ? "on" : ""}" data-mg-muet aria-pressed="${c.muet ? "true" : "false"}"
           title="${c.muet ? "Les notifications de ce groupe sont coupées : appuie pour les remettre" : "Couper les notifications de ce groupe"}"
           aria-label="${c.muet ? "Notifications du groupe coupées. Les remettre" : "Couper les notifications de ce groupe"}"><span aria-hidden="true">${c.muet ? "🔕" : "🔔"}</span><span class="mg-muet-t">${c.muet ? "Notifications coupées" : "Couper les notifications"}</span></button>` : ""}
-      ${c && (!groupe || ["entraineur", "bureau"].includes(roleCle())) ? `<button type="button" class="mg-effacer" data-mg-effacer
-          title="${groupe ? "Supprimer tous les messages du groupe, pour tout le monde" : "Supprimer cette conversation de ta liste"}"
-          aria-label="${groupe ? "Supprimer la conversation du groupe pour tout le monde" : "Supprimer cette conversation"}"><span aria-hidden="true">🗑</span><span class="mg-muet-t">Supprimer</span></button>` : ""}
+      ${c && ["entraineur", "bureau"].includes(roleCle()) ? `<button type="button" class="mg-effacer" data-mg-effacer
+          title="Supprimer cette conversation" aria-label="Supprimer la conversation"><span aria-hidden="true">🗑</span><span class="mg-muet-t">Supprimer la conversation</span></button>` : ""}
       ${groupe && membres && u.membres ? `<div class="mg-membres"><ul role="list">${membres.map(m => `<li><span class="mg-av mg-av-mini" style="--av:${teinte(m.id)}" aria-hidden="true">${e(initiales(m.nom))}</span><b>${e(m.nom)}</b><small>${e(m.libelle || "")}</small></li>`).join("")}</ul></div>` : ""}`;
     if (zTete.dataset.h !== tete){ zTete.innerHTML = tete; zTete.dataset.h = tete; }
     // le texte en cours de cette conversation (gardé dans S.ui, jamais remplacé tant qu'on reste dessus)
@@ -438,7 +437,7 @@
     const corps = m.supprime ? `<div class="mg-t mg-t-suppr"><span aria-hidden="true">🚫</span> Message supprimé</div>` : `<div class="mg-t">${texteHtml(m.texte)}</div>`;
     return `<div class="mg-l ${moiMsg ? "mg-moi" : "mg-lui"} ${suite ? "mg-suite" : ""} ${m.tmp ? "mg-tmp" : ""}" ${m.tmp ? "" : `data-mg-id="${+m.id}"`}>
       <div class="mg-b ${m.supprime ? "mg-b-suppr" : ""}" data-mg-bulle>${auteur}${corps}<span class="mg-meta">${etat}<time datetime="${e(m.date || "")}">${d ? heure(d) : ""}</time></span></div>
-      ${peutSuppr ? `<button type="button" class="mg-suppr" data-mg-suppr="${+m.id}" aria-label="Supprimer ce message${moiMsg ? "" : " de " + e(m.auteur)}">Supprimer</button>` : ""}
+      ${peutSuppr ? `<button type="button" class="mg-suppr" data-mg-suppr="${+m.id}" aria-label="Supprimer ce message${moiMsg ? "" : " de " + e(m.auteur)}">Supprimer ce message</button>` : ""}
     </div>`;
   }
 
@@ -649,24 +648,19 @@
     const u = U(), id = u.conv, f = filDe(id), c = f.conv || itemDe(id);
     if (!c) return;
     const groupe = c.type === "equipe";
-    if (!confirm(groupe ? `Supprimer tous les messages du « ${c.titre} » pour tout le monde ?\n\nLes joueurs ne verront plus le groupe tant qu'un coach n'y aura pas écrit de nouveau.`
-      : `Supprimer la conversation avec ${c.titre} de ta liste ?\n\n${c.titre} la garde de son côté. Si un nouveau message arrive, elle revient avec seulement les nouveaux messages.`)) return;
+    if (!confirm(groupe ? `Supprimer la conversation « ${c.titre} » ?\n\nElle disparaît pour tous les membres du groupe. Un coach pourra la relancer avec « Nouveau message ».`
+      : `Supprimer la conversation avec ${c.titre} ?\n\nElle disparaît pour toi et pour ${c.titre}.`)) return;
     try {
       await api({ effacer: 1 }, { conv: id });
       if (u.brouillons) delete u.brouillons[id];
-      if (groupe){
-        f.messages = []; f.plusAnciens = false;
-        const it = itemDe(id); if (it){ it.dernier = null; it.nonlus = 0; }
-        rendreFil(); rendreListe(); chargerListe();
-        toastMg("Conversation du groupe supprimée pour tout le monde.");
-      } else {
+      {
         fils.delete(id);
         liste = (liste || []).filter(x => x.id !== id);
         resume.nonlus = liste.reduce((n, x) => n + (+x.nonlus || 0), 0); majPastilles();
         u.conv = null; u.vue = "liste"; filConv = null;
         if (history.state && history.state.mg){ try { history.back(); } catch(err){} }
         afficher(); rendreListe(); chargerListe();
-        toastMg("Conversation supprimée de ta liste.");
+        toastMg("Conversation supprimée.");
       }
     } catch(err){ toastMg("Suppression impossible : " + err.message, true); }
   }
