@@ -33,7 +33,7 @@
   const roleCle = () => (S.compte && ["joueur", "entraineur", "bureau"].includes(S.compte.role)) ? S.compte.role : "joueur";
   const PHRASES = {
     joueur: { barre: "Écris à tes coachs et au bureau. Le groupe de ton équipe apparaît ici dès que ton coach le lance.", vide: "à ton coach ou au bureau", liste: "Écris à ton coach ou au bureau : ils reçoivent une notification sur leur téléphone. Le groupe de ton équipe apparaît dès que ton coach y écrit." },
-    entraineur: { barre: "Écris à tes joueurs, aux autres coachs, au bureau et à tes équipes.", vide: "à un joueur, à un coach, au bureau ou à ton équipe", liste: "Écris à tes joueurs, aux coachs ou au bureau : ils reçoivent une notification sur leur téléphone." },
+    entraineur: { barre: "Écris à tes joueurs, aux coachs de ton équipe, au bureau et au groupe de ton équipe.", vide: "à un de tes joueurs, à un coach de ton équipe, au bureau ou à ton équipe", liste: "Écris à tes joueurs, aux coachs ou au bureau : ils reçoivent une notification sur leur téléphone." },
     bureau: { barre: "Écris à tous les membres du club et aux groupes d'équipe.", vide: "à un membre du club ou à un groupe d'équipe", liste: "Écris aux joueurs, aux coachs ou à un groupe d'équipe : ils reçoivent une notification sur leur téléphone." },
   };
   const U = () => {
@@ -365,6 +365,9 @@
       ${groupe ? `<button type="button" class="mg-muet ${c.muet ? "on" : ""}" data-mg-muet aria-pressed="${c.muet ? "true" : "false"}"
           title="${c.muet ? "Les notifications de ce groupe sont coupées : appuie pour les remettre" : "Couper les notifications de ce groupe"}"
           aria-label="${c.muet ? "Notifications du groupe coupées. Les remettre" : "Couper les notifications de ce groupe"}"><span aria-hidden="true">${c.muet ? "🔕" : "🔔"}</span><span class="mg-muet-t">${c.muet ? "Notifications coupées" : "Couper les notifications"}</span></button>` : ""}
+      ${c && (!groupe || ["entraineur", "bureau"].includes(roleCle())) ? `<button type="button" class="mg-effacer" data-mg-effacer
+          title="${groupe ? "Supprimer tous les messages du groupe, pour tout le monde" : "Supprimer cette conversation de ta liste"}"
+          aria-label="${groupe ? "Supprimer la conversation du groupe pour tout le monde" : "Supprimer cette conversation"}"><span aria-hidden="true">🗑</span><span class="mg-muet-t">Supprimer</span></button>` : ""}
       ${groupe && membres && u.membres ? `<div class="mg-membres"><ul role="list">${membres.map(m => `<li><span class="mg-av mg-av-mini" style="--av:${teinte(m.id)}" aria-hidden="true">${e(initiales(m.nom))}</span><b>${e(m.nom)}</b><small>${e(m.libelle || "")}</small></li>`).join("")}</ul></div>` : ""}`;
     if (zTete.dataset.h !== tete){ zTete.innerHTML = tete; zTete.dataset.h = tete; }
     // le texte en cours de cette conversation (gardé dans S.ui, jamais remplacé tant qu'on reste dessus)
@@ -640,6 +643,33 @@
       toastMg(muet ? "Notifications coupées pour ce groupe. Tu verras quand même les messages ici." : "Notifications remises pour ce groupe.");
     } catch(err){ toastMg(err.message, true); }
   }
+  /* supprimer la conversation ouverte : une privée disparaît de ta liste (l'autre personne la garde) ;
+     un groupe est vidé pour tout le monde (coach de l'équipe ou bureau) */
+  async function effacerConv(){
+    const u = U(), id = u.conv, f = filDe(id), c = f.conv || itemDe(id);
+    if (!c) return;
+    const groupe = c.type === "equipe";
+    if (!confirm(groupe ? `Supprimer tous les messages du « ${c.titre} » pour tout le monde ?\n\nLes joueurs ne verront plus le groupe tant qu'un coach n'y aura pas écrit de nouveau.`
+      : `Supprimer la conversation avec ${c.titre} de ta liste ?\n\n${c.titre} la garde de son côté. Si un nouveau message arrive, elle revient avec seulement les nouveaux messages.`)) return;
+    try {
+      await api({ effacer: 1 }, { conv: id });
+      if (u.brouillons) delete u.brouillons[id];
+      if (groupe){
+        f.messages = []; f.plusAnciens = false;
+        const it = itemDe(id); if (it){ it.dernier = null; it.nonlus = 0; }
+        rendreFil(); rendreListe(); chargerListe();
+        toastMg("Conversation du groupe supprimée pour tout le monde.");
+      } else {
+        fils.delete(id);
+        liste = (liste || []).filter(x => x.id !== id);
+        resume.nonlus = liste.reduce((n, x) => n + (+x.nonlus || 0), 0); majPastilles();
+        u.conv = null; u.vue = "liste"; filConv = null;
+        if (history.state && history.state.mg){ try { history.back(); } catch(err){} }
+        afficher(); rendreListe(); chargerListe();
+        toastMg("Conversation supprimée de ta liste.");
+      }
+    } catch(err){ toastMg("Suppression impossible : " + err.message, true); }
+  }
   async function ouvrirAvec(corps){
     try {
       const d = await api({ ouvrir: 1 }, corps);
@@ -737,7 +767,7 @@
   /* ================= LES ÉVÉNEMENTS (les nôtres, jamais data-a) ================= */
   document.addEventListener("click", ev => {
     const t = ev.target; if (!t || !t.closest) return;
-    const b = t.closest("[data-mg-ouvrir],[data-mg-onglet-joueur],[data-mg-conv],[data-mg-retour],[data-mg-nouveau],[data-mg-groupe],[data-mg-contact],[data-mg-plus],[data-mg-suppr],[data-mg-muet],[data-mg-membres],[data-mg-bas],[data-mg-recharger],[data-mg-recharger-conv],[data-mg-contacts],[data-mg-notif-x],[data-mg-notif]");
+    const b = t.closest("[data-mg-ouvrir],[data-mg-onglet-joueur],[data-mg-conv],[data-mg-retour],[data-mg-nouveau],[data-mg-groupe],[data-mg-contact],[data-mg-plus],[data-mg-suppr],[data-mg-muet],[data-mg-effacer],[data-mg-membres],[data-mg-bas],[data-mg-recharger],[data-mg-recharger-conv],[data-mg-contacts],[data-mg-notif-x],[data-mg-notif]");
     if (!b){
       const bu = t.closest("[data-mg-bulle]");
       if (bu && !t.closest("a") && racine && racine.contains(bu) && !(getSelection() && String(getSelection()).length)){
@@ -762,6 +792,7 @@
     if ("mgPlus" in d){ chargerAvant(); return; }
     if ("mgSuppr" in d){ supprimer(+d.mgSuppr); return; }
     if ("mgMuet" in d){ basculerMuet(); return; }
+    if ("mgEffacer" in d){ effacerConv(); return; }
     if ("mgMembres" in d){ const u = U(); u.membres = !u.membres; rendreConv(); return; }
     if ("mgBas" in d){ allerEnBas(); return; }
     if ("mgRecharger" in d){ erreurListe = ""; liste = null; rendreListe(); chargerListe(); return; }
@@ -1079,6 +1110,9 @@ ${L} .mg-it.nonlu .mg-it-h{color:#15803D}
 .mg-retour:hover{background:var(--mg-survol)}
 .mg-membres-bt{border:0;background:none;padding:2px 0;color:var(--mg-doux);font:600 13.5px var(--corps);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .mg-membres-bt:hover{color:var(--mg-texte)}
+.mg-effacer{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid rgba(248,113,113,.45);background:none;color:#FCA5A5;font:700 13.5px var(--corps);cursor:pointer}
+.mg-effacer:hover{background:rgba(220,38,38,.14)}
+:root[data-theme="light"] .mg-effacer{color:#B91C1C;border-color:#F87171}
 .mg-muet{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--mg-ligne);background:none;
   color:var(--mg-doux);font:700 14px var(--corps);cursor:pointer}
 .mg-muet:hover{color:var(--mg-texte);border-color:rgba(143,168,240,.5)}
@@ -1194,6 +1228,8 @@ ${L} .mg-erreur{color:#991B1B;background:#FEE2E2}
   .mg-tete{padding:8px 12px;min-height:60px;gap:10px}
   .mg-tete-txt b{font-size:19px}
   .mg-muet{padding:6px 10px;min-width:44px;min-height:44px;justify-content:center}
+  .mg-effacer{padding:6px 10px;min-width:44px;min-height:44px;justify-content:center}
+  .mg-effacer .mg-muet-t{display:none}
   .mg-muet-t{display:none}
   .mg-membres{margin:6px -12px -8px;padding:8px 12px}
   .mg-fil{padding:10px 10px 8px}
