@@ -345,7 +345,19 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
         else continue;
         $l[(int) $c['id']] = $c;
     }
-    // conversation privée supprimée par ce compte : elle ne revient que si un nouveau message arrive
+    // conversation supprimée (privée effacée, groupe supprimé ou jamais lancé) : elle n'apparaît que s'il y a des messages après la suppression
+    if ($l) {
+        $st = $pdo->prepare('SELECT m.conv_id, COUNT(*) FROM msg_msg m JOIN msg_conv c ON c.id = m.conv_id
+            WHERE m.conv_id IN (' . implode(',', array_fill(0, count($l), '?')) . ') AND m.id > c.efface GROUP BY m.conv_id');
+        $st->execute(array_keys($l));
+        $vivants = [];
+        foreach ($st->fetchAll(PDO::FETCH_NUM) as [$cid, $n]) $vivants[(int) $cid] = (int) $n;
+        foreach ($l as $id => $c) {
+            if (isset($vivants[$id])) continue;
+            if ($c['type'] === 'equipe' || (int) ($c['ceff'] ?? 0) > 0) unset($l[$id]);   // privée jamais écrite : visible par celui qui l'a ouverte
+        }
+    }
+    // conversation privée supprimée par ce compte (ancienne version) : elle ne revient que si un nouveau message arrive
     $effaces = array_filter($l, fn($c) => $c['type'] === 'prive' && (int) ($c['peff'] ?? 0) > 0);
     if ($effaces) {
         $st = $pdo->prepare('SELECT conv_id, MAX(id) FROM msg_msg WHERE conv_id IN (' . implode(',', array_fill(0, count($effaces), '?')) . ') GROUP BY conv_id');
@@ -588,24 +600,24 @@ try {
         mg_sortir(400, ['erreur' => 'Indique à qui tu veux écrire.']);
     }
 
-    // supprimer une conversation : une privée disparaît de MA liste (l'autre personne la garde) ;
-    // un groupe est vidé pour tout le monde, par un coach de l'équipe ou le bureau
+    // supprimer une conversation (coachs et bureau seulement) : elle disparaît pour tout le monde ;
+    // un groupe : par un coach de l'équipe ou le bureau. Les messages restent en base, invisibles.
     if (isset($_GET['effacer'])) {
         $c = mg_conv($pdo, mg_entier($corps['conv'] ?? null), $me);
         if (!$c || !mg_peut_lire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => $refus]);
         $id = (int) $c['id'];
+        // seuls les coachs et le bureau suppriment une conversation (jamais un joueur)
+        if (rang($moi) < 2) mg_sortir(403, ['erreur' => 'Seuls les coachs et le bureau peuvent supprimer une conversation.']);
+        if ($c['type'] === 'equipe') {
+            $coachDuGroupe = ($moi['role'] ?? '') === 'entraineur' && mg_membre($pdo, $moi, mg_eq_conv($c));
+            if (rang($moi) < 3 && !$coachDuGroupe) mg_sortir(403, ['erreur' => 'Seul un coach de l\'équipe ou le bureau peut supprimer la conversation du groupe.']);
+        }
         $st = $pdo->prepare('SELECT COALESCE(MAX(id), 0) FROM msg_msg WHERE conv_id = ?');
         $st->execute([$id]);
         $max = (int) $st->fetchColumn();
-        if ($c['type'] === 'prive') {
-            if ($max === 0) $pdo->prepare('DELETE FROM msg_part WHERE conv_id = ? AND compte_id = ?')->execute([$id, $me]);
-            else $pdo->prepare('INSERT INTO msg_part (conv_id, compte_id, lu, efface) VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE lu = GREATEST(lu, VALUES(lu)), efface = VALUES(efface)')->execute([$id, $me, $max, $max]);
-            mg_sortir(200, ['ok' => true, 'pourTous' => false]);
-        }
-        $coachDuGroupe = ($moi['role'] ?? '') === 'entraineur' && mg_membre($pdo, $moi, mg_eq_conv($c));
-        if (rang($moi) < 3 && !$coachDuGroupe) mg_sortir(403, ['erreur' => 'Seul un coach de l\'équipe ou le bureau peut supprimer la conversation du groupe.']);
-        // les messages restent en base (preuve en cas d'abus) mais plus personne ne les voit ; le groupe est à relancer par un coach
+        // la conversation disparaît pour tout le monde ; les messages restent en base, invisibles (preuve en cas d'abus).
+        // Elle ne revient que si quelqu'un réécrit (avec seulement les nouveaux messages).
+        if ($max === 0) $pdo->prepare('DELETE FROM msg_part WHERE conv_id = ?')->execute([$id]);
         $pdo->prepare('UPDATE msg_conv SET efface = ?, maj = ? WHERE id = ?')->execute([$max, mg_maintenant(), $id]);
         mg_sortir(200, ['ok' => true, 'pourTous' => true]);
     }
