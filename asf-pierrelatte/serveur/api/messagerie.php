@@ -154,7 +154,13 @@ function mg_comptes(PDO $pdo): array {
     static $tous = null;
     if ($tous === null) {
         $tous = [];
-        foreach ($pdo->query('SELECT id, nom, role, equipe, actif, doit_changer FROM comptes ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) as $c) $tous[(int) $c['id']] = $c;
+        // un coach ou un dirigeant sans numéro de licence compte comme un joueur (session.php : role_effectif)
+        $lic = function_exists('role_effectif');
+        $sql = $lic ? 'SELECT id, nom, email, role, equipe, actif, doit_changer, licence FROM comptes ORDER BY id' : 'SELECT id, nom, role, equipe, actif, doit_changer FROM comptes ORDER BY id';
+        foreach ($pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            if ($lic) $c['role'] = role_effectif($c);
+            $tous[(int) $c['id']] = $c;
+        }
     }
     return $tous;
 }
@@ -468,6 +474,7 @@ try {
     $methode = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($methode !== 'GET') verifier_origine();              // POST : JSON obligatoire, depuis le site lui-même
     $moi = compte_actuel();
+    if ($moi && function_exists('role_effectif')) $moi['role'] = role_effectif($moi);
     // la clé d'écriture (X-Cle) ne donne pas accès à la messagerie : il faut un vrai compte, au code personnel
     if (!$moi || rang($moi) < 1) mg_sortir(401, ['erreur' => 'Connecte-toi (avec ton mot de passe personnel) pour accéder à la messagerie.']);
     mg_preparer($pdo);

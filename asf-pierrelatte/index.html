@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="1500828171e1">
+<meta name="asf-version" content="6dc5c119b7ac">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16537,6 +16537,49 @@ body.mg-plein #p-espace,body.mg-plein #p-joueur{transform:none!important;animati
     });
     racine.querySelectorAll("select option").forEach(o => { if (estEcoleTout(o.value || o.textContent) && !o.hasAttribute("selected")) o.remove(); });
   };
+
+  /* ---- numéro de licence : pas de licence, pas d'accès à l'espace dirigeants (vérifié par le serveur, auth.php) ---- */
+  const licencePropre = v => { const x = String(v || "").replace(/[\s.-]+/g, ""); return /^\d{6,12}$/.test(x) ? x : ""; };
+  const estStaff = r => /entraineur|bureau/.test(String(r || ""));
+  /* le numéro trouvé dans les effectifs (import Footclubs) pour cette personne */
+  const licenceEffectifs = (...noms) => {
+    const cles = noms.filter(Boolean).map(n => slug(n));
+    for (const ef of Object.values(S.effectifs || {}))
+      for (const j of (ef && ef.joueurs) || []) if (j && cles.includes(slug(j.nom || "")) && licencePropre(j.licence)) return licencePropre(j.licence);
+    return "";
+  };
+  if (typeof window.appelAuth === "function"){
+    const avantAuth = window.appelAuth;
+    window.appelAuth = async function(action, corps){
+      try {
+        if (action === "maj" && corps && corps.id != null){
+          const x = document.querySelector(`#panneau [data-cpt="${CSS.escape(String(corps.id))}"] [data-cpt-champ="licence"]`);
+          if (x) corps = { ...corps, licence: x.value.trim() };
+        }
+        if (action === "creer_lot" && corps && Array.isArray(corps.comptes)){
+          const f = document.querySelector('#panneau form[data-form="compte-staff"] [name="licence"]');
+          corps = { ...corps, comptes: corps.comptes.map(r => {
+            if (r.licence) return r;
+            if (estStaff(r.role) && f && corps.comptes.length === 1) return { ...r, licence: f.value.trim() };
+            const l = licenceEffectifs(r.complet, `${r.prenom || ""} ${r.nom || ""}`);
+            return l ? { ...r, licence: l } : r;
+          }) };
+        }
+      } catch(err){}
+      const r = await avantAuth.call(this, action, corps);
+      if (action === "comptes" && r && typeof r.gerer === "boolean") S.ui.cptGerer = r.gerer;
+      return r;
+    };
+  }
+  /* un coach ou un dirigeant sans licence est traité comme un joueur : on lui dit pourquoi l'espace club est fermé */
+  let ditSansLicence = false;
+  const direSansLicence = () => {
+    if (ditSansLicence || location.hash !== "#espace" || !S.compte || !S.compte.sansLicence) return;
+    ditSansLicence = true;
+    if (typeof toast === "function") toast("Ton compte n'a pas de numéro de licence : l'espace dirigeants est fermé. Demande au bureau de l'ajouter dans « Accès et rôles ».", true);
+  };
+  window.addEventListener("hashchange", () => setTimeout(direSansLicence, 300));
+  setTimeout(direSansLicence, 2500);
   /* un champ avec son libellé (visible sur téléphone ; sur ordinateur, les colonnes ont leur en-tête) */
   const cellule = (texte, champ, cls) => {
     const l = document.createElement("label"); l.className = "ong-reg-cel" + (cls ? " " + cls : "");
@@ -16790,11 +16833,18 @@ body.mg-plein #p-espace,body.mg-plein #p-joueur{transform:none!important;animati
     const bt = k => corps.querySelector(`[data-a="${k}"]`);
     const enr = bt("cpt-enregistrer"), reinit = bt("cpt-reinit"), desac = bt("cpt-desactiver"), suppr = bt("cpt-supprimer");
     if (!champs || !enr) return;
+    // numéro de licence (obligatoire pour un coach ou un dirigeant) ; proposé depuis les effectifs s'il y est
+    const licC = licencePropre(c.licence), licE = licC ? "" : licenceEffectifs(c.joueur_nom, c.nom);
+    champs.appendChild(el(`<label>N° de licence<input data-cpt-champ="licence" inputmode="numeric" autocomplete="off" maxlength="16"
+        placeholder="10 chiffres" value="${e(licC || licE)}"></label>`));
+    const sansLic = estStaff(c.role) && !!c.sansLicence;
+    if (sansLic && sum) sum.querySelector(".cpt-qui small")?.insertAdjacentHTML("beforeend", `<span class="ong-reg-sanslic">⚠ Sans licence</span>`);
     // ce que le compte peut ouvrir, en clair
     const dispo = ONGLETS.filter(o => c.role === "bureau" ? true : o[2] === "entraineur");
     const ch = q && Array.isArray(q.onglets) ? q.onglets : [];
     let onglets;
     if (f === "joueur") onglets = "L'espace joueur seulement (pas l'espace club)";
+    else if (sansLic) onglets = "Rien dans l'espace club tant que son numéro de licence n'est pas renseigné (il est traité comme un joueur)";
     else if (!ch.length) onglets = `Tous les onglets de son rôle (${dispo.length})`;
     else {
       const noms = dispo.filter(o => ch.includes(o[0])).map(o => nomOnglet(o[0]));
@@ -16803,6 +16853,10 @@ body.mg-plein #p-espace,body.mg-plein #p-joueur{transform:none!important;animati
     const profil = el(`<section class="ong-reg-bloc"><h4>Son profil</h4></section>`);
     if (id){ id.innerHTML = `Identifiant de connexion : <b>${e(c.email)}</b>`; profil.appendChild(id); }
     profil.appendChild(champs);
+    if (sansLic || licE) profil.appendChild(el(`<p class="ong-reg-lic-note ${sansLic ? "alerte" : ""}">${sansLic
+      ? (licE ? `⚠ Pas de licence enregistrée : celle des effectifs (${e(licE)}) est proposée. Touche <b>Enregistrer</b> pour lui ouvrir l'espace dirigeants.`
+              : "⚠ Pas de licence, pas d'accès dirigeant : indique son numéro de licence puis touche <b>Enregistrer</b>.")
+      : `Numéro trouvé dans les effectifs. Touche <b>Enregistrer</b> pour le garder.`}</p>`));
     const p1 = el(`<div class="ong-reg-bloc-pied"></div>`); enr.classList.remove("petit"); p1.appendChild(enr); profil.appendChild(p1);
     const droits = el(`<section class="ong-reg-bloc"><h4>Ce qu'il peut ouvrir</h4>
         <dl class="ong-reg-droits"><div><dt>Onglets</dt><dd>${e(onglets)}</dd></div><div><dt>Équipes gérées</dt><dd>${gerees.length ? e(gerees.join(", ")) : "Aucune"}</dd></div></dl></section>`);
@@ -16858,6 +16912,12 @@ body.mg-plein #p-espace,body.mg-plein #p-joueur{transform:none!important;animati
       nouveau.classList.add("ong-reg-nouveau");
       const p = nouveau.querySelector("p.quoi"), form = nouveau.querySelector("form");
       if (p && form){ p.className = "ong-reg-hint"; p.textContent = "Un identifiant et un code provisoire sont créés. Ils ne s'affichent qu'une fois, en haut de la page : imprime-les ou note-les."; form.before(p); }
+      const btF = form && form.querySelector("button");
+      if (btF && !form.querySelector('[name="licence"]')){
+        btF.before(el(`<label>N° de licence<input name="licence" required inputmode="numeric" autocomplete="off" maxlength="16"
+            pattern="[0-9 ]{6,16}" placeholder="10 chiffres" title="Le numéro de licence FFF de la personne (des chiffres)"></label>`));
+        form.after(el(`<p class="ong-reg-hint">Pas de licence, pas d'accès dirigeant : le numéro de licence est obligatoire pour un coach ou un dirigeant.</p>`));
+      }
     }
     const chips = w.querySelector(".acc-chips"), actu = w.querySelector('[data-a="cpt-actualiser"]');
     if (chips){
@@ -17144,7 +17204,13 @@ ${P} .ong-reg-bloc{display:grid;gap:12px;align-content:start;padding:14px 16px;b
 ${P} .ong-reg-bloc h4{margin:0;font:800 13px var(--corps);letter-spacing:.1em;text-transform:uppercase;color:#AFC0EA}
 ${P} .ong-reg-bloc .cpt-id{font-size:15px}
 ${P} .ong-reg-bloc .cpt-id b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15.5px;color:#fff;background:rgba(143,168,240,.14);padding:2px 8px;border-radius:7px}
-${P} .ong-reg-bloc .cpt-champs{grid-template-columns:repeat(3,minmax(0,1fr))}
+${P} .ong-reg-bloc .cpt-champs{grid-template-columns:repeat(2,minmax(0,1fr))}
+${P} .ong-reg-sanslic{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:rgba(245,158,11,.18);color:#FBBF24;font-weight:800;font-size:12px}
+${P} .ong-reg-lic-note{margin:0;padding:10px 12px;border-radius:12px;background:rgba(47,107,255,.12);color:#C9D4F2;font-size:14px;line-height:1.45}
+${P} .ong-reg-lic-note.alerte{background:rgba(245,158,11,.14);color:#FDE68A;border:1px solid rgba(245,158,11,.35)}
+:root[data-theme="light"] ${P} .ong-reg-lic-note{color:var(--texte)}
+:root[data-theme="light"] ${P} .ong-reg-lic-note.alerte{color:#92400E}
+:root[data-theme="light"] ${P} .ong-reg-sanslic{color:#B45309}
 ${P} .ong-reg-bloc-pied{display:flex;gap:10px;flex-wrap:wrap}
 ${P} .ong-reg-bloc-pied .btn.bleu{min-width:160px}
 ${P} .ong-reg-droits{margin:0;display:grid;gap:10px}
