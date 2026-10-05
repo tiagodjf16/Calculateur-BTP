@@ -65,9 +65,9 @@
     racine.querySelectorAll("select option").forEach(o => { if (estEcoleTout(o.value || o.textContent) && !o.hasAttribute("selected")) o.remove(); });
   };
 
-  /* ---- numéro de licence : pas de licence, pas d'accès à l'espace dirigeants (vérifié par le serveur, auth.php) ---- */
+  /* ---- numéro de licence : l'espace joueur est réservé aux licenciés (vérifié par le serveur, session.php) ;
+     donner l'accès dirigeant (changer un rôle) : les comptes « Joueur, coach et bureau » et l'administrateur ---- */
   const licencePropre = v => { const x = String(v || "").replace(/[\s.-]+/g, ""); return /^\d{6,12}$/.test(x) ? x : ""; };
-  const estStaff = r => /entraineur|bureau/.test(String(r || ""));
   /* le numéro trouvé dans les effectifs (import Footclubs) pour cette personne */
   const licenceEffectifs = (...noms) => {
     const cles = noms.filter(Boolean).map(n => slug(n));
@@ -84,26 +84,24 @@
           if (x) corps = { ...corps, licence: x.value.trim() };
         }
         if (action === "creer_lot" && corps && Array.isArray(corps.comptes)){
-          const f = document.querySelector('#panneau form[data-form="compte-staff"] [name="licence"]');
           corps = { ...corps, comptes: corps.comptes.map(r => {
             if (r.licence) return r;
-            if (estStaff(r.role) && f && corps.comptes.length === 1) return { ...r, licence: f.value.trim() };
             const l = licenceEffectifs(r.complet, `${r.prenom || ""} ${r.nom || ""}`);
             return l ? { ...r, licence: l } : r;
           }) };
         }
       } catch(err){}
       const r = await avantAuth.call(this, action, corps);
-      if (action === "comptes" && r && typeof r.gerer === "boolean") S.ui.cptGerer = r.gerer;
+      if (action === "comptes" && r){ if (typeof r.gerer === "boolean") S.ui.cptGerer = r.gerer; if (typeof r.donner === "boolean") S.ui.cptDonner = r.donner; }
       return r;
     };
   }
-  /* un coach ou un dirigeant sans licence est traité comme un joueur : on lui dit pourquoi l'espace club est fermé */
+  /* un joueur sans licence n'a accès à rien : on lui dit pourquoi */
   let ditSansLicence = false;
   const direSansLicence = () => {
-    if (ditSansLicence || location.hash !== "#espace" || !S.compte || !S.compte.sansLicence) return;
+    if (ditSansLicence || location.hash !== "#joueur" || !S.compte || S.compte.role !== "joueur" || S.compte.aLicence !== false) return;
     ditSansLicence = true;
-    if (typeof toast === "function") toast("Ton compte n'a pas de numéro de licence : l'espace dirigeants est fermé. Demande au bureau de l'ajouter dans « Accès et rôles ».", true);
+    if (typeof toast === "function") toast("Ton numéro de licence n'est pas enregistré au club : l'espace joueur est réservé aux licenciés. Demande à ton coach ou au bureau.", true);
   };
   window.addEventListener("hashchange", () => setTimeout(direSansLicence, 300));
   setTimeout(direSansLicence, 2500);
@@ -361,17 +359,19 @@
     const enr = bt("cpt-enregistrer"), reinit = bt("cpt-reinit"), desac = bt("cpt-desactiver"), suppr = bt("cpt-supprimer");
     if (!champs || !enr) return;
     // numéro de licence (obligatoire pour un coach ou un dirigeant) ; proposé depuis les effectifs s'il y est
-    const licC = licencePropre(c.licence), licE = licC ? "" : licenceEffectifs(c.joueur_nom, c.nom);
+    const licC = licencePropre(c.licence), licE = licC ? "" : (licencePropre(c.licenceTrouvee) || licenceEffectifs(c.joueur_nom, c.nom));
     champs.appendChild(el(`<label>N° de licence<input data-cpt-champ="licence" inputmode="numeric" autocomplete="off" maxlength="16"
         placeholder="10 chiffres" value="${e(licC || licE)}"></label>`));
-    const sansLic = estStaff(c.role) && !!c.sansLicence;
+    const sansLic = c.role === "joueur" && (c.sansLicence === true || (c.sansLicence === undefined && !licC && !licE));
+    // changer un rôle : seulement les comptes « Joueur, coach et bureau » (et l'administrateur)
+    const selRole = champs.querySelector('[data-cpt-champ="role"]');
+    if (selRole && S.ui.cptDonner === false){ selRole.disabled = true; selRole.title = "Seules les personnes qui ont tous les rôles (joueur, coach et bureau) peuvent changer un rôle."; }
     if (sansLic && sum) sum.querySelector(".cpt-qui small")?.insertAdjacentHTML("beforeend", `<span class="ong-reg-sanslic">⚠ Sans licence</span>`);
     // ce que le compte peut ouvrir, en clair
     const dispo = ONGLETS.filter(o => c.role === "bureau" ? true : o[2] === "entraineur");
     const ch = q && Array.isArray(q.onglets) ? q.onglets : [];
     let onglets;
     if (f === "joueur") onglets = "L'espace joueur seulement (pas l'espace club)";
-    else if (sansLic) onglets = "Rien dans l'espace club tant que son numéro de licence n'est pas renseigné (il est traité comme un joueur)";
     else if (!ch.length) onglets = `Tous les onglets de son rôle (${dispo.length})`;
     else {
       const noms = dispo.filter(o => ch.includes(o[0])).map(o => nomOnglet(o[0]));
@@ -380,10 +380,9 @@
     const profil = el(`<section class="ong-reg-bloc"><h4>Son profil</h4></section>`);
     if (id){ id.innerHTML = `Identifiant de connexion : <b>${e(c.email)}</b>`; profil.appendChild(id); }
     profil.appendChild(champs);
-    if (sansLic || licE) profil.appendChild(el(`<p class="ong-reg-lic-note ${sansLic ? "alerte" : ""}">${sansLic
-      ? (licE ? `⚠ Pas de licence enregistrée : celle des effectifs (${e(licE)}) est proposée. Touche <b>Enregistrer</b> pour lui ouvrir l'espace dirigeants.`
-              : "⚠ Pas de licence, pas d'accès dirigeant : indique son numéro de licence puis touche <b>Enregistrer</b>.")
-      : `Numéro trouvé dans les effectifs. Touche <b>Enregistrer</b> pour le garder.`}</p>`));
+    if (sansLic) profil.appendChild(el(`<p class="ong-reg-lic-note alerte">⚠ Sans numéro de licence, il ne peut pas entrer dans l'espace joueur : indique son numéro puis touche <b>Enregistrer</b>.</p>`));
+    else if (licE) profil.appendChild(el(`<p class="ong-reg-lic-note">Numéro de licence trouvé dans les effectifs. Touche <b>Enregistrer</b> pour le garder dans son compte.</p>`));
+    if (selRole && selRole.disabled) profil.appendChild(el(`<p class="ong-reg-lic-note">🔒 Seules les personnes qui ont tous les rôles (joueur, coach et bureau) peuvent changer son rôle ou lui donner l'accès dirigeant.</p>`));
     const p1 = el(`<div class="ong-reg-bloc-pied"></div>`); enr.classList.remove("petit"); p1.appendChild(enr); profil.appendChild(p1);
     const droits = el(`<section class="ong-reg-bloc"><h4>Ce qu'il peut ouvrir</h4>
         <dl class="ong-reg-droits"><div><dt>Onglets</dt><dd>${e(onglets)}</dd></div><div><dt>Équipes gérées</dt><dd>${gerees.length ? e(gerees.join(", ")) : "Aucune"}</dd></div></dl></section>`);
@@ -432,6 +431,8 @@
         ch.replaceWith(l); l.insertAdjacentHTML("afterbegin", `<span aria-hidden="true">🔍</span>`); l.appendChild(ch);
       }
       const nouv = barre.querySelector('[data-a="cpt-nouveau"]');
+      // créer un coach ou un dirigeant : seulement les comptes « Joueur, coach et bureau » (et l'administrateur)
+      if (nouv && S.ui.cptDonner === false){ nouv.remove(); const n = w.querySelector(".acc-nouveau"); if (n) n.remove(); }
       if (nouv && S.ui.cptNouveau){ nouv.className = "btn contour"; nouv.textContent = "✕ Fermer le formulaire"; }
     }
     const nouveau = w.querySelector(".acc-nouveau");
@@ -439,12 +440,6 @@
       nouveau.classList.add("ong-reg-nouveau");
       const p = nouveau.querySelector("p.quoi"), form = nouveau.querySelector("form");
       if (p && form){ p.className = "ong-reg-hint"; p.textContent = "Un identifiant et un code provisoire sont créés. Ils ne s'affichent qu'une fois, en haut de la page : imprime-les ou note-les."; form.before(p); }
-      const btF = form && form.querySelector("button");
-      if (btF && !form.querySelector('[name="licence"]')){
-        btF.before(el(`<label>N° de licence<input name="licence" required inputmode="numeric" autocomplete="off" maxlength="16"
-            pattern="[0-9 ]{6,16}" placeholder="10 chiffres" title="Le numéro de licence FFF de la personne (des chiffres)"></label>`));
-        form.after(el(`<p class="ong-reg-hint">Pas de licence, pas d'accès dirigeant : le numéro de licence est obligatoire pour un coach ou un dirigeant.</p>`));
-      }
     }
     const chips = w.querySelector(".acc-chips"), actu = w.querySelector('[data-a="cpt-actualiser"]');
     if (chips){

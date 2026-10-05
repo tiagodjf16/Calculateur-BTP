@@ -93,6 +93,22 @@ try {
         echo json_encode(['erreur' => $compte ? "Ton compte n'a pas le droit de modifier cet élément." : 'Connecte-toi pour modifier.']);
         exit;
     }
+    // changer le « rôle choisi » d'un compte (joueur et coach, coach et bureau…), c'est donner l'accès dirigeant :
+    // l'administrateur principal et les comptes « Joueur, coach et bureau » seulement
+    if ($chemin === 'site/permissions' && !cle_valide() && !peut_donner_roles($compte)) {
+        $avant = permissions_site();
+        $apres = $methode === 'DELETE' ? [] : (is_array($corps['data'] ?? null) ? $corps['data'] : []);
+        $serveur = [];                                           // sans « rôle choisi », c'est le rôle du compte
+        foreach ($pdo->query('SELECT id, role FROM comptes') as $l) $serveur['c' . $l['id']] = (string) $l['role'];
+        $role = fn($p, $k) => (is_array($p[$k] ?? null) ? (string) ($p[$k]['roleChoisi'] ?? '') : '') ?: ($serveur[$k] ?? '');
+        foreach (array_unique(array_merge(array_keys($avant), array_keys($apres))) as $k) {
+            if ($role($avant, $k) !== $role($apres, $k)) {
+                http_response_code(403);
+                echo json_encode(['erreur' => "Seules les personnes qui ont tous les rôles (joueur, coach et bureau) peuvent donner l'accès dirigeant ou changer un rôle."]);
+                exit;
+            }
+        }
+    }
 
     if ($methode === 'DELETE') {
         $pdo->prepare('DELETE FROM documents WHERE path = ?')->execute([$chemin]);

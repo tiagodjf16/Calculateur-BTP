@@ -169,16 +169,17 @@ le serveur répond « rien n'a changé » quand c'est le cas), ajouter en haut d
 En plus, l'espace club et le site affichent « ✨ Nouvelle version du site disponible — Recharger » quand une nouvelle
 version de `index.html` est en ligne.
 
-## Licence obligatoire pour l'espace dirigeants, et qui peut donner les accès
+## Espace joueur réservé aux licenciés, et qui donne l'accès dirigeant
 
 - Chaque compte a un **numéro de licence** (colonne `licence` de la table `comptes`, ajoutée toute seule par `session.php`).
-- Un compte **coach ou bureau sans numéro de licence** n'a que les droits d'un joueur : pas d'espace dirigeants, pas de
-  données réservées au staff, et il compte comme un joueur dans la messagerie. L'administrateur principal n'est pas concerné.
-- Seuls **l'administrateur principal** et les membres du **bureau qui ont l'onglet « Accès et rôles »** peuvent créer des
-  comptes, changer un rôle, donner un code, voir les identifiants des joueurs et modifier `site/permissions` (onglets,
-  équipes gérées). Un compte du bureau sans liste d'onglets a tous les onglets, donc ce droit.
-- Pour donner le rôle coach ou bureau, le numéro de licence est obligatoire (des chiffres, 10 en général) ; le serveur
-  refuse sinon.
+  S'il est vide, le serveur prend celui de la fiche du joueur dans les effectifs (import Footclubs) et le garde dans le compte.
+- Un compte **joueur sans numéro de licence** ne peut pas se connecter (« l'espace joueur est réservé aux licenciés ») et
+  n'a accès à aucune donnée ; il n'apparaît pas non plus dans la messagerie. Les coachs et le bureau n'ont pas besoin de
+  licence pour l'espace dirigeants.
+- **Donner l'accès dirigeant** (changer le rôle d'un compte, créer un coach ou un dirigeant, changer un « rôle choisi » dans
+  `site/permissions`) : seulement l'administrateur principal et les comptes au rôle **« Joueur, coach et bureau »**.
+- Le reste (créer les accès des joueurs, donner un code, voir les identifiants, cocher les onglets et les équipes) : en plus,
+  les membres du bureau qui ont l'onglet « Accès et rôles » (un compte du bureau sans liste d'onglets les a tous).
 
 Fichiers à envoyer dans `api/` : `session.php`, `auth.php`, `db.php`, `messagerie.php`. `session.php` n'est pas dans ce
 dépôt (il contient le code commun des joueurs) : prends celui qui t'a été envoyé à part.

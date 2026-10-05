@@ -47,7 +47,7 @@
     const ini = ((moi.querySelector(".app-ini") || {}).textContent || "").trim();
     const sortir = !!moi.querySelector('[data-a="deconnexion"]');
     // un dirigeant qui est aussi joueur (ou qui a accès à l'espace joueur) y passe en un appui
-    let aJoueur = false; try { const rc = String(((typeof mesPerms === "function" && mesPerms()) || {}).roleChoisi || ""); aJoueur = /joueur/.test(rc) || !!(S.compte && S.compte.joueurNom); } catch(err){}
+    let aJoueur = false; try { const rc = String(((typeof mesPerms === "function" && mesPerms()) || {}).roleChoisi || ""); aJoueur = (/joueur/.test(rc) || !!(S.compte && S.compte.joueurNom)) && !(S.compte && S.compte.aLicence === false); } catch(err){}   // espace joueur : licenciés seulement
     const prenom = /membre du club/i.test(nomC) ? "" : nomC.split(/\s+/)[0];
     if (p) p.textContent = `Bonjour${prenom ? " " + prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() : ""} ! Que veux-tu faire aujourd'hui ?`;
     const html = `<span class="esp-moi-av">${img ? `<img src="${esc(img.getAttribute("src") || "")}" alt="">` : esc(ini || "?")}</span>

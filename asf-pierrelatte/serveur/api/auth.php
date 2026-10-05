@@ -7,8 +7,9 @@
 //   POST /api/auth?action=motdepasse     { ancien, nouveau }
 //   GET  /api/auth?action=comptes                                   (bureau)
 //   POST /api/auth?action=maj            { id, role, equipe, joueurNom, actif, licence? }   (bureau autorisé)
-//   Rôles, comptes et codes : seuls l'administrateur principal et les membres du bureau qui ont l'onglet « Accès et rôles »
-//   peuvent les changer. Un coach ou un dirigeant doit avoir un numéro de licence (sinon il n'a que les droits d'un joueur).
+//   L'espace joueur est réservé aux licenciés (numéro de licence du compte, ou de sa fiche dans les effectifs).
+//   Changer un rôle (donner l'accès dirigeant) : l'administrateur principal et les comptes « Joueur, coach et bureau ».
+//   Le reste de la gestion des comptes : en plus, le bureau qui a l'onglet « Accès et rôles ».
 //   POST /api/auth?action=reinit         { id }                     (bureau)
 //   POST /api/auth?action=supprimer      { id }                     (bureau)
 require __DIR__ . '/session.php';
@@ -52,6 +53,7 @@ try {
             $liste = identifiants_joueurs();
             if (isset($liste[$email])) {
                 $j = $liste[$email];
+                if (licence_de(['nom' => $j['nom'], 'joueur_nom' => $j['nom'], 'licence' => '']) === '') sortir(403, ['erreur' => 'Ton numéro de licence n\'est pas enregistré au club : l\'espace joueur est réservé aux licenciés. Demande à ton coach ou au bureau.']);
                 $pdo->prepare("INSERT INTO comptes (email, nom, hash, role, role_demande, equipe, joueur_nom, actif, doit_changer, cree) VALUES (?, ?, ?, 'joueur', 'joueur', ?, ?, 1, 1, NOW())")
                     ->execute([$email, $j['nom'], password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT), $j['equipe'], $j['nom']]);
                 $st->execute([$email]);
@@ -67,6 +69,7 @@ try {
             sortir(401, ['erreur' => 'Identifiant ou code incorrect.']);
         }
         if (!(int) $c['actif']) sortir(403, ['erreur' => 'Ce compte est désactivé. Rapproche-toi du bureau du club.']);
+        if ($c['role'] === 'joueur' && !a_licence($c)) sortir(403, ['erreur' => 'Ton numéro de licence n\'est pas enregistré au club : l\'espace joueur est réservé aux licenciés. Demande à ton coach ou au bureau.']);
         if (!hash_equals(CODE_COMMUN, $mdp) && password_needs_rehash($c['hash'], PASSWORD_DEFAULT)) {
             $pdo->prepare('UPDATE comptes SET hash = ? WHERE id = ?')->execute([password_hash($mdp, PASSWORD_DEFAULT), $c['id']]);
         }
@@ -151,14 +154,17 @@ try {
     }
     if ($action === 'comptes') {
         $l = $pdo->query('SELECT id, email, nom, role, role_demande, equipe, joueur_nom, licence, actif, cree, derniere FROM comptes ORDER BY actif, nom')->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($l as &$x) $x['sansLicence'] = in_array($x['role'], ['entraineur', 'bureau'], true) && !a_licence($x);
+        foreach ($l as &$x) { $x['licenceTrouvee'] = licence_de($x); $x['sansLicence'] = $x['licenceTrouvee'] === ''; }
         unset($x);
-        sortir(200, ['comptes' => $l, 'gerer' => cle_valide() || peut_gerer_comptes(compte_actuel())]);
+        $moi = compte_actuel();
+        sortir(200, ['comptes' => $l, 'gerer' => cle_valide() || peut_gerer_comptes($moi), 'donner' => cle_valide() || peut_donner_roles($moi)]);
     }
-    // ---- créer les comptes, changer les rôles, donner les codes : les personnes autorisées seulement ----
+    // ---- gérer les comptes : les personnes autorisées seulement ----
     if (!cle_valide() && !peut_gerer_comptes(compte_actuel())) {
-        sortir(403, ['erreur' => "Seules les personnes autorisées (bureau, avec l'onglet « Accès et rôles ») peuvent gérer les comptes et donner l'accès dirigeant."]);
+        sortir(403, ['erreur' => "Seules les personnes autorisées (bureau, avec l'onglet « Accès et rôles ») peuvent gérer les comptes."]);
     }
+    $DONNER = "Seules les personnes qui ont tous les rôles (joueur, coach et bureau) peuvent donner l'accès dirigeant ou changer un rôle.";
+    $peutDonner = cle_valide() || peut_donner_roles(compte_actuel());
     $id = (int) ($corps['id'] ?? 0);
     $moi = compte_actuel();
     // l'administrateur principal ne peut être ni rétrogradé, ni désactivé, ni supprimé par un autre compte
@@ -170,18 +176,16 @@ try {
     if ($action === 'maj' && $m === 'POST') {
         $role = in_array($corps['role'] ?? '', ['joueur', 'entraineur', 'bureau'], true) ? $corps['role'] : 'joueur';
         if ($moi && $id === (int) $moi['id'] && $role !== 'bureau') sortir(400, ['erreur' => 'Tu ne peux pas retirer tes propres droits de bureau.']);
-        $st = $pdo->prepare('SELECT nom, licence FROM comptes WHERE id = ?'); $st->execute([$id]);
+        $st = $pdo->prepare('SELECT role, licence FROM comptes WHERE id = ?'); $st->execute([$id]);
         $avant = $st->fetch(PDO::FETCH_ASSOC);
         if (!$avant) sortir(404, ['erreur' => 'Compte introuvable.']);
+        if ($role !== $avant['role'] && !$peutDonner) sortir(403, ['erreur' => $DONNER]);
         // numéro de licence : gardé tel quel s'il n'est pas envoyé
         $licence = (string) $avant['licence'];
         if (array_key_exists('licence', $corps)) {
             $brut = trim((string) $corps['licence']);
             $licence = licence_propre($brut);
             if ($brut !== '' && $licence === '') sortir(400, ['erreur' => 'Numéro de licence invalide : des chiffres seulement (10 en général).']);
-        }
-        if ($role !== 'joueur' && !empty($corps['actif']) && $cible !== ADMIN_PRINCIPAL && $licence === '') {
-            sortir(400, ['erreur' => 'Pas de licence, pas d\'accès dirigeant : indique le numéro de licence de ' . $avant['nom'] . ' pour lui donner ce rôle.']);
         }
         $pdo->prepare('UPDATE comptes SET role = ?, equipe = ?, joueur_nom = ?, actif = ?, licence = ? WHERE id = ?')
             ->execute([$role, mb_substr((string) ($corps['equipe'] ?? ''), 0, 80), mb_substr((string) ($corps['joueurNom'] ?? ''), 0, 120), empty($corps['actif']) ? 0 : 1, $licence, $id]);
@@ -201,12 +205,9 @@ try {
         $crees = []; $ignores = 0;
         $existe = $pdo->prepare('SELECT COUNT(*) FROM comptes WHERE joueur_nom = ? AND equipe = ?');
         $ajout = $pdo->prepare('INSERT INTO comptes (email, nom, hash, role, role_demande, equipe, joueur_nom, licence, actif, doit_changer, cree) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())');
-        // un coach ou un dirigeant : numéro de licence obligatoire (vérifié avant de créer quoi que ce soit)
+        // créer un coach ou un dirigeant, c'est donner l'accès dirigeant
         foreach (array_slice($corps['comptes'] ?? [], 0, 600) as $x) {
-            if (in_array($x['role'] ?? '', ['entraineur', 'bureau'], true) && licence_propre((string) ($x['licence'] ?? '')) === '') {
-                $qui = trim((string) ($x['complet'] ?? (($x['prenom'] ?? '') . ' ' . ($x['nom'] ?? ''))));
-                sortir(400, ['erreur' => 'Pas de licence, pas d\'accès dirigeant : indique le numéro de licence' . ($qui !== '' ? ' de ' . $qui : '') . ' (des chiffres, 10 en général).']);
-            }
+            if (in_array($x['role'] ?? '', ['entraineur', 'bureau'], true) && !$peutDonner) sortir(403, ['erreur' => $DONNER]);
         }
         foreach (array_slice($corps['comptes'] ?? [], 0, 600) as $x) {
             $prenom = trim((string) ($x['prenom'] ?? '')); $nom = trim((string) ($x['nom'] ?? ''));
