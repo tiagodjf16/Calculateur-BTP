@@ -354,6 +354,8 @@ local activePops: { Pop } = {}
 local holes: { Hole } = {}
 local holeIndex = 0
 
+local camoParts: { [BasePart]: number } = {} -- pièces taguées "AnimatedCamo" -> décalage de phase
+
 --------------------------------------------------------------------------
 -- Dossier ClientFX, fabrique de pièces, émetteurs partagés
 --------------------------------------------------------------------------
@@ -882,6 +884,10 @@ function Effects.Tracer(from: Vector3, to: Vector3, color: Color3?, weaponId: st
 	end
 
 	local weapon = if type(weaponId) == "string" then Weapons.ById[weaponId] else nil
+	if not weapon and type(ClientState.Weapon) == "table" then
+		-- sans weaponId : tir local (GunController) -> arme en main
+		weapon = ClientState.Weapon
+	end
 	local tint = if typeof(color) == "Color3" then color elseif weapon then weapon.TracerColor else DEFAULT_TRACER
 	tint = tint or DEFAULT_TRACER
 	local colors = colorSet(tint)
@@ -1421,7 +1427,7 @@ function Effects.PlayWeaponSound(weaponId: string, at: (Instance | Vector3)?): S
 	local soundId = Config.Sounds.Weapons[weapon.Sound]
 	local profile = SOUND_PROFILES[weapon.Sound] or DEFAULT_SOUND_PROFILE
 	if typeof(at) == "Vector3" then
-		if not isFiniteVector(at) then
+		if not isFiniteVector(at) or distanceToCamera(at) > profile.Range then
 			return nil
 		end
 		return Sfx.PlayAt(soundId, at, profile.Volume, 0.06, profile.Range)
@@ -1430,10 +1436,16 @@ function Effects.PlayWeaponSound(weaponId: string, at: (Instance | Vector3)?): S
 		if not instance:IsDescendantOf(workspace) then
 			return nil
 		end
-		if instance:IsA("Attachment") or instance:IsA("BasePart") then
-			return Sfx.PlayAt(soundId, instance, profile.Volume, 0.06, profile.Range)
+		local position: Vector3? = nil
+		if instance:IsA("Attachment") then
+			position = instance.WorldPosition
+		elseif instance:IsA("BasePart") then
+			position = instance.Position
 		end
-		return nil
+		if not position or distanceToCamera(position) > profile.Range then
+			return nil -- trop loin pour être entendu : pas de Sound créé
+		end
+		return Sfx.PlayAt(soundId, instance, profile.Volume, 0.06, profile.Range)
 	end
 	-- pas de position : son « interface » (tir local sans repère)
 	return Sfx.Play2D(soundId, profile.Volume, 1)
@@ -1563,7 +1575,11 @@ local function refreshNumber(entry: DamageNumber, strong: boolean)
 	entry.Token += 1
 	local token = entry.Token
 	task.delay(0.8, function()
-		if entry.Token ~= token or not entry.Attachment.Parent then
+		if entry.Token ~= token then
+			return
+		end
+		if not entry.Attachment.Parent then
+			destroyNumber(entry)
 			return
 		end
 		entry.Fading = true
@@ -1893,8 +1909,15 @@ local function orbitalImpact(ground: Vector3, radius: number, groundColor: Color
 	glow.Parent = folder
 	tween(core, 0.12, { Size = Vector3.new(800, radius * 0.75, radius * 0.75) })
 	tween(glow, 0.15, { Size = Vector3.new(800, radius * 1.6, radius * 1.6) })
-	tween(core, 0.9, { Size = Vector3.new(800, 0.2, 0.2), Transparency = 1 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In, 0.18)
-	tween(glow, 1.1, { Size = Vector3.new(800, 0.5, 0.5), Transparency = 1 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In, 0.18)
+	-- 2e phase lancée après coup (un tween différé sur la même propriété annulerait le premier)
+	task.delay(0.18, function()
+		if core.Parent then
+			tween(core, 0.9, { Size = Vector3.new(800, 0.2, 0.2), Transparency = 1 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		end
+		if glow.Parent then
+			tween(glow, 1.1, { Size = Vector3.new(800, 0.5, 0.5), Transparency = 1 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		end
+	end)
 	Debris:AddItem(core, 1.4)
 	Debris:AddItem(glow, 1.5)
 
@@ -2120,6 +2143,7 @@ type Pose = {
 	Shoulder: Motor6D?,
 	ShoulderC0: CFrame,
 	Ik: IKControl?,
+	IkWeight: number,
 	Pole: Attachment?,
 	Pitch: number,
 	Applied: number,
@@ -2204,6 +2228,7 @@ local function onToolEquipped(player: Player, character: Model, humanoid: Humano
 			Shoulder = shoulder,
 			ShoulderC0 = if shoulder then shoulder.C0 else CFrame.new(),
 			Ik = nil,
+			IkWeight = 1,
 			Pole = nil,
 			Pitch = 0,
 			Applied = math.huge,
@@ -2236,6 +2261,7 @@ local function onToolEquipped(player: Player, character: Model, humanoid: Humano
 		ik.Target = leftGrip
 		ik.Pole = current.Pole
 		ik.Weight = 1
+		current.IkWeight = 1
 		ik.Priority = 1
 		trySet(ik, "SmoothTime", 0.04)
 		ik.Enabled = true
@@ -2299,6 +2325,19 @@ local function stepPoses(dt: number)
 			local shoulder = pose.Shoulder
 			if shoulder and shoulder.Parent then
 				shoulder.C0 = pose.ShoulderC0 * CFrame.Angles(pitch * SHOULDER_SHARE, 0, 0)
+			end
+		end
+		-- rechargement : la main gauche quitte l'arme (geste de recharge) puis revient
+		local ik = pose.Ik
+		if ik then
+			local goal = if tool:GetAttribute("Reloading") == true then 0 else 1
+			if pose.IkWeight ~= goal then
+				local weight = pose.IkWeight + (goal - pose.IkWeight) * math.min(1, dt * 10)
+				if math.abs(goal - weight) < 0.01 then
+					weight = goal
+				end
+				pose.IkWeight = weight
+				ik.Weight = weight
 			end
 		end
 	end
@@ -2469,6 +2508,7 @@ local function dissolveCharacter(character: Model, player: Player?)
 	end
 	local height = math.max(maxY - minY, 1)
 	for _, part in parts do
+		camoParts[part] = nil -- l'arme qui se dissout ne doit plus changer de teinte
 		if part:IsA("MeshPart") then
 			trySet(part, "TextureID", "")
 		end
@@ -2507,8 +2547,6 @@ end
 --------------------------------------------------------------------------
 -- Camos animés : défilement de teinte (cyan -> violet -> rose), 20 fois / s
 --------------------------------------------------------------------------
-local camoParts: { [BasePart]: number } = {}
-
 local function addCamoPart(instance: Instance)
 	if not instance:IsA("BasePart") then
 		return
@@ -2547,7 +2585,6 @@ local killcam = {
 	Start = 0,
 	Yaw = 0,
 	DeathPos = Vector3.zero,
-	SavedFov = Config.Camera.BaseFov,
 	Highlight = nil :: Highlight?,
 	FovTween = nil :: Tween?,
 	Params = nil :: RaycastParams?,
@@ -2655,8 +2692,10 @@ local function stopKillcam(restoreCamera: boolean)
 	local camera = workspace.CurrentCamera
 	if restoreCamera and camera then
 		-- GunController reprend ensuite la main (caméra épaule, FOV des paramètres)
+		local settings = ClientState.Settings
+		local fov = if type(settings) == "table" and isFiniteNumber(settings.Fov) then settings.Fov else Config.Camera.BaseFov
 		camera.CameraType = Enum.CameraType.Custom
-		camera.FieldOfView = killcam.SavedFov
+		camera.FieldOfView = math.clamp(fov, 40, 110)
 		local character = LocalPlayer.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
@@ -2681,7 +2720,6 @@ local function startKillcam(killer: Player?)
 	killcam.DeathPos = deathPos
 	local offset = camera.CFrame.Position - deathPos
 	killcam.Yaw = math.atan2(offset.Z, offset.X)
-	killcam.SavedFov = camera.FieldOfView
 	killcam.Params = Ballistics.GetRaycastParams(Ballistics.GetCharacters())
 	camera.CameraType = Enum.CameraType.Scriptable
 
