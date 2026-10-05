@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="4630e422ebc0">
+<meta name="asf-version" content="3eea7821f006">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15105,9 +15105,12 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     return null;
   }
   /* un CSV : séparateur le plus fréquent, guillemets, accents « Windows » */
-  function decoder(buf){
-    const u8 = new Uint8Array(buf);
-    try { return new TextDecoder("utf-8", { fatal: true }).decode(u8).replace(/^﻿/, ""); }
+  function decoder(u8){
+    if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder("utf-16le").decode(u8.subarray(2));
+    if (u8[0] === 0xFE && u8[1] === 0xFF) return new TextDecoder("utf-16be").decode(u8.subarray(2));
+    let nuls = 0; for (let i = 1; i < Math.min(u8.length, 400); i += 2) if (u8[i] === 0) nuls++;      // « texte Unicode » d'Excel sans en-tête
+    if (nuls > 60) return new TextDecoder("utf-16le").decode(u8);
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(u8).replace(/^\ufeff/, ""); }
     catch(err){ return new TextDecoder("windows-1252").decode(u8); }
   }
   function csvLignes(txt){
@@ -15131,29 +15134,68 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     await new Promise((ok, ko) => { const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
   }
+  const feuillesDe = wb => wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }));
+  /* la feuille qui a une ligne de titres et le plus de lignes dessous */
+  const meilleure = feuilles => { let m = null; feuilles.forEach(l => { const i = trouverTete(l); if (i >= 0 && (!m || l.length - i > m.l.length - m.i)) m = { l, i }; }); return m ? m.l : null; };
   async function lignesDuFichier(f){
-    const buf = await f.arrayBuffer();
-    const debut = new Uint8Array(buf.slice(0, 8));
-    const binaire = (debut[0] === 0x50 && debut[1] === 0x4B) || (debut[0] === 0xD0 && debut[1] === 0xCF);   // xlsx (zip) ou xls
-    const texte = !binaire ? decoder(buf) : "";
-    if (binaire || /^\s*<(html|table|\?xml)/i.test(texte)){
-      await chargerXlsx();
-      const wb = XLSX.read(binaire ? buf : texte, { type: binaire ? "array" : "string", cellDates: true });
-      // la feuille qui a la meilleure ligne de titres et le plus de lignes
-      let mieux = null;
-      wb.SheetNames.forEach(n => {
-        const l = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" });
-        const i = trouverTete(l); if (i < 0) return;
-        if (!mieux || l.length - i > mieux.l.length - mieux.i) mieux = { l, i };
-      });
-      return mieux ? mieux.l : XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+    const u8 = new Uint8Array(await f.arrayBuffer()), d = u8.subarray(0, 8);
+    const est = (...b) => b.every((x, i) => d[i] === x);
+    if (est(0x25, 0x50, 0x44, 0x46)) throw new Error("c'est un PDF. Dans Footclubs, choisis le format « Extraction MS Excel »");
+    const zip = est(0x50, 0x4B), ole = est(0xD0, 0xCF, 0x11, 0xE0);
+    if (zip || ole){
+      try { await chargerXlsx(); } catch(err){ throw new Error("le lecteur Excel ne se charge pas (connexion ?). Ouvre le fichier dans Excel, « Enregistrer sous » CSV, et choisis ce CSV"); }
+      let feuilles = [];
+      try { feuilles = feuillesDe(XLSX.read(u8, { type: "array", cellDates: true })); } catch(err){}
+      if (!meilleure(feuilles) && zip){
+        // un .zip qui contient le fichier Footclubs
+        try {
+          const z = XLSX.CFB.read(u8, { type: "array" });
+          for (let i = 0; i < z.FullPaths.length; i++){
+            const nom = z.FullPaths[i], c = z.FileIndex[i] && z.FileIndex[i].content;
+            if (!c || !c.length || !/\.(xlsx?|csv|txt|xml|html?)$/i.test(nom)) continue;
+            const dedans = new Uint8Array(c);
+            try {
+              if (/\.(csv|txt)$/i.test(nom)) feuilles.push(csvLignes(decoder(dedans)));
+              else feuilles.push(...feuillesDe(XLSX.read(dedans, { type: "array", cellDates: true })));
+            } catch(err){}
+          }
+        } catch(err){}
+      }
+      const m = meilleure(feuilles); if (m) return m;
+      const plein = feuilles.find(l => l && l.length > 1); if (plein) return plein;
+      throw new Error("Excel n'arrive pas à ouvrir ce fichier. Ouvre-le dans Excel, « Enregistrer sous » CSV, et choisis ce CSV");
+    }
+    const texte = decoder(u8);
+    if (/^\s*<(html|table|\?xml|!doctype)/i.test(texte)){
+      try { await chargerXlsx(); const m = meilleure(feuillesDe(XLSX.read(texte, { type: "string", cellDates: true }))); if (m) return m; } catch(err){}
     }
     return csvLignes(texte);
+  }
+  /* pas de ligne de titres : on reconnaît les colonnes à leur contenu (numéro de licence, date, catégorie, nom, prénom) */
+  function tableSansTitres(lignes){
+    const an = new Date().getFullYear();
+    const estNum = c => typeof c === "number" ? c >= 1e5 && c < 1e12 : /^\s*\d[\d ]{5,14}\s*$/.test(String(c == null ? "" : c));
+    const estDate = c => { const x = dateIso(c); return x && +x.slice(0, 4) > 1920 && +x.slice(0, 4) <= an; };
+    const estCat = c => /\bu\s?-?\s?\d{1,2}\b|senior|veteran|dirig|educat|arbitr|libre|futsal|loisir/i.test(sansAccent(c));
+    const estMot = c => typeof c === "string" && /^[A-Za-zÀ-ÿ'’ -]{2,}$/.test(c.trim()) && !estCat(c);
+    const table = [["Nom", "Prénom", "N° licence", "Catégorie", "Date de naissance"]];
+    lignes.forEach(r => {
+      if (!r) return;
+      const num = r.find(estNum); if (num === undefined) return;
+      const mots = r.filter(estMot).map(c => c.trim());
+      if (!mots.length) return;
+      table.push([mots[0], mots[1] || "", num, r.find(estCat) || "", r.find(estDate) || ""]);
+    });
+    return table.length > 1 ? table : null;
   }
   /* des lignes (tableau de tableaux) → les licences reconnues */
   function analyser(lignes){
     const iTete = trouverTete(lignes);
-    if (iTete < 0) throw new Error("je ne trouve pas la ligne des titres (Nom, Prénom, N° de licence…)");
+    if (iTete < 0){
+      if (!lignes.__sansTitres){ const t = tableSansTitres(lignes); if (t){ t.__sansTitres = true; return analyser(t); } }
+      const debut = (lignes.find(r => r && r.some(c => String(c).trim())) || []).map(c => String(c).trim()).filter(Boolean).slice(0, 6).join(" | ");
+      throw new Error(`je ne trouve ni la ligne des titres (Nom, Prénom, N° de licence…) ni de numéros de licence${debut ? `. Début du fichier : « ${debut.slice(0, 120)} »` : ""}`);
+    }
     const tete = lignes[iTete].map(T), brute = lignes[iTete].map(c => String(c == null ? "" : c).trim());
     const col = (k, sauf = []) => tete.findIndex((c, i) => COL[k](c) && !sauf.includes(i));
     const cNom = col("nom"), cNomPre = cNom < 0 ? col("nomPrenom") : -1, cPre = col("prenom");
@@ -15200,7 +15242,7 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     ev.stopImmediatePropagation();
     const f = t.files && t.files[0]; if (!f) return;
     try { proposer(analyser(await lignesDuFichier(f)), f.name); }
-    catch(err){ toast("Fichier illisible : " + (err && err.message || "format inattendu"), true); }
+    catch(err){ toast(`Fichier « ${f.name} » illisible : ` + (err && err.message || "format inattendu"), true); if (window.console) console.warn("import licences", err); }
     t.value = "";
   }, true);
   // les lignes copiées depuis Footclubs (avec la ligne des titres) : même lecture ; sans titres, l'application s'en charge
