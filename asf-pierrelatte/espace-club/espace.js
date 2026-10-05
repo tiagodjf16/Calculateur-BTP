@@ -46,11 +46,13 @@
     const img = moi.querySelector(".app-moi-haut img");
     const ini = ((moi.querySelector(".app-ini") || {}).textContent || "").trim();
     const sortir = !!moi.querySelector('[data-a="deconnexion"]');
+    // un dirigeant qui est aussi joueur (ou qui a accès à l'espace joueur) y passe en un appui
+    let aJoueur = false; try { const rc = String(((typeof mesPerms === "function" && mesPerms()) || {}).roleChoisi || ""); aJoueur = /joueur/.test(rc) || !!(S.compte && S.compte.joueurNom); } catch(err){}
     const prenom = /membre du club/i.test(nomC) ? "" : nomC.split(/\s+/)[0];
     if (p) p.textContent = `Bonjour${prenom ? " " + prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() : ""} ! Que veux-tu faire aujourd'hui ?`;
     const html = `<span class="esp-moi-av">${img ? `<img src="${esc(img.getAttribute("src") || "")}" alt="">` : esc(ini || "?")}</span>
       <span class="esp-moi-txt"><b>${esc(nomC)}</b><small>${esc(role)}</small></span>
-      <span class="esp-moi-bts"><a class="esp-moi-bt" href="#accueil"><span aria-hidden="true">↗</span> Voir le site</a>${sortir ? `<button type="button" class="esp-moi-bt sortir" data-a="deconnexion"><span aria-hidden="true">⏻</span> Se déconnecter</button>` : ""}</span>`;
+      <span class="esp-moi-bts">${aJoueur ? `<a class="esp-moi-bt joueur" href="#joueur"><span aria-hidden="true">⚽</span> Mon espace joueur</a>` : ""}<a class="esp-moi-bt" href="#accueil"><span aria-hidden="true">↗</span> Voir le site</a>${sortir ? `<button type="button" class="esp-moi-bt sortir" data-a="deconnexion"><span aria-hidden="true">⏻</span> Se déconnecter</button>` : ""}</span>`;
     if (!carte){ carte = document.createElement("div"); carte.className = "esp-moi"; wrap.appendChild(carte); }
     if (carte.dataset.html !== html){ carte.innerHTML = html; carte.dataset.html = html; }
   }
@@ -436,6 +438,9 @@
 .esp-moi-txt b{font:800 18px var(--display);color:#fff;letter-spacing:.2px}
 .esp-moi-txt small{font:600 13.5px var(--corps);color:#C9D4F2}
 .esp-moi-bts{display:flex;gap:8px;flex-wrap:wrap}
+.esp-moi-bt.joueur{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);border-color:transparent}
+/* au toucher : pas d'attente du « double appui pour zoomer », le lien part au premier appui */
+a,button,[role=tab],summary,label{touch-action:manipulation}
 .esp-moi-bt{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:9px 15px;border-radius:12px;font:700 14.5px var(--corps);cursor:pointer;
   text-decoration:none;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);transition:background .15s,border-color .15s,transform .12s}
 .esp-moi-bt:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.55)}

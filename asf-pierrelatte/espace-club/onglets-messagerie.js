@@ -32,7 +32,7 @@
   const estJoueur = () => !!(S.compte && S.compte.role === "joueur");
   const roleCle = () => (S.compte && ["joueur", "entraineur", "bureau"].includes(S.compte.role)) ? S.compte.role : "joueur";
   const PHRASES = {
-    joueur: { barre: "Écris à tes coachs, au bureau et à ton équipe.", vide: "à ton coach, au bureau ou à ton équipe", liste: "Écris à ton coach, au bureau ou à ton équipe : ils reçoivent une notification sur leur téléphone." },
+    joueur: { barre: "Écris à tes coachs et au bureau. Le groupe de ton équipe apparaît ici dès que ton coach le lance.", vide: "à ton coach ou au bureau", liste: "Écris à ton coach ou au bureau : ils reçoivent une notification sur leur téléphone. Le groupe de ton équipe apparaît dès que ton coach y écrit." },
     entraineur: { barre: "Écris à tes joueurs, aux autres coachs, au bureau et à tes équipes.", vide: "à un joueur, à un coach, au bureau ou à ton équipe", liste: "Écris à tes joueurs, aux coachs ou au bureau : ils reçoivent une notification sur leur téléphone." },
     bureau: { barre: "Écris à tous les membres du club et aux groupes d'équipe.", vide: "à un membre du club ou à un groupe d'équipe", liste: "Écris aux joueurs, aux coachs ou à un groupe d'équipe : ils reçoivent une notification sur leur téléphone." },
   };
@@ -711,7 +711,9 @@
     if (conv){ u.conv = +conv; u.vue = "conv"; u.membres = false; }
     else if (enTelephone()){ u.vue = "liste"; u.conv = null; }
     else if (u.vue === "nouveau") u.vue = u.conv ? "conv" : "liste";
-    if (estJoueur()){
+    // dans l'espace joueur, on y reste (même pour un dirigeant qui est aussi joueur) ; dans l'espace club aussi
+    const versJoueur = location.hash === "#joueur" ? true : location.hash === "#espace" ? !(typeof peutCoacher === "function" && peutCoacher()) : estJoueur();
+    if (versJoueur){
       S.ui.ongletJoueur = "messages";
       if (location.hash !== "#joueur") location.hash = "#joueur";
       rendreJoueur();
@@ -932,6 +934,8 @@
   let lance = false;
   function demarrerSiPret(){
     majBouton();
+    // compte connu après le premier affichage de l'espace joueur : l'onglet « Messages » y est ajouté maintenant
+    try { if (actif() && document.querySelector('#nav-joueur [data-a="onglet-joueur"]') && !document.querySelector("#nav-joueur [data-mg-onglet-joueur]")) ongletJoueur(); } catch(err){}
     if (!actif() || lance) return;
     lance = true;
     chargerResume();

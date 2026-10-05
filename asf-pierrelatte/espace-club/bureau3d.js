@@ -448,7 +448,7 @@ void main(){
     const r = hero.getBoundingClientRect();
     if (r.width < 10 || r.height < 10) return false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const max = tactile ? 300000 : 620000;
+    const max = tactile ? 200000 : 620000;
     let w = r.width * dpr, h = r.height * dpr;
     const k = Math.min(1, Math.sqrt(max / (w * h)));
     w = Math.max(2, Math.round(w * k)); h = Math.max(2, Math.round(h * k));
@@ -579,11 +579,14 @@ void main(){
   }
 
   /* ---------- boucle : 30 images/s au plus, en pause quand l'en-tête n'est pas visible ---------- */
-  let visible = true, raf = 0, dernier = 0;
+  let visible = true, raf = 0, dernier = 0, figeJusqua = 0;
+  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
+  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, () => { figeJusqua = performance.now() + 900; }, { passive: true, capture: true }));
   function boucle(now){
     raf = 0;
     if (!visible || document.hidden) return;
-    if (now - dernier >= 33){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
+    if (W && now < figeJusqua){ raf = requestAnimationFrame(boucle); return; }
+    if (now - dernier >= (tactile ? 50 : 33)){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
     if (!reduit && tFixe == null) raf = requestAnimationFrame(boucle);
   }
   const relancer = () => { if (!raf) raf = requestAnimationFrame(boucle); };

@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="e6b696e9c1aa">
+<meta name="asf-version" content="63bfb2414d13">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10597,9 +10597,14 @@ void main(){
   }
 
   let derniereImage = 0;
+  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
+  let figeJusqua = 0;
+  const figer = () => { figeJusqua = performance.now() + 900; };
+  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, figer, { passive: true, capture: true }));
   function image(now){
     raf = 0;
     if (!gl || gl.isContextLost()) return;
+    if (st.pret && now < figeJusqua){ reveiller(); return; }
     // sur téléphone, 30 images par seconde suffisent et ménagent la batterie
     if (tactile && st.pret && now - derniereImage < 30){ reveiller(); return; }
     derniereImage = now;
@@ -12424,7 +12429,7 @@ void main(){
     const r = hero.getBoundingClientRect();
     if (r.width < 10 || r.height < 10) return false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const max = tactile ? 300000 : 620000;
+    const max = tactile ? 200000 : 620000;
     let w = r.width * dpr, h = r.height * dpr;
     const k = Math.min(1, Math.sqrt(max / (w * h)));
     w = Math.max(2, Math.round(w * k)); h = Math.max(2, Math.round(h * k));
@@ -12555,11 +12560,14 @@ void main(){
   }
 
   /* ---------- boucle : 30 images/s au plus, en pause quand l'en-tête n'est pas visible ---------- */
-  let visible = true, raf = 0, dernier = 0;
+  let visible = true, raf = 0, dernier = 0, figeJusqua = 0;
+  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
+  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, () => { figeJusqua = performance.now() + 900; }, { passive: true, capture: true }));
   function boucle(now){
     raf = 0;
     if (!visible || document.hidden) return;
-    if (now - dernier >= 33){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
+    if (W && now < figeJusqua){ raf = requestAnimationFrame(boucle); return; }
+    if (now - dernier >= (tactile ? 50 : 33)){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
     if (!reduit && tFixe == null) raf = requestAnimationFrame(boucle);
   }
   const relancer = () => { if (!raf) raf = requestAnimationFrame(boucle); };
@@ -15246,7 +15254,7 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
   const estJoueur = () => !!(S.compte && S.compte.role === "joueur");
   const roleCle = () => (S.compte && ["joueur", "entraineur", "bureau"].includes(S.compte.role)) ? S.compte.role : "joueur";
   const PHRASES = {
-    joueur: { barre: "Écris à tes coachs, au bureau et à ton équipe.", vide: "à ton coach, au bureau ou à ton équipe", liste: "Écris à ton coach, au bureau ou à ton équipe : ils reçoivent une notification sur leur téléphone." },
+    joueur: { barre: "Écris à tes coachs et au bureau. Le groupe de ton équipe apparaît ici dès que ton coach le lance.", vide: "à ton coach ou au bureau", liste: "Écris à ton coach ou au bureau : ils reçoivent une notification sur leur téléphone. Le groupe de ton équipe apparaît dès que ton coach y écrit." },
     entraineur: { barre: "Écris à tes joueurs, aux autres coachs, au bureau et à tes équipes.", vide: "à un joueur, à un coach, au bureau ou à ton équipe", liste: "Écris à tes joueurs, aux coachs ou au bureau : ils reçoivent une notification sur leur téléphone." },
     bureau: { barre: "Écris à tous les membres du club et aux groupes d'équipe.", vide: "à un membre du club ou à un groupe d'équipe", liste: "Écris aux joueurs, aux coachs ou à un groupe d'équipe : ils reçoivent une notification sur leur téléphone." },
   };
@@ -15925,7 +15933,9 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
     if (conv){ u.conv = +conv; u.vue = "conv"; u.membres = false; }
     else if (enTelephone()){ u.vue = "liste"; u.conv = null; }
     else if (u.vue === "nouveau") u.vue = u.conv ? "conv" : "liste";
-    if (estJoueur()){
+    // dans l'espace joueur, on y reste (même pour un dirigeant qui est aussi joueur) ; dans l'espace club aussi
+    const versJoueur = location.hash === "#joueur" ? true : location.hash === "#espace" ? !(typeof peutCoacher === "function" && peutCoacher()) : estJoueur();
+    if (versJoueur){
       S.ui.ongletJoueur = "messages";
       if (location.hash !== "#joueur") location.hash = "#joueur";
       rendreJoueur();
@@ -16146,6 +16156,8 @@ ${L} ${V} .ong-nb,${L} ${T} .ong-nb{background:rgba(28,79,214,.12);color:#1C4FD6
   let lance = false;
   function demarrerSiPret(){
     majBouton();
+    // compte connu après le premier affichage de l'espace joueur : l'onglet « Messages » y est ajouté maintenant
+    try { if (actif() && document.querySelector('#nav-joueur [data-a="onglet-joueur"]') && !document.querySelector("#nav-joueur [data-mg-onglet-joueur]")) ongletJoueur(); } catch(err){}
     if (!actif() || lance) return;
     lance = true;
     chargerResume();
@@ -18441,11 +18453,13 @@ ${M} .modale-pied .scp-mini{margin-right:auto;color:var(--texte-doux);font-size:
     const img = moi.querySelector(".app-moi-haut img");
     const ini = ((moi.querySelector(".app-ini") || {}).textContent || "").trim();
     const sortir = !!moi.querySelector('[data-a="deconnexion"]');
+    // un dirigeant qui est aussi joueur (ou qui a accès à l'espace joueur) y passe en un appui
+    let aJoueur = false; try { const rc = String(((typeof mesPerms === "function" && mesPerms()) || {}).roleChoisi || ""); aJoueur = /joueur/.test(rc) || !!(S.compte && S.compte.joueurNom); } catch(err){}
     const prenom = /membre du club/i.test(nomC) ? "" : nomC.split(/\s+/)[0];
     if (p) p.textContent = `Bonjour${prenom ? " " + prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() : ""} ! Que veux-tu faire aujourd'hui ?`;
     const html = `<span class="esp-moi-av">${img ? `<img src="${esc(img.getAttribute("src") || "")}" alt="">` : esc(ini || "?")}</span>
       <span class="esp-moi-txt"><b>${esc(nomC)}</b><small>${esc(role)}</small></span>
-      <span class="esp-moi-bts"><a class="esp-moi-bt" href="#accueil"><span aria-hidden="true">↗</span> Voir le site</a>${sortir ? `<button type="button" class="esp-moi-bt sortir" data-a="deconnexion"><span aria-hidden="true">⏻</span> Se déconnecter</button>` : ""}</span>`;
+      <span class="esp-moi-bts">${aJoueur ? `<a class="esp-moi-bt joueur" href="#joueur"><span aria-hidden="true">⚽</span> Mon espace joueur</a>` : ""}<a class="esp-moi-bt" href="#accueil"><span aria-hidden="true">↗</span> Voir le site</a>${sortir ? `<button type="button" class="esp-moi-bt sortir" data-a="deconnexion"><span aria-hidden="true">⏻</span> Se déconnecter</button>` : ""}</span>`;
     if (!carte){ carte = document.createElement("div"); carte.className = "esp-moi"; wrap.appendChild(carte); }
     if (carte.dataset.html !== html){ carte.innerHTML = html; carte.dataset.html = html; }
   }
@@ -18831,6 +18845,9 @@ ${M} .modale-pied .scp-mini{margin-right:auto;color:var(--texte-doux);font-size:
 .esp-moi-txt b{font:800 18px var(--display);color:#fff;letter-spacing:.2px}
 .esp-moi-txt small{font:600 13.5px var(--corps);color:#C9D4F2}
 .esp-moi-bts{display:flex;gap:8px;flex-wrap:wrap}
+.esp-moi-bt.joueur{background:linear-gradient(180deg,#2F6BFF,#1C4FD6);border-color:transparent}
+/* au toucher : pas d'attente du « double appui pour zoomer », le lien part au premier appui */
+a,button,[role=tab],summary,label{touch-action:manipulation}
 .esp-moi-bt{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:9px 15px;border-radius:12px;font:700 14.5px var(--corps);cursor:pointer;
   text-decoration:none;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);transition:background .15s,border-color .15s,transform .12s}
 .esp-moi-bt:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.55)}

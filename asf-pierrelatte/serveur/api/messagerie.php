@@ -249,6 +249,15 @@ function mg_peut_lire(PDO $pdo, array $moi, array $c): bool {
     if ($c['type'] === 'equipe') return rang($moi) >= 3 || mg_membre($pdo, $moi, mg_eq_conv($c));
     return false;
 }
+/* Un groupe d'équipe est « lancé » quand un coach ou le bureau y a écrit : avant, les joueurs ne le voient pas et ne peuvent pas y écrire. */
+function mg_groupe_lance(PDO $pdo, int $conv): bool {
+    static $memo = [];
+    if (isset($memo[$conv])) return $memo[$conv];
+    $st = $pdo->prepare("SELECT 1 FROM msg_msg m JOIN comptes k ON k.id = m.compte_id WHERE m.conv_id = ? AND k.role <> 'joueur' LIMIT 1");
+    $st->execute([$conv]);
+    return $memo[$conv] = (bool) $st->fetchColumn();
+}
+function mg_joueur(array $c): bool { return (string) ($c['role'] ?? '') === 'joueur'; }
 /* Écrire : revérifié à chaque message (un joueur qui a changé d'équipe ne peut plus écrire à son ancien coach, mais peut relire). */
 function mg_peut_ecrire(PDO $pdo, array $moi, array $c): bool {
     if (!mg_peut_lire($pdo, $moi, $c)) return false;
@@ -256,6 +265,8 @@ function mg_peut_ecrire(PDO $pdo, array $moi, array $c): bool {
         [$x, $y] = mg_ids_prive((string) $c['cle']);
         return mg_peut_ecrire_a($pdo, $moi, mg_comptes($pdo)[$x === (int) $moi['id'] ? $y : $x] ?? null);
     }
+    // groupe d'équipe : seuls les coachs et le bureau le lancent ; les joueurs répondent ensuite
+    if (mg_joueur($moi) && !mg_groupe_lance($pdo, (int) $c['id'])) return false;
     return true;
 }
 
@@ -313,7 +324,10 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
     $l = [];
     foreach ($lignes as $c) {
         if ($c['type'] === 'prive') { if (!in_array($me, mg_ids_prive((string) $c['cle']), true)) continue; }
-        elseif ($c['type'] === 'equipe') { if (!isset($eqs[mg_eq_conv($c)]) && !($c['part'] !== null && rang($moi) >= 3)) continue; }
+        elseif ($c['type'] === 'equipe') {
+            if (!isset($eqs[mg_eq_conv($c)]) && !($c['part'] !== null && rang($moi) >= 3)) continue;
+            if (mg_joueur($moi) && !mg_groupe_lance($pdo, (int) $c['id'])) continue;      // pas encore lancé par un coach
+        }
         else continue;
         $l[(int) $c['id']] = $c;
     }
@@ -461,7 +475,7 @@ try {
                 if ($bureau && $a['famille'] !== 'Bureau' && ($e = strnatcmp(mg_simple($a['libelle']), mg_simple($b['libelle']))) !== 0) return $e;
                 return strnatcmp(mg_simple($a['nom']), mg_simple($b['nom'])) ?: $a['id'] <=> $b['id'];
             });
-            $eqs = $bureau ? mg_noms_equipes($pdo) + mg_equipes($pdo, $moi) : mg_equipes($pdo, $moi);
+            $eqs = $bureau ? mg_noms_equipes($pdo) + mg_equipes($pdo, $moi) : (mg_joueur($moi) ? [] : mg_equipes($pdo, $moi));   // un joueur ne lance pas de groupe
             $groupes = [];
             foreach ($eqs as $k => $nom) { $nom = mg_nom_equipe($pdo, (string) $k, $nom); $groupes[] = ['equipe' => $nom, 'titre' => 'Groupe ' . $nom]; }
             usort($groupes, fn($a, $b) => strnatcmp(mg_simple($a['equipe']), mg_simple($b['equipe'])));
@@ -538,8 +552,10 @@ try {
                     if (!$st->fetchColumn()) mg_sortir(404, ['erreur' => 'Aucun compte n\'est rattaché à cette équipe.']);
                 }
             } elseif (!mg_membre($pdo, $moi, $k)) mg_sortir(403, ['erreur' => 'Tu ne fais pas partie de cette équipe.']);
+            $gid = mg_groupe($pdo, $k, mg_nom_equipe($pdo, $k, $nom));
+            if (mg_joueur($moi) && !mg_groupe_lance($pdo, $gid)) mg_sortir(403, ['erreur' => 'Seul un coach peut lancer la conversation du groupe de ton équipe.']);
             // pas de participant ici : le bureau ne le devient qu'en écrivant
-            mg_sortir(200, ['id' => mg_groupe($pdo, $k, mg_nom_equipe($pdo, $k, $nom))]);
+            mg_sortir(200, ['id' => $gid]);
         }
         mg_sortir(400, ['erreur' => 'Indique à qui tu veux écrire.']);
     }
@@ -551,7 +567,8 @@ try {
         $id = (int) $c['id'];
 
         if (isset($_GET['envoyer'])) {
-            if (!mg_peut_ecrire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => 'Tu ne peux plus écrire dans cette conversation.']);
+            if (!mg_peut_ecrire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => $c['type'] === 'equipe' && mg_joueur($moi) && !mg_groupe_lance($pdo, (int) $c['id'])
+                ? 'Seul un coach peut lancer la conversation du groupe de ton équipe.' : 'Tu ne peux plus écrire dans cette conversation.']);
             $texte = mg_nettoyer($corps['texte'] ?? '');
             if ($texte === '') mg_sortir(400, ['erreur' => 'Ton message est vide.']);
             if (mb_strlen($texte) > MG_MAX) mg_sortir(400, ['erreur' => 'Ton message est trop long (' . MG_MAX . ' caractères au maximum).']);
