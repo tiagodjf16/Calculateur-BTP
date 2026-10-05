@@ -118,6 +118,8 @@
     const j = jourDe(c.prevue);
     return c.precise ? { t: `prévue ${j}à ${hh(c.prevue)}`, k: "att" } : { t: `prévue ${j}entre ${hh(c.debut)} et ${hh(c.prevue)}`, k: "att" };
   }
+  /* école de foot (onglets-jeunes.js) : une convocation, jamais de story « composition » */
+  const convocSeule = id => { const c = (S.compos || []).find(x => x.id === id); try { return !!(window.ASF_ECOLE && window.ASF_ECOLE.estConvoc(c)); } catch(err){ return false; } };
   function ligneHtml(id){
     const x = ETATS.get(id);
     if (!x) return `<span class="scp-l-att">📲 Stories : …</span>`;
@@ -125,6 +127,7 @@
     if (d.erreur) return `<span class="scp-l-off">📲 Stories : ${e(d.erreur)}</span>`;
     if (!d.actif) return `<span class="scp-l-off">📲 Stories des compos désactivées (onglet Affiches)</span>`;
     const a = texteConvoc(d), b = texteCompo(d);
+    if (convocSeule(id)) return `<span class="scp-l-${a.k}">📲 Story convoqués : ${e(a.t)}</span><span class="scp-l-off">Pas de story compo (école de foot)</span>`;
     return `<span class="scp-l-${a.k}">📲 Story convoqués : ${e(a.t)}</span><span class="scp-l-${b.k}">Story compo : ${e(b.t)}</span>`;
   }
   function majLignes(id){
@@ -231,7 +234,7 @@
         <button type="button" class="modale-x" data-stage-fermer aria-label="Fermer">×</button></div>
       <div class="modale-corps scp-figs">
         ${bloc("convocation", "Les convoqués", d && d.actif ? texteConvoc(d) : null, peut("convocation"))}
-        ${bloc("composition", "La composition", d && d.actif ? texteCompo(d) : null, peut("composition"))}
+        ${convocSeule(id) ? "" : bloc("composition", "La composition", d && d.actif ? texteCompo(d) : null, peut("composition"))}
       </div>
       <div class="modale-pied"><small class="scp-mini">Style « ${e(styles()[(d && d.style) || reglages().style] || "")} » : le bureau le choisit dans l'onglet Affiches.</small></div></div></div>`;
     document.body.classList.add("modale-ouverte");
@@ -291,7 +294,7 @@
       <div class="scp-puces"><span class="scp-puce ${off ? "off" : "ok"}">${off ? "● Arrêtées" : "● En marche"}</span>${cronPuce()}<span class="scp-puce">🎨 ${e(st[r.style] || r.style)}</span></div>
       ${ONG.aide("scp-aide", "Comment ça marche ?", `<ol>
         <li>Quand un coach clique <b>« Valider et prévenir »</b> sur sa compo, l'affiche des <b>convoqués</b> part en story sur Facebook et Instagram.</li>
-        <li><b>${e(r.minutesAvant)} minutes avant le coup d'envoi</b>, l'affiche de la <b>composition</b> (le onze sur le terrain) part en story.</li>
+        <li><b>${e(r.minutesAvant)} minutes avant le coup d'envoi</b>, l'affiche de la <b>composition</b> (le onze sur le terrain) part en story. Pas pour l'école de foot (U6 à U11) : seulement la convocation.</li>
         <li>Seulement en story (visible 24 h), jamais dans le fil. Une seule fois par compo, même si le coach la modifie.</li>
         <li>Le soir après 21 h 30, la story des convoqués attend le lendemain 8 h.</li></ol>`)}
       <h4 class="scp-h">Ce qui part en story</h4>
