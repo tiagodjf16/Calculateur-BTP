@@ -13,6 +13,13 @@ local CombatService = require(Services.CombatService)
 local ShopService = require(Services.ShopService)
 local LeaderboardService = require(Services.LeaderboardService)
 
+-- Aperçu visible seulement dans l'éditeur Studio (map pré-générée + panneau « Clique sur Play ») :
+-- on le retire, la vraie map est générée juste après.
+local editorPreview = workspace:FindFirstChild("ApercuEditeur")
+if editorPreview then
+	editorPreview:Destroy()
+end
+
 local ok, err = pcall(MapService.Build)
 if not ok then
 	warn("[Main] Génération de la map échouée : " .. tostring(err))
