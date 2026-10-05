@@ -15,6 +15,55 @@
   const e = ONG.e;
   const el = html => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
   const pl = (n, s, p) => n + " " + (n > 1 ? (p || s + "s") : s);
+
+  /* ---- rôle « Joueur, coach et bureau » : pour le serveur c'est un compte bureau, l'espace joueur reste ouvert ---- */
+  try {
+    if (typeof ROLES_COMBI !== "undefined" && !ROLES_COMBI.some(([k]) => k === "joueur_entraineur_bureau"))
+      ROLES_COMBI.push(["joueur_entraineur_bureau", "Joueur, coach et bureau"]);
+    if (typeof ROLE_SERVEUR !== "undefined") ROLE_SERVEUR.joueur_entraineur_bureau = "bureau";
+  } catch(err){}
+
+  /* ---- école de foot : trois équipes (U6 · U7, U8 · U9, U10 · U11) au lieu de « U6 à U11 » pour les équipes gérées ----
+     La liste des équipes de l'application vient des équipes du club (site public), des matchs et des effectifs. Pour que
+     les trois équipes existent partout côté club (équipes gérées, compos, effectifs, filtres des coachs) sans toucher
+     à la carte « U6 à U11 » du site public, on ajoute un effectif vide pour chacune tant que le club n'en a pas encore. */
+  const ECOLE = ["U6 · U7", "U8 · U9", "U10 · U11"];
+  const estEcoleTout = n => /^\s*u\s?6\s*(à|a|-)\s*u\s?11\s*$/i.test(String(n || ""));
+  try {
+    if (typeof GROUPE_EFF === "function" && typeof slug === "function"){
+      const avecEcole = o => {
+        const x = { ...(o || {}) };
+        const pris = new Set(Object.values(x).map(v => v && GROUPE_EFF(v.equipe)));
+        ECOLE.forEach(n => { const k = slug(n); if (!x[k] && !pris.has(GROUPE_EFF(n))) x[k] = { equipe: n, joueurs: [] }; });
+        return x;
+      };
+      let vue = avecEcole(S.effectifs);                                     // même objet tant que les effectifs ne changent pas
+      Object.defineProperty(S, "effectifs", { configurable: true, enumerable: true,
+        get: () => vue, set: v => { vue = avecEcole(v); } });
+    }
+  } catch(err){}
+  /* ancien choix « U6 à U11 » coché : à la première case touchée, il devient les trois équipes */
+  document.addEventListener("change", ev => {
+    const t = ev.target; if (!t || !t.matches || !t.matches("[data-eq-perm]")) return;
+    try {
+      const cle = "c" + t.dataset.cptId, p = S.permissions || {}, q = p[cle] || {};
+      const cpt = (S.comptes || []).find(x => String(x.id) === String(t.dataset.cptId)) || {};
+      const base = Array.isArray(q.equipes) && q.equipes.length ? q.equipes : (cpt.equipe ? [cpt.equipe] : []);
+      if (!base.some(estEcoleTout)) return;
+      const l = [...new Set(base.flatMap(n => estEcoleTout(n) ? ECOLE : [n]))];
+      S.permissions = { ...p, [cle]: { ...q, equipes: l } };
+    } catch(err){}
+  }, true);
+  /* dans une fiche ou une fenêtre : plus de case ni de choix « U6 à U11 » (sauf le choix déjà enregistré d'un compte) */
+  const sansEcoleTout = racine => {
+    racine.querySelectorAll("input[data-eq-perm]").forEach(i => {
+      if (!estEcoleTout(i.dataset.eqPerm)) return;
+      const coche = i.hasAttribute("checked"), lab = i.closest("label") || i;
+      if (coche) ECOLE.forEach(n => { const x = racine.querySelector(`input[data-eq-perm="${CSS.escape(n)}"]`); if (x) x.setAttribute("checked", ""); });
+      lab.remove();
+    });
+    racine.querySelectorAll("select option").forEach(o => { if (estEcoleTout(o.value || o.textContent) && !o.hasAttribute("selected")) o.remove(); });
+  };
   /* un champ avec son libellé (visible sur téléphone ; sur ordinateur, les colonnes ont leur en-tête) */
   const cellule = (texte, champ, cls) => {
     const l = document.createElement("label"); l.className = "ong-reg-cel" + (cls ? " " + cls : "");
@@ -389,6 +438,7 @@
     window.panComptes = function(){
       const h = avantComptes.apply(this, arguments);
       return ONG.transformer(h, racine => {
+        sansEcoleTout(racine);
         const sections = racine.querySelector(".club-sections");
         if (!sections){ envelopper(racine, "ong-reg-acces ong-reg-charge"); return; }      // chargement
         const section = S.ui.accesSection || "comptes";
@@ -438,6 +488,7 @@
       return ONG.transformer(h, racine => {
         const m = racine.querySelector(".modale"); if (!m) return;
         m.classList.add("ong-reg-modale");
+        sansEcoleTout(m);
         const corps = m.querySelector(".modale-corps"); if (!corps) return;
         const labels = [...corps.querySelectorAll("label.sw-ligne")];
         const titre = [...corps.children].find(x => x.matches("b.acces-titre"));
