@@ -1,19 +1,37 @@
--- Petits helpers pour construire une interface propre et homogène en code.
+-- Helpers pour construire une interface propre et homogène en code.
+-- Style : panneaux sombres translucides (« verre »), accents cyan / magenta, titres Oswald, texte Gotham.
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
 
 local Ui = {}
 
 Ui.Colors = {
-	Background = Color3.fromRGB(16, 18, 26),
-	Panel = Color3.fromRGB(26, 29, 40),
-	PanelLight = Color3.fromRGB(38, 42, 58),
+	Background = Color3.fromRGB(10, 12, 18),
+	Panel = Color3.fromRGB(20, 23, 32),
+	PanelLight = Color3.fromRGB(34, 38, 52),
 	Text = Color3.fromRGB(245, 246, 250),
-	Muted = Color3.fromRGB(150, 155, 175),
+	Muted = Color3.fromRGB(150, 156, 176),
+	Accent = Config.Colors.Accent,
+	Accent2 = Config.Colors.Accent2,
+	Gold = Config.Colors.Gold,
+	Good = Config.Colors.Good,
+	Bad = Config.Colors.Bad,
 }
 
-Ui.Font = Enum.Font.GothamBold
-Ui.FontBlack = Enum.Font.GothamBlack
+local GOTHAM = "rbxasset://fonts/families/GothamSSm.json"
+local OSWALD = "rbxasset://fonts/families/Oswald.json"
 
+Ui.Fonts = {
+	Title = Font.new(OSWALD, Enum.FontWeight.Bold), -- gros titres, chiffres de munitions
+	Heading = Font.new(OSWALD, Enum.FontWeight.Medium),
+	Body = Font.new(GOTHAM, Enum.FontWeight.Medium),
+	Bold = Font.new(GOTHAM, Enum.FontWeight.Bold),
+	Heavy = Font.new(GOTHAM, Enum.FontWeight.Heavy),
+}
+
+-- Crée une instance : Ui.new("Frame", { Size = ..., Parent = ... }, { enfants })
 function Ui.new(className: string, props, children)
 	local instance = Instance.new(className)
 	local parent
@@ -46,48 +64,93 @@ function Ui.stroke(color: Color3?, thickness: number?, transparency: number?)
 	})
 end
 
-function Ui.padding(px: number)
-	local u = UDim.new(0, px)
-	return Ui.new("UIPadding", { PaddingTop = u, PaddingBottom = u, PaddingLeft = u, PaddingRight = u })
+function Ui.padding(px: number, horizontal: number?)
+	local v = UDim.new(0, px)
+	local h = UDim.new(0, horizontal or px)
+	return Ui.new("UIPadding", { PaddingTop = v, PaddingBottom = v, PaddingLeft = h, PaddingRight = h })
 end
 
-function Ui.label(props)
+function Ui.gradient(a: Color3, b: Color3, rotation: number?)
+	return Ui.new("UIGradient", { Color = ColorSequence.new(a, b), Rotation = rotation or 0 })
+end
+
+function Ui.list(direction: Enum.FillDirection?, padding: number?, props)
+	local layout = Ui.new("UIListLayout", {
+		FillDirection = direction or Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, padding or 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+	for key, value in props or {} do
+		layout[key] = value
+	end
+	return layout
+end
+
+-- Panneau « verre » standard.
+function Ui.panel(props, children)
 	local defaults = {
-		BackgroundTransparency = 1,
-		Font = Ui.Font,
-		TextColor3 = Ui.Colors.Text,
-		TextScaled = true,
+		BackgroundColor3 = Ui.Colors.Background,
+		BackgroundTransparency = 0.2,
+		BorderSizePixel = 0,
 	}
-	for key, value in props do
+	for key, value in props or {} do
 		defaults[key] = value
 	end
-	return Ui.new("TextLabel", defaults)
+	local frame = Ui.new("Frame", defaults, children)
+	if not frame:FindFirstChildOfClass("UICorner") then
+		Ui.corner(12).Parent = frame
+	end
+	if not frame:FindFirstChildOfClass("UIStroke") then
+		Ui.stroke(Color3.new(1, 1, 1), 1, 0.88).Parent = frame
+	end
+	return frame
 end
 
-function Ui.tween(instance: Instance, time: number, goal, style: Enum.EasingStyle?)
-	local tween = TweenService:Create(instance, TweenInfo.new(time, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), goal)
+function Ui.label(props, children)
+	local defaults = {
+		BackgroundTransparency = 1,
+		FontFace = Ui.Fonts.Bold,
+		TextColor3 = Ui.Colors.Text,
+		TextScaled = true,
+		BorderSizePixel = 0,
+	}
+	for key, value in props or {} do
+		defaults[key] = value
+	end
+	return Ui.new("TextLabel", defaults, children)
+end
+
+function Ui.tween(instance: Instance, time: number, goal, style: Enum.EasingStyle?, direction: Enum.EasingDirection?)
+	local tween = TweenService:Create(
+		instance,
+		TweenInfo.new(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out),
+		goal
+	)
 	tween:Play()
 	return tween
 end
 
--- Bouton avec effet de survol / clic.
-function Ui.button(props, color: Color3)
+-- Bouton avec effet de survol / clic. color = couleur de fond.
+function Ui.button(props, color: Color3?)
 	local button = Ui.new("TextButton", {
 		AutoButtonColor = false,
-		BackgroundColor3 = color,
-		Font = Ui.Font,
+		BackgroundColor3 = color or Ui.Colors.PanelLight,
+		FontFace = Ui.Fonts.Title,
 		TextColor3 = Ui.Colors.Text,
 		TextScaled = true,
-	}, { Ui.corner(10), Ui.padding(6) })
-	for key, value in props do
+		BorderSizePixel = 0,
+	}, { Ui.corner(10), Ui.padding(6, 10) })
+	local parent
+	for key, value in props or {} do
 		if key == "Parent" then
-			continue
+			parent = value
+		else
+			button[key] = value
 		end
-		button[key] = value
 	end
 	local scale = Ui.new("UIScale", { Parent = button })
 	button.MouseEnter:Connect(function()
-		Ui.tween(scale, 0.15, { Scale = 1.05 })
+		Ui.tween(scale, 0.15, { Scale = 1.04 })
 	end)
 	button.MouseLeave:Connect(function()
 		Ui.tween(scale, 0.15, { Scale = 1 })
@@ -96,10 +159,10 @@ function Ui.button(props, color: Color3)
 		Ui.tween(scale, 0.08, { Scale = 0.95 })
 	end)
 	button.MouseButton1Up:Connect(function()
-		Ui.tween(scale, 0.12, { Scale = 1.05 })
+		Ui.tween(scale, 0.12, { Scale = 1.04 })
 	end)
-	if props.Parent then
-		button.Parent = props.Parent
+	if parent then
+		button.Parent = parent
 	end
 	return button
 end

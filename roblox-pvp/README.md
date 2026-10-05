@@ -1,80 +1,63 @@
-# ⚔️ ARENA CLASH — jeu PvP Roblox clé en main
+# 🔫 ARENA CLASH — FPS/TPS PvP Roblox clé en main
 
-Arène PvP au sabre, en mode « tous contre tous » : tu lances le jeu et c'est jouable, la carte, les armes et l'interface sont générées par le code (aucun modèle à importer).
+Shooter en tous contre tous, vue à l'épaule, **100 % généré par le code** : map, armes 3D, effets et interface. Aucun modèle à importer.
 
-## Ce qu'il y a dedans
-
-| Système | Détail |
-|---|---|
-| **Combat validé par le serveur** | Le client dit seulement « je frappe ». Le serveur vérifie le cooldown et calcule lui-même la hitbox, ce qui bloque les exploits de dégâts et de portée les plus courants. |
-| **Ressenti du combat** | Coups critiques, recul, chiffres de dégâts, flash rouge quand tu es touché, traînées sur les lames, sons, dash (Q / bouton mobile / L1 manette) |
-| **Kills et séries** | Kill feed, séries annoncées à tout le serveur (3, 5, 10, 15, 25), **prime** sur les joueurs en série, assistances payées, +30 PV à chaque kill |
-| **Progression** | Pièces, XP et niveaux (avec des pièces bonus à chaque niveau), meilleure série, kills et morts sauvegardés |
-| **Boutique** | 6 épées, de l'Épée en bois à la Faux du Néant. Les DPS restent proches : on achète du style, pas une victoire assurée |
-| **Rétention** | Récompense quotidienne qui augmente sur 7 jours consécutifs, classement **Top Kills global** affiché dans l'arène |
-| **Monétisation** | Gamepass VIP (pièces x2), badges (premier kill, série de 10, niveau 10) |
-| **Protection au spawn** | ForceField de 3 s, retiré dès que le joueur attaque (pas d'abus) |
-| **Sauvegarde fiable** | 3 essais en cas d'échec, sauvegarde auto toutes les 2 min, sauvegarde à la fermeture du serveur. Si le chargement échoue en ligne, le joueur est expulsé pour ne pas écraser ses données |
-| **Carte** | Arène néon de 200×200 avec couvertures symétriques, plateforme centrale et rampes, 8 spawns, éclairage soigné (Atmosphere, Bloom…) |
-
-## Essayer en 2 minutes (le plus simple)
+## Essayer en 2 minutes
 
 1. Installe **Roblox Studio** depuis https://create.roblox.com (bouton « Start Creating ») et connecte-toi.
-2. Télécharge le fichier **`ArenaClash.rbxlx`** de ce dossier, puis ouvre-le dans Studio (double-clic, ou Fichier → Ouvrir depuis un fichier).
-3. Clique sur **Play** (ou F5). Tu apparais dans l'arène avec ton épée.
-4. Pour te battre contre toi-même : onglet **Test** → section « Clients et serveurs » → choisis **2 joueurs** → **Démarrer**. Deux fenêtres s'ouvrent, une par joueur.
+2. Télécharge **`ArenaClash.rbxlx`** et ouvre-le dans Studio (double-clic, ou *File → Open from File*).
+3. Clique sur **Play** (F5), puis **JOUER** dans le menu.
+4. Pour te battre contre toi-même : onglet **Test** → *Clients and Servers* → **2 Players** → **Start**.
 
-> En test local, la progression n'est pas sauvegardée et le classement reste vide : c'est normal. Pour que ça marche, publie le jeu (Fichier → Publier sur Roblox), puis active Accueil → Paramètres du jeu → Sécurité → « Autoriser l'accès Studio aux services API ».
+> En test local, la progression n'est pas sauvegardée et le classement mondial reste vide : c'est normal. Pour que ça marche, publie le jeu (*File → Publish to Roblox*), puis active *Game Settings → Security → Enable Studio Access to API Services*.
 
-`ArenaClash.rbxlx` est généré à partir de `src/` avec `rojo build -o ArenaClash.rbxlx`. Si tu modifies le code, régénère-le, ou utilise la méthode Rojo ci-dessous.
+## Commandes
 
-## Installation (avec Rojo, pour développer)
+| Action | PC | Manette | Mobile |
+|---|---|---|---|
+| Tirer | Clic gauche | R2 | bouton 🔫 |
+| Viser / lunette | Clic droit (maintenu) | L2 | bouton 🎯 |
+| Recharger | R | X | bouton ↻ |
+| Changer d'arme | 1 / 2 / molette | Y | bouton ⇄ |
+| Sprint | Shift (maintenu) | L3 | bouton 🏃 |
+| Dash | Q | B | bouton 💨 |
+| Radar (série de 4) | 3 | ← | bouton |
+| Frappe orbitale (série de 8) | 4, puis clic sur la cible | → | bouton |
+| Arsenal | B | — | bouton |
+| Tableau des scores | Tab | — | — |
 
-1. Installe [Rojo](https://rojo.space) (plugin Studio + CLI, ou via l'extension VS Code).
-2. Dans ce dossier : `rojo serve`
-3. Dans Roblox Studio : ouvre un **Baseplate** vide, puis clique sur Rojo → **Connect**.
-4. **Accueil → Paramètres du jeu → Sécurité → active « Autoriser l'accès Studio aux services API »** (sinon rien n'est sauvegardé en test).
-5. Lance **Play**. Pour tester le PvP en local : **Test → Clients et serveurs → 2 joueurs**.
+## Contenu
 
-## Installation sans Rojo
+- **8 armes réelles** modélisées en 3D par le code : M1911, Magnum .357, UZI, fusil à pompe, AK-47, M4A1, Sniper .50 (avec lunette), M249. Chacune a ses propres dégâts, cadence, portée, recul et dispersion.
+- **Gunplay** : vue à l'épaule, visée, recul de la caméra, dispersion qui grandit en tirant, tirs à la tête, baisse des dégâts avec la distance, rechargement, sprint et dash.
+- **Tirs validés par le serveur** : cadence, munitions, origine du tir, cohérence de l'impact et vérification qu'aucun mur ne se trouve entre le tireur et la cible.
+- **Effets** : traceurs, flash de bouche, douilles éjectées, impacts et trous de balles, dissolution néon à la mort, killcam sur ton tueur, chiffres de dégâts et éclairage *Future* avec de vraies ombres.
+- **Séries** : Radar (ennemis visibles à travers les murs) et **Frappe orbitale** (un rayon tombe du ciel). Le joueur en grosse série devient une **cible** marquée d'une couronne.
+- **Score à la CoD** : « +100 ÉLIMINATION », « TIR À LA TÊTE », médailles (DOUBLE KILL, VENGEANCE, PREMIER SANG…).
+- **Progression** : niveaux, pièces, Arsenal avec aperçu 3D des armes, **camouflages** débloqués en faisant des kills avec chaque arme (Carbone, Arctique, Cramoisi, Or, Diamant, Nébuleuse animée).
+- **Rétention** : récompense quotidienne sur 7 jours, classement mondial, gamepass VIP (pièces x2) et badges.
+- **Menu d'accueil cinématique** : la caméra survole la map, et la map est conçue pour être unique.
 
-Recrée cette structure dans Studio en copiant le contenu des fichiers :
+## Développer avec Rojo
 
-```
-ReplicatedStorage
-└─ Shared (Folder)
-   ├─ Config    (ModuleScript)  ← src/shared/Config.luau
-   ├─ Remotes   (ModuleScript)
-   └─ Weapons   (ModuleScript)
-ServerScriptService
-└─ Server (Folder)
-   ├─ Main (Script)             ← src/server/Main.server.luau
-   └─ Services (Folder)  → DataService, CombatService, ShopService, LeaderboardService, MapService (ModuleScripts)
-StarterPlayer > StarterPlayerScripts
-└─ Client (Folder)
-   ├─ Main (LocalScript)        ← src/client/Main.client.luau
-   └─ Controllers (Folder) → Ui, HudController, ShopController, CombatController (ModuleScripts)
-```
+1. Installe [Rojo](https://rojo.space), puis lance `rojo serve` dans ce dossier.
+2. Dans Studio, ouvre un Baseplate vide et connecte-toi avec le plugin Rojo.
+3. Pour régénérer le fichier à ouvrir directement : `rojo build -o ArenaClash.rbxlx`.
+
+`ARCHITECTURE.md` décrit comment les modules communiquent entre eux.
 
 ## Personnaliser
 
-- **Tout l'équilibrage** se trouve dans `src/shared/Config.luau` : pièces, XP, crit, dash, récompenses quotidiennes, couleurs, sons.
-- **Armes** : ajoute une entrée dans `src/shared/Weapons.luau` et elle apparaît automatiquement en boutique.
-- **VIP / badges** : crée le gamepass et les badges sur le Creator Hub, puis colle leurs IDs dans `Config.VipGamepassId` et `Config.Badges`.
-- **Ta propre carte** : construis un dossier `Arena` dans Workspace avec des `SpawnLocation` et une part nommée `Leaderboard`. La génération automatique ne se lance alors pas.
+- **Équilibrage** : `src/shared/Config.luau` (XP, pièces, santé, séries, caméra…) et `src/shared/Weapons.luau` (stats des armes).
+- **Sons** : `Config.Sounds`. Colle des `rbxassetid://` d'audios **publics** (Creator Store → Audio, de préférence ceux publiés par *Roblox*). Un champ vide = son désactivé.
+- **VIP / badges** : crée-les sur le Creator Hub puis colle leurs IDs dans `Config.VipGamepassId` et `Config.Badges`.
+- **Ta propre map** : construis un dossier `Arena` dans Workspace (avec des `SpawnLocation`, une part `Leaderboard` et un dossier `CameraPoints`). La génération automatique ne se lance alors pas.
 
-## Attirer des joueurs : la checklist
+## Attirer des joueurs
 
-Le code fait la moitié du travail. Le reste se joue sur la page du jeu :
-
-1. **Icône et miniatures** : ce sont elles qui déterminent si les gens cliquent. Mets une action en gros plan avec des couleurs vives et peu de texte. Prépare 2 ou 3 miniatures et teste-les (le Creator Hub propose des tests A/B de miniatures).
-2. **Un nom court + un mot-clé** que les joueurs tapent vraiment, par exemple « Arena Clash ⚔️ Sword PvP ».
-3. **Une description** qui liste les points forts (séries, boutique, classement, récompense quotidienne) et le calendrier des mises à jour.
-4. **Des mises à jour régulières**, par exemple une nouvelle épée chaque semaine. Ajoute le numéro de mise à jour dans le titre (« [UPD 3] »).
-5. **Des groupes et serveurs Discord** : crée un groupe Roblox, mets-y un code promo (une épée gratuite par exemple) et annonce les mises à jour.
-6. **Des publicités sponsorisées** pour un petit budget au lancement : les premiers joueurs déclenchent la recommandation de Roblox.
-7. **La rétention avant tout** : l'algorithme de Roblox met en avant les jeux où les joueurs restent et reviennent. C'est le rôle de la récompense quotidienne, des séries et du classement.
-
-## Idées pour la suite
-
-Codes promo, modes en équipes ou « Roi de la colline » sur la plateforme centrale, skins d'effets de kill, saisons de classement, PNJ d'entraînement, file de matchs 1v1.
+1. **Icône et miniatures** : prends des captures du menu cinématique et de la frappe orbitale. Utilise des couleurs vives et peu de texte, puis fais des tests A/B de miniatures sur le Creator Hub.
+2. **Titre** : un nom court + un mot-clé, par exemple « Arena Clash 🔫 FPS PvP ». Ajoute « [UPD 1] » à chaque mise à jour.
+3. **Mises à jour régulières** : une nouvelle arme ou un nouveau camouflage chaque semaine.
+4. **Groupe Roblox et Discord** : annonce les mises à jour et propose une récompense aux membres.
+5. **Publicités sponsorisées** au lancement : les premiers joueurs déclenchent la recommandation de Roblox.
+6. **Rétention** : l'algorithme met en avant les jeux où les joueurs restent et reviennent. Les camouflages, la récompense quotidienne et les séries servent à ça.

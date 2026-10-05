@@ -2,6 +2,12 @@
   "name": "ArenaClash",
   "tree": {
     "$className": "DataModel",
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future",
+        "GlobalShadows": true
+      }
+    },
     "ReplicatedStorage": {
       "Shared": { "$path": "src/shared" }
     },
@@ -9,6 +15,13 @@
       "Server": { "$path": "src/server" }
     },
     "StarterPlayer": {
+      "$properties": {
+        "CameraMinZoomDistance": 6,
+        "CameraMaxZoomDistance": 12,
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 50,
+        "LoadCharacterAppearance": true
+      },
       "StarterPlayerScripts": {
         "Client": { "$path": "src/client" }
       }
