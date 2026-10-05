@@ -579,14 +579,14 @@ void main(){
   }
 
   /* ---------- boucle : 30 images/s au plus, en pause quand l'en-tête n'est pas visible ---------- */
-  let visible = true, raf = 0, dernier = 0, figeJusqua = 0;
-  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
-  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, () => { figeJusqua = performance.now() + 900; }, { passive: true, capture: true }));
+  let visible = true, raf = 0, dernier = 0, doigtJusqua = 0;
+  // un doigt fait défiler la page : 10 images/s le temps du geste (la page reste fluide), sans jamais figer la scène
+  ["touchstart", "touchmove"].forEach(t => window.addEventListener(t, () => { doigtJusqua = performance.now() + 350; }, { passive: true, capture: true }));
   function boucle(now){
     raf = 0;
     if (!visible || document.hidden) return;
-    if (W && now < figeJusqua){ raf = requestAnimationFrame(boucle); return; }
-    if (now - dernier >= (tactile ? 50 : 33)){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
+    const pas = tactile ? (now < doigtJusqua ? 100 : 50) : 33;
+    if (now - dernier >= pas - 4){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
     if (!reduit && tFixe == null) raf = requestAnimationFrame(boucle);
   }
   const relancer = () => { if (!raf) raf = requestAnimationFrame(boucle); };

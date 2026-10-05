@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="ac4d227b9fad">
+<meta name="asf-version" content="ce64a903d127">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10597,26 +10597,30 @@ void main(){
   }
 
   let derniereImage = 0;
-  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
-  let figeJusqua = 0;
-  const figer = () => { figeJusqua = performance.now() + 900; };
-  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, figer, { passive: true, capture: true }));
+  // téléphone : 30 images par seconde suffisent et ménagent la batterie ; pendant qu'un doigt fait défiler la page,
+  // 20 images par seconde (la page reste fluide), mais jamais d'arrêt : le ballon suit toujours le doigt
+  let doigtJusqua = 0;
+  const doigt = () => { doigtJusqua = performance.now() + 350; };
+  ["touchstart", "touchmove"].forEach(t => window.addEventListener(t, doigt, { passive: true, capture: true }));
   function image(now){
     raf = 0;
     if (!gl || gl.isContextLost()) return;
-    if (st.pret && now < figeJusqua){ reveiller(); return; }
-    // sur téléphone, 30 images par seconde suffisent et ménagent la batterie
-    if (tactile && st.pret && now - derniereImage < 30){ reveiller(); return; }
+    const defile = tactile && now < doigtJusqua && !st.drag;
+    const pas = !tactile ? 0 : defile ? 1000 / 20 : 1000 / 30;
+    if (st.pret && pas && now - derniereImage < pas - 4){ reveiller(); return; }
     derniereImage = now;
     if (!mesurer()) return;
     if (!cibles(cadre.w, cadre.h, cadre.wA, cadre.hA)){ sans3d(); return; }
     const dtv = st.dernier ? (now - st.dernier) / 1000 : 0.016, dt = Math.min(0.05, dtv);
-    if (st.dernier){
-      st.temps.push(now - st.dernier);
-      if (st.temps.length > 40){
+    // qualité adaptée à l'appareil : on compare le temps entre deux images au rythme visé (30 i/s sur téléphone,
+    // 60 sur ordinateur). Les pauses (onglet caché, défilement, ballon hors de l'écran) ne comptent pas.
+    if (st.dernier && st.pret && !defile){
+      const ecart = now - st.dernier, vise = tactile ? 1000 / 30 : 1000 / 60;
+      if (ecart < 250) st.temps.push(ecart / vise);
+      if (st.temps.length >= 45){
         const moy = st.temps.reduce((a, b) => a + b, 0) / st.temps.length; st.temps = [];
-        if (moy > 26 && st.qualite > 0.5) st.qualite = Math.max(0.5, st.qualite - 0.15);
-        else if (moy < 15 && st.qualite < 1) st.qualite = Math.min(1, st.qualite + 0.05);
+        if (moy > 1.45 && st.qualite > 0.55) st.qualite = Math.max(0.55, st.qualite - 0.15);
+        else if (moy < 1.1 && st.qualite < 1) st.qualite = Math.min(1, st.qualite + 0.05);
       }
     }
     st.dernier = now;
@@ -12560,14 +12564,14 @@ void main(){
   }
 
   /* ---------- boucle : 30 images/s au plus, en pause quand l'en-tête n'est pas visible ---------- */
-  let visible = true, raf = 0, dernier = 0, figeJusqua = 0;
-  // un doigt sur l'écran (appui, défilement) : la scène reste figée un instant, le téléphone répond tout de suite à l'appui
-  ["touchstart", "touchmove", "pointerdown"].forEach(t => window.addEventListener(t, () => { figeJusqua = performance.now() + 900; }, { passive: true, capture: true }));
+  let visible = true, raf = 0, dernier = 0, doigtJusqua = 0;
+  // un doigt fait défiler la page : 10 images/s le temps du geste (la page reste fluide), sans jamais figer la scène
+  ["touchstart", "touchmove"].forEach(t => window.addEventListener(t, () => { doigtJusqua = performance.now() + 350; }, { passive: true, capture: true }));
   function boucle(now){
     raf = 0;
     if (!visible || document.hidden) return;
-    if (W && now < figeJusqua){ raf = requestAnimationFrame(boucle); return; }
-    if (now - dernier >= (tactile ? 50 : 33)){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
+    const pas = tactile ? (now < doigtJusqua ? 100 : 50) : 33;
+    if (now - dernier >= pas - 4){ dernier = now; dessiner(tFixe != null ? tFixe : (now - t0) / 1000); }
     if (!reduit && tFixe == null) raf = requestAnimationFrame(boucle);
   }
   const relancer = () => { if (!raf) raf = requestAnimationFrame(boucle); };
