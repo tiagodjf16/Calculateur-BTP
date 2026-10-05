@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="e48c129bda15">
+<meta name="asf-version" content="1500828171e1">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18545,26 +18545,13 @@ ${M} .modale-pied .scp-mini{margin-right:auto;color:var(--texte-doux);font-size:
     if (carte.dataset.html !== html){ carte.innerHTML = html; carte.dataset.html = html; }
   }
 
-  /* téléphone : une barre en bas avec les rubriques, toujours à portée du pouce */
-  const COURT = { accueil: "Accueil", equipes: "Équipes", matchs: "Matchs", com: "Com.", vie: "Vie club", reglages: "Réglages" };
+  /* plus de barre des rubriques en bas ni de menu ☰ : tout passe par « Où tu veux aller ? » et le bouton « ← Accueil » */
   function barreBas(){
-    let b = document.getElementById("esp-barre");
-    if (location.hash !== "#espace" || !document.getElementById("panneau")){ if (b) b.remove(); document.body.classList.remove("avec-barre"); return; }
-    const rubs = rubsDuCompte(); if (!rubs.length) return;
-    const act = (rubs.find(r => r[3].includes(S.ui.onglet)) || [])[0];
-    const html = rubs.map(([k, l, ico, tabs]) => `<button type="button" class="${k === act ? "on" : ""}" aria-current="${k === act ? "page" : "false"}" data-a="${tabs.length > 1 ? "rubrique" : "onglet"}" data-k="${esc(tabs.length > 1 ? k : tabs[0])}"><span class="esp-barre-ico" aria-hidden="true">${ico}</span><span>${esc(COURT[k] || l)}</span>${tabs.includes("messages") ? badge("messages") : ""}</button>`).join("");
-    if (!b){ b = document.createElement("nav"); b.id = "esp-barre"; b.setAttribute("aria-label", "Rubriques de l'espace club"); document.body.appendChild(b); }
-    b.innerHTML = html; document.body.classList.add("avec-barre");
+    const b = document.getElementById("esp-barre"); if (b) b.remove();
+    document.body.classList.remove("avec-barre");
+    if (document.body.classList.contains("sur-espace") && document.body.classList.contains("drawer-ouvert") && typeof fermerMenuMobile === "function") fermerMenuMobile();
   }
   window.addEventListener("hashchange", () => setTimeout(() => { barreBas(); heroCompte(); }, 0));
-  // la barre du bas est hors de #espace : on relaie ses boutons au gestionnaire de l'application
-  document.addEventListener("click", ev => {
-    const b = ev.target.closest && ev.target.closest("#esp-barre button"); if (!b) return;
-    ev.preventDefault();
-    const proxy = document.querySelector("#espace .esp-relais") || (() => { const x = document.createElement("button"); x.type = "button"; x.className = "esp-relais"; x.hidden = true; const z = document.getElementById("espace"); if (z) z.appendChild(x); return x; })();
-    proxy.dataset.a = b.dataset.a; proxy.dataset.k = b.dataset.k; proxy.click();
-    setTimeout(() => window.scrollTo({ top: 0 }), 0);
-  });
 
   /* chaque page : le bandeau de la rubrique (à quoi sert l'onglet ouvert + « Accueil ») */
   function habiller(){
@@ -19049,8 +19036,9 @@ body.sur-espace #panneau tbody tr:nth-child(even) td{background:rgba(143,168,240
 body.sur-espace #panneau tbody tr:hover td{background:rgba(143,168,240,.1)}
 /* textes d'aide plus lisibles */
 body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace #panneau .aide{color:#AFC0EA;line-height:1.5}
-.esp-relais{display:none}
-#esp-barre{display:none}
+#esp-barre{display:none!important}
+/* le menu ☰ (tiroir « Espace club ») ne sert plus dans l'espace club, sur ordinateur comme sur téléphone */
+body.sur-espace #btn-menu,body.sur-espace #drawer{display:none!important}
 .esp-version{margin:30px 0 6px;text-align:center;color:var(--texte-doux);font:600 12px var(--corps);letter-spacing:.04em;opacity:.75}
 /* ================= THÈME CLAIR ================= */
 :root[data-theme="light"] body.sur-espace #panneau .carte,:root[data-theme="light"] body.sur-espace #panneau .pli,
@@ -19069,16 +19057,6 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
 :root[data-theme="light"] body.sur-espace .rub-onglets button[aria-selected="true"]{color:#fff}
 /* ================= TABLETTE ET TÉLÉPHONE ================= */
 @media (max-width:1140px){
-  #esp-barre{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;position:fixed;left:0;right:0;bottom:0;z-index:40;
-    background:rgba(6,12,32,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid rgba(143,168,240,.25);
-    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 28px rgba(0,0,0,.35)}
-  #esp-barre button{position:relative;display:grid;justify-items:center;gap:2px;border:0;background:none;color:#C9D4F2;cursor:pointer;
-    padding:6px 2px;border-radius:12px;font:700 11px var(--corps);min-height:54px}
-  #esp-barre .esp-barre-ico{font-size:22px;line-height:1.1;filter:grayscale(.35);opacity:.85}
-  #esp-barre button.on{color:#fff;background:rgba(47,107,255,.35)}
-  #esp-barre button.on .esp-barre-ico{filter:none;opacity:1}
-  #esp-barre .menu-badge{position:absolute;top:2px;right:18%}
-  body.avec-barre{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
   body.sur-espace .rub-onglets{position:sticky;top:60px;z-index:6;box-shadow:0 10px 22px rgba(3,8,24,.35)}
   body.sur-espace .rub-onglets button{flex:none}
   body.sur-espace .app-tete.esp-bandeau{padding:16px;border-radius:18px;margin-bottom:12px}
@@ -19260,11 +19238,6 @@ body.sur-espace #panneau .quoi,body.sur-espace #panneau .legende,body.sur-espace
 @keyframes asfMajMonte{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
 /* le message d'enregistrement (toast) passe au-dessus du bandeau */
 body.avec-asf-maj .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
-@media (max-width:1140px){
-  /* espace club : au-dessus de la barre des rubriques, jamais dessus */
-  body.avec-barre #asf-maj{bottom:calc(78px + env(safe-area-inset-bottom,0px))}
-  body.avec-barre.avec-asf-maj .toast{bottom:calc(146px + env(safe-area-inset-bottom,0px))}
-}
 @media (max-width:560px){
   #asf-maj{gap:8px;padding:6px 6px 6px 14px;font-size:14px;width:calc(100vw - 24px)}
   #asf-maj .asf-maj-txt{flex:1}
