@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="1d2fb2a82f7c">
+<meta name="asf-version" content="4630e422ebc0">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14806,6 +14806,8 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
   window.rendrePanneau = function(){
     // l'équipe choisie était l'ancienne « U6 à U11 », désormais vide : on passe à U6 · U7
     try { if (estEcoleTout(S.ui.eq) && ecoleVide()) S.ui.eq = ECOLE[0]; } catch(err){}
+    // le bureau range l'école de foot tout seul (une fois les données arrivées)
+    try { if (!ecoleEchec && !ecoleEnCours && bureau() && (!clubFait || !ecoleVide())) setTimeout(ecoleAuto, 400); } catch(err){}
     if (S.ui.onglet !== K){
       const r = rendreAvant.apply(this, arguments);
       try { nettoyerListes(); } catch(err){}
@@ -14930,8 +14932,8 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
   /* =====================================================================================
      Ranger les catégories : l'ancienne « U6 à U11 » et les équipes inventées par d'anciens imports
      ===================================================================================== */
-  async function rangerCategories(){
-    const aRanger = docsARanger();
+  async function rangerCategories(opts = {}){
+    const aRanger = docsARanger().filter(([, d]) => !opts.seulementEcole || estEcoleTout(d.equipe));
     const travail = {}; docs().forEach(([cle, d]) => { travail[cle] = { ...d, joueurs: [...d.joueurs] }; });
     const hors = { ...(docHors() || { titre: NOM_HORS }), joueurs: [], licencies: [...licenciesHors()] };
     let ranges = 0, versRanger = 0, versHors = 0;
@@ -14959,14 +14961,66 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     for (const cle of ordre){
       const doc = cle === HORS ? hors : travail[cle];
       const ok = await ecrire(() => S.db.doc("effectifs/" + cle).set(doc));
-      if (!ok){ toast("Enregistrement refusé : vérifie ta connexion, puis recommence.", true); return; }
+      if (!ok){ if (!opts.silencieux) toast("Enregistrement refusé : vérifie ta connexion, puis recommence.", true); return null; }
       S.effectifs = { ...(S.effectifs || {}), [cle]: doc };
     }
+    // l'ancienne « U6 à U11 » vidée est supprimée (sinon son nom resterait dans les listes d'équipes)
+    for (const cle of [...changes]){
+      const d = travail[cle];
+      if (cle !== HORS && d && estEcoleTout(d.equipe) && !d.joueurs.length){
+        try { await S.db.doc("effectifs/" + cle).delete(); const x = { ...(S.effectifs || {}) }; delete x[cle]; S.effectifs = x; } catch(err){}
+      }
+    }
     // les coachs qui géraient « U6 à U11 » gèrent maintenant les trois équipes ; les comptes joueurs vont dans leur nouvelle équipe
-    const comptes = await rangerComptes();
-    toast([ranges ? `${pl(ranges, "licence rangée", "licences rangées")} dans leur équipe` : "", versRanger ? `${versRanger} à ranger à la main (en haut de la liste)` : "",
-      versHors ? `${versHors} avec les dirigeants et éducateurs` : "", comptes].filter(Boolean).join(", ") + "." || "Tout était déjà rangé.");
+    const comptes = changes.size ? await rangerComptes() : "";
+    const bilan = [ranges ? `${pl(ranges, "licence rangée", "licences rangées")} dans leur équipe` : "", versRanger ? `${versRanger} à ranger à la main (dans « Suivi des licences »)` : "",
+      versHors ? `${versHors} avec les dirigeants et éducateurs` : "", comptes].filter(Boolean).join(", ");
+    if (opts.silencieux) return bilan;
+    toast(bilan ? bilan + "." : "Tout était déjà rangé.");
     rendrePanneau();
+    return bilan;
+  }
+
+  /* =====================================================================================
+     L'école de foot en trois équipes partout, tout seul : à l'ouverture de l'espace club par le bureau, une fois
+     - la liste des équipes du club (Réglages → Le club, et le site public) : « U6 à U11 » devient U6 · U7, U8 · U9, U10 · U11 ;
+     - les enfants encore dans « U6 à U11 » vont dans leur équipe d'après leur âge (âge inconnu : « À ranger »).
+     ===================================================================================== */
+  const DESC_ECOLE = { "U6 · U7": "Premiers pas : jeux, ballon et plaisir.", "U8 · U9": "Découverte du jeu, en plateaux.", "U10 · U11": "Apprentissage du jeu à 8, en plateaux." };
+  const equipesSansEcoleTout = eqs => {
+    const i = eqs.findIndex(x => x && estEcoleTout(x.nom)); if (i < 0) return null;
+    const vieux = eqs[i];
+    const nouv = ECOLE.filter(n => !eqs.some(x => x && x.nom === n)).map(n => ({ ...vieux, nom: n, niveau: vieux.niveau || "École de foot", desc: DESC_ECOLE[n] }));
+    return [...eqs.slice(0, i), ...nouv, ...eqs.slice(i + 1)].filter(x => !(x && estEcoleTout(x.nom)));
+  };
+  let clubFait = false, ecoleEnCours = false, ecoleEchec = false;
+  async function ecoleAuto(){
+    if (ecoleEnCours || ecoleEchec || !bureau() || !S.db || !S.compte) return;
+    ecoleEnCours = true;
+    const morceaux = [];
+    try {
+      if (!clubFait){
+        clubFait = true;
+        try {
+          const d = await S.db.doc("site/club").get();
+          const club = d && d.exists ? d.data() : null, base = club || C();
+          const equipes = Array.isArray(base.equipes) ? equipesSansEcoleTout(base.equipes) : null;
+          if (equipes){
+            const doc = { ...base, equipes };
+            if (await ecrire(() => S.db.doc("site/club").set(doc))){
+              S.club = doc; morceaux.push("équipes du club : U6 · U7, U8 · U9, U10 · U11");
+              // une fiche « Le club » déjà ouverte reprend la même liste (sinon un enregistrement remettrait « U6 à U11 »)
+              if (S.ui.club && Array.isArray(S.ui.club.equipes)){ const l = equipesSansEcoleTout(S.ui.club.equipes); if (l) S.ui.club.equipes = l; }
+            } else ecoleEchec = true;
+          }
+        } catch(err){}
+      }
+      if (!ecoleEchec && !ecoleVide()){
+        const r = await rangerCategories({ seulementEcole: true, silencieux: true });
+        if (r === null) ecoleEchec = true; else if (r) morceaux.push("enfants : " + r);
+      }
+    } finally { ecoleEnCours = false; }
+    if (morceaux.length){ toast("École de foot rangée — " + morceaux.join(" ; ") + "."); rendrePanneau(); }
   }
   async function rangerComptes(){
     let coachs = 0, joueurs = 0;
