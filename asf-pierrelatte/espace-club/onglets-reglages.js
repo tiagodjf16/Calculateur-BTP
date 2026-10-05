@@ -92,6 +92,8 @@
         }
       } catch(err){}
       const r = await avantAuth.call(this, action, corps);
+      // ma propre licence vient d'être enregistrée : l'espace joueur s'ouvre sans recharger
+      try { if (action === "maj" && S.compte && String(corps.id) === String(S.compte.id) && licencePropre(corps.licence)) S.compte.aLicence = true; } catch(err){}
       if (action === "comptes" && r){ if (typeof r.gerer === "boolean") S.ui.cptGerer = r.gerer; if (typeof r.donner === "boolean") S.ui.cptDonner = r.donner; }
       return r;
     };
@@ -104,6 +106,23 @@
     if (typeof toast === "function") toast("Ton numéro de licence n'est pas enregistré au club : l'espace joueur est réservé aux licenciés. Demande à ton coach ou au bureau.", true);
   };
   window.addEventListener("hashchange", () => setTimeout(direSansLicence, 300));
+  /* l'espace joueur est fermé à tout compte sans licence, coachs et bureau compris (le serveur leur laisse les données
+     de l'espace dirigeants, c'est donc ici qu'on ferme la porte) */
+  if (typeof window.rendreJoueur === "function"){
+    const joueurAvant = window.rendreJoueur;
+    window.rendreJoueur = function(){
+      const ferme = !!(S.compte && S.compte.aLicence === false);
+      document.body.classList.toggle("asf-sans-licence", ferme);
+      if (!ferme) return joueurAvant.apply(this, arguments);
+      const z = document.getElementById("joueur"); if (!z) return;
+      const staff = typeof peutCoacher === "function" && peutCoacher();
+      z.innerHTML = `<div class="carte asf-lic-carte"><h2>🎫 Espace joueur réservé aux licenciés</h2>
+        <p>Ton compte n'a pas de numéro de licence enregistré au club : l'espace joueur reste fermé.</p>
+        ${staff ? `<p>Ajoute ton numéro dans <b>Espace dirigeants › Accès et rôles</b> : ouvre ta fiche, remplis « N° de licence » puis touche <b>Enregistrer</b>.</p>
+          <p><a class="btn bleu" href="#espace">Aller à l'espace dirigeants</a></p>`
+        : `<p>Demande à ton coach ou au bureau de l'ajouter.</p>`}</div>`;
+    };
+  }
   setTimeout(direSansLicence, 2500);
   /* un champ avec son libellé (visible sur téléphone ; sur ordinateur, les colonnes ont leur en-tête) */
   const cellule = (texte, champ, cls) => {
@@ -891,6 +910,9 @@ body.sur-espace .modale.ong-reg-modale .ong-reg-mgroupe label.sw-ligne:last-chil
   ${P} .ong-reg-sv-liste .sv-txt{grid-area:txt}
   ${P} .ong-reg-sv-liste .ong-reg-puce{grid-area:puce;justify-self:start}
   ${P} .ong-reg-sv-liste .sv .btn{grid-area:btn;min-height:44px}
-}`;
+}
+/* espace joueur fermé (pas de licence) : ni ses onglets en haut, ni sa barre en bas */
+body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:none!important}
+.asf-lic-carte{max-width:640px}`;
   document.head.appendChild(css);
 })();
