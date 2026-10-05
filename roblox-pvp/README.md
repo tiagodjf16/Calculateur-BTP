@@ -17,7 +17,18 @@ Arène PvP au sabre, en mode « tous contre tous » : tu lances le jeu et c'est 
 | **Sauvegarde fiable** | 3 essais en cas d'échec, sauvegarde auto toutes les 2 min, sauvegarde à la fermeture du serveur. Si le chargement échoue en ligne, le joueur est expulsé pour ne pas écraser ses données |
 | **Carte** | Arène néon de 200×200 avec couvertures symétriques, plateforme centrale et rampes, 8 spawns, éclairage soigné (Atmosphere, Bloom…) |
 
-## Installation (avec Rojo, recommandé)
+## Essayer en 2 minutes (le plus simple)
+
+1. Installe **Roblox Studio** depuis https://create.roblox.com (bouton « Start Creating ») et connecte-toi.
+2. Télécharge le fichier **`ArenaClash.rbxlx`** de ce dossier, puis ouvre-le dans Studio (double-clic, ou Fichier → Ouvrir depuis un fichier).
+3. Clique sur **Play** (ou F5). Tu apparais dans l'arène avec ton épée.
+4. Pour te battre contre toi-même : onglet **Test** → section « Clients et serveurs » → choisis **2 joueurs** → **Démarrer**. Deux fenêtres s'ouvrent, une par joueur.
+
+> En test local, la progression n'est pas sauvegardée et le classement reste vide : c'est normal. Pour que ça marche, publie le jeu (Fichier → Publier sur Roblox), puis active Accueil → Paramètres du jeu → Sécurité → « Autoriser l'accès Studio aux services API ».
+
+`ArenaClash.rbxlx` est généré à partir de `src/` avec `rojo build -o ArenaClash.rbxlx`. Si tu modifies le code, régénère-le, ou utilise la méthode Rojo ci-dessous.
+
+## Installation (avec Rojo, pour développer)
 
 1. Installe [Rojo](https://rojo.space) (plugin Studio + CLI, ou via l'extension VS Code).
 2. Dans ce dossier : `rojo serve`

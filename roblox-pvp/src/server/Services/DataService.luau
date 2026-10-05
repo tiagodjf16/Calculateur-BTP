@@ -55,15 +55,20 @@ local function reconcile(data)
 	return data
 end
 
+-- En Studio on n'insiste pas : une place non publiée n'a jamais accès aux DataStores.
+local MAX_ATTEMPTS = if RunService:IsStudio() then 1 else 3
+
 local function withRetries(callback)
 	local lastError
-	for attempt = 1, 3 do
+	for attempt = 1, MAX_ATTEMPTS do
 		local ok, result = pcall(callback)
 		if ok then
 			return true, result
 		end
 		lastError = result
-		task.wait(attempt * 2)
+		if attempt < MAX_ATTEMPTS then
+			task.wait(attempt * 2)
+		end
 	end
 	return false, lastError
 end
@@ -183,7 +188,7 @@ function DataService.Load(player: Player)
 		end)
 		if not ok then
 			if RunService:IsStudio() then
-				warn("[DataService] Chargement impossible en Studio (active l'accès API). Données temporaires utilisées.")
+				warn("[DataService] Pas de sauvegarde en Studio (place non publiée ou accès API désactivé) : progression temporaire.")
 				noSave[player] = true
 			else
 				player:Kick("Impossible de charger tes données. Réessaie dans un instant !")
