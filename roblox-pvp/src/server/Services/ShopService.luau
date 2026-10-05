@@ -1,23 +1,63 @@
--- Boutique d'armes + récompense quotidienne (tout est vérifié côté serveur).
+-- Arsenal (achat d'armes, loadout, camouflages), récompense quotidienne et paramètres joueur.
+-- Tout est vérifié côté serveur : le client ne fait que demander.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local Weapons = require(Shared.Weapons)
+local Camos = require(Shared.Camos)
 local DataService = require(script.Parent.DataService)
-local CombatService = require(script.Parent.CombatService)
+local WeaponService = require(script.Parent.WeaponService)
 
 local ShopService = {}
 
-local function buy(player: Player, weaponId: any)
-	local weapon = type(weaponId) == "string" and Weapons.ById[weaponId]
+local THROTTLE = 0.2 -- secondes minimum entre deux demandes du même type
+local NOT_LOADED = "Données en cours de chargement…"
+
+local lastCalls = {} -- [Player] = { [nom] = os.clock() }
+
+local function throttled(player: Player, name: string): boolean
+	local calls = lastCalls[player]
+	if not calls then
+		calls = {}
+		lastCalls[player] = calls
+	end
+	local now = os.clock()
+	if now - (calls[name] or -math.huge) < THROTTLE then
+		return true
+	end
+	calls[name] = now
+	return false
+end
+
+local function getWeapon(weaponId: any)
+	if type(weaponId) ~= "string" then
+		return nil
+	end
+	return Weapons.ById[weaponId]
+end
+
+-- Sauvegarde en arrière-plan après un achat / une récompense (évite de perdre des pièces dépensées).
+local function saveSoon(player: Player)
+	task.spawn(DataService.Save, player)
+end
+
+--------------------------------------------------------------------------
+-- Remotes
+--------------------------------------------------------------------------
+local function buyWeapon(player: Player, weaponId: any): (boolean, string)
+	if throttled(player, "Buy") then
+		return false, "Doucement !"
+	end
+	local weapon = getWeapon(weaponId)
 	if not weapon then
 		return false, "Arme inconnue"
 	end
 	local data = DataService.Get(player)
 	if not data then
-		return false, "Données pas encore chargées"
+		return false, NOT_LOADED
 	end
 	if data.Owned[weapon.Id] then
 		return false, "Tu possèdes déjà cette arme"
@@ -29,54 +69,123 @@ local function buy(player: Player, weaponId: any)
 	DataService.Update(player, function(d)
 		d.Coins -= weapon.Price
 		d.Owned[weapon.Id] = true
-		d.Equipped = weapon.Id
-	end)
-	CombatService.GiveWeapon(player)
-	return true, weapon.Name .. " achetée !"
+		d.Loadout[weapon.Slot] = weapon.Id
+	end, true)
+	WeaponService.RefreshSlot(player, weapon.Slot)
+	saveSoon(player)
+	return true, weapon.Name .. " achetée et équipée !"
 end
 
-local function equip(player: Player, weaponId: any)
-	local weapon = type(weaponId) == "string" and Weapons.ById[weaponId]
-	local data = DataService.Get(player)
-	if not weapon or not data or not data.Owned[weapon.Id] then
-		return false, "Impossible d'équiper cette arme"
+local function setLoadout(player: Player, weaponId: any): (boolean, string)
+	if throttled(player, "Loadout") then
+		return false, "Doucement !"
 	end
+	local weapon = getWeapon(weaponId)
+	if not weapon then
+		return false, "Arme inconnue"
+	end
+	local data = DataService.Get(player)
+	if not data then
+		return false, NOT_LOADED
+	end
+	if not data.Owned[weapon.Id] then
+		return false, "Tu ne possèdes pas cette arme"
+	end
+	if data.Loadout[weapon.Slot] == weapon.Id then
+		return true, weapon.Name .. " déjà équipée"
+	end
+
 	DataService.Update(player, function(d)
-		d.Equipped = weapon.Id
-	end)
-	CombatService.GiveWeapon(player)
+		d.Loadout[weapon.Slot] = weapon.Id
+	end, true)
+	WeaponService.RefreshSlot(player, weapon.Slot)
 	return true, weapon.Name .. " équipée"
 end
 
-local function claimDaily(player: Player)
+local function equipCamo(player: Player, weaponId: any, camoId: any): (boolean, string)
+	if throttled(player, "Camo") then
+		return false, "Doucement !"
+	end
+	local weapon = getWeapon(weaponId)
+	local camo = if type(camoId) == "string" then Camos.ById[camoId] else nil
+	if not weapon or not camo then
+		return false, "Camouflage inconnu"
+	end
+	local data = DataService.Get(player)
+	if not data then
+		return false, NOT_LOADED
+	end
+	if not data.Owned[weapon.Id] then
+		return false, "Achète d'abord cette arme"
+	end
+	local kills = data.WeaponKills[weapon.Id] or 0
+	if kills < camo.Kills then
+		return false, string.format("Encore %d éliminations avec %s", camo.Kills - kills, weapon.Name)
+	end
+	if (data.Camos[weapon.Id] or "Default") == camo.Id then
+		return true, "Camouflage déjà équipé"
+	end
+
+	DataService.Update(player, function(d)
+		d.Camos[weapon.Id] = camo.Id
+	end, true)
+	WeaponService.ApplyCamo(player, weapon.Id, camo.Id)
+	return true, string.format("Camouflage %s équipé sur %s", camo.Name, weapon.Name)
+end
+
+-- Retourne (true, récompense, série) ou (false, secondes restantes).
+local function claimDaily(player: Player): (boolean, number, number?)
 	local data = DataService.Get(player)
 	if not data then
 		return false, 0
 	end
-	local now = os.time()
-	local elapsed = now - data.LastDaily
-	if elapsed < Config.DailyRewardCooldown then
-		return false, Config.DailyRewardCooldown - elapsed
+	if throttled(player, "Daily") then
+		local remaining = DataService.GetDailyState(data)
+		return false, remaining
 	end
 
-	local streak = if elapsed > Config.DailyStreakReset then 0 else data.DailyStreak
-	local reward = Config.DailyRewards[(streak % #Config.DailyRewards) + 1]
-	if player:GetAttribute("VIP") then
-		reward *= Config.VipCoinMultiplier
+	local remaining, streak = DataService.GetDailyState(data)
+	if remaining > 0 then
+		return false, remaining
 	end
+
+	local reward = Config.DailyRewards[(streak % #Config.DailyRewards) + 1]
+	reward = math.floor(reward * DataService.GetCoinMultiplier(player) + 0.5)
+	local newStreak = streak + 1
 
 	DataService.Update(player, function(d)
-		d.LastDaily = now
-		d.DailyStreak = streak + 1
+		d.LastDaily = os.time()
+		d.DailyStreak = newStreak
 		d.Coins += reward
-	end)
-	return true, reward, streak + 1
+	end, true)
+	saveSoon(player)
+	return true, reward, newStreak
+end
+
+-- Nettoie et enregistre les paramètres (sauvegardés avec les données). Pas de DataChanged :
+-- le client a déjà les valeurs et une synchro pourrait écraser un réglage en cours.
+local function saveSettings(player: Player, settings: any): boolean
+	if type(settings) ~= "table" then
+		return false
+	end
+	local data = DataService.Get(player)
+	if not data then
+		return false
+	end
+	data.Settings = DataService.SanitizeSettings(settings)
+	return true
 end
 
 function ShopService.Init()
-	Remotes.BuyWeapon.OnServerInvoke = buy
-	Remotes.EquipWeapon.OnServerInvoke = equip
+	Remotes.BuyWeapon.OnServerInvoke = buyWeapon
+	Remotes.SetLoadout.OnServerInvoke = setLoadout
+	Remotes.EquipCamo.OnServerInvoke = equipCamo
 	Remotes.ClaimDaily.OnServerInvoke = claimDaily
+	Remotes.SaveSettings.OnServerInvoke = saveSettings
+
+	Players.PlayerRemoving:Connect(function(player)
+		lastCalls[player] = nil
+	end)
 end
 
 return ShopService

@@ -1,30 +1,26 @@
--- Point d'entrée serveur.
+-- Point d'entrée serveur : génère la map puis démarre les services dans l'ordre.
 local Players = game:GetService("Players")
+
+-- On contrôle nous-mêmes l'apparition : le joueur apparaît après « JOUER » dans le menu (remote Deploy).
+Players.CharacterAutoLoads = false
 
 local Services = script.Parent:WaitForChild("Services")
 local MapService = require(Services.MapService)
 local DataService = require(Services.DataService)
+local SpawnService = require(Services.SpawnService)
+local WeaponService = require(Services.WeaponService)
 local CombatService = require(Services.CombatService)
 local ShopService = require(Services.ShopService)
 local LeaderboardService = require(Services.LeaderboardService)
 
--- On contrôle nous-mêmes le spawn : l'arme est donnée une fois les données chargées.
-Players.CharacterAutoLoads = false
+local ok, err = pcall(MapService.Build)
+if not ok then
+	warn("[Main] Génération de la map échouée : " .. tostring(err))
+end
 
-MapService.Build()
 DataService.Init()
+SpawnService.Init()
+WeaponService.Init()
 CombatService.Init()
 ShopService.Init()
 LeaderboardService.Init()
-
-local function onPlayerAdded(player: Player)
-	local data = DataService.Load(player)
-	if data then
-		CombatService.SetupPlayer(player)
-	end
-end
-
-Players.PlayerAdded:Connect(onPlayerAdded)
-for _, player in Players:GetPlayers() do
-	task.spawn(onPlayerAdded, player)
-end
