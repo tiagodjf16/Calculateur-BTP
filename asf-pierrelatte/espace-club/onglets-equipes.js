@@ -143,9 +143,10 @@
       const h2 = cImp.querySelector(":scope > h2"), p = cImp.querySelector(":scope > p");
       if (h2) h2.outerHTML = `<div class="ong-eff-cadre-tete"><h3 class="ong-ent-h">Importer depuis Footclubs</h3>${S.ui.importLic ? "" : `<button type="button" class="btn contour petit" data-a="eff-panneau" data-k="import">Fermer</button>`}</div>`;
       if (p) p.outerHTML = `<ol class="ong-eff-etapes">
-          <li>Dans <b>Footclubs</b>, ouvre le menu <b>Licences</b> et exporte la liste (Excel ou CSV).</li>
-          <li>Touche le bouton ci-dessous et choisis ce fichier.</li>
-          <li>Vérifie le nombre de joueurs trouvés, puis valide.</li></ol>`;
+          <li>Dans <b>Footclubs</b> : <b>Licences → Éditions et Extractions → Édition des licenciés</b>, toutes les catégories, format
+            <b>Extraction MS Excel</b>. Le fichier arrive dans <b>Travaux demandés</b> (l'engrenage sous ton nom).</li>
+          <li>Touche le bouton ci-dessous et choisis ce fichier (tout le club d'un coup : chacun ira dans l'équipe de sa catégorie).</li>
+          <li>Vérifie ce qui a été trouvé, puis touche <b>« Mettre les licences dans l'appli »</b>.</li></ol>`;
       const lab = fich.closest("label.btn");
       if (lab){ libelle(lab, "📂 Choisir le fichier Footclubs"); lab.removeAttribute("style"); lab.classList.add("ong-eff-fichier");
         const z = lab.closest(".btns"); if (z) z.removeAttribute("style"); }
