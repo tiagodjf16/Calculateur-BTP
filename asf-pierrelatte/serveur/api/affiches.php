@@ -4438,6 +4438,11 @@ function acp_de_jour(int $t): bool { $m = (int) date('G', $t) * 60 + (int) date(
 function acp_cle(string $quoi, string $id): string { return ($quoi === 'composition' ? 'compo-' : 'convoc-') . $id; }
 function acp_fait(string $quoi, string $id): bool { return reglage('pub_' . acp_cle($quoi, $id)) === 'fait'; }
 
+/* école de foot (U6 à U11) : une convocation, jamais de composition (même règle que l'application, onglets-jeunes.js) */
+function acp_ecole(array $c): bool {
+    $eq = (string) ($c['equipe'] ?? '');
+    return !empty($c['convocationSeule']) || preg_match('/^\s*U\s?(?:[5-9]|1[01])(?!\d)/iu', $eq) || preg_match('/u\s?6\s*(à|a)\s*u\s?11/iu', $eq);
+}
 /* pourquoi cette story ne peut pas partir (null : elle peut partir) ; la fenêtre horaire de la composition est vue à part */
 function acp_motif(string $quoi, array $c, array $reg, int $t): ?string {
     if (!$reg['actif']) return 'stories des compos désactivées par le bureau';
@@ -4450,6 +4455,7 @@ function acp_motif(string $quoi, array $c, array $reg, int $t): ?string {
     $k = acp_coup_envoi($c);
     $titulaires = array_filter(is_array($c['titulaires'] ?? null) ? $c['titulaires'] : [], fn($x) => is_array($x) && trim((string) ($x['nom'] ?? '')) !== '');
     if ($quoi === 'composition') {
+        if (acp_ecole($c)) return "école de foot : la convocation seulement, pas de composition";
         if ($k === null) return "heure du coup d'envoi inconnue";
         if (!$titulaires) return 'aucun titulaire placé sur le terrain';
         if ($t > $k + ACP_APRES) return 'match commencé';

@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="a3721b31334f">
+<meta name="asf-version" content="dee4a9e4dfbf">
 <meta name="asf-version-date" content="2026-10-05">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14694,7 +14694,7 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
       if (c && !ecole && estU13(c.equipe) && !estA8(c.formation)){ c.formation = A8; c.slots = {}; }
       const n = ecole ? (c.convoques || []).length : 0;
       const r = await enrAvant.apply(this, arguments);
-      if (ecole && !S.ui.compo) toast(publie ? `📣 Convocation envoyée : ${n > 1 ? `les ${n} convoqués sont prévenus` : "le convoqué est prévenu"}.` : "Convocation enregistrée (personne n'est encore prévenu).");
+      if (ecole && !S.ui.compo) toast(publie ? `📣 Convocation enregistrée : envoi ${n > 1 ? `aux ${n} convoqués` : "au convoqué"}…` : "Convocation enregistrée (personne n'est encore prévenu).");
       return r;
     };
   }
@@ -14705,6 +14705,7 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
     window.ficheCompo = function(c, opts){
       if (!estConvoc(c)) return ficheAvant.apply(this, arguments);
       const o = opts || {};
+      if (o.visiteur && !(S.compte || S.editeur)) return "";              // jamais les noms des enfants pour un visiteur
       let nous = "ASF Pierrelatte"; try { nous = C().nomCourt || nous; } catch(err){}
       const st = o.statut ? (o.statut.k === "non" ? { k: "non", t: "Tu n'es pas convoqué pour cette fois" } : { k: "tit", t: "✅ Tu es convoqué" }) : null;
       const conv = c.convoquesListe || [];
@@ -14724,11 +14725,11 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
         </div></div></article>`;
     };
   }
-  /* page publique des compos : jamais les convocations de l'école de foot (des enfants) */
+  /* page publique des compos : jamais les convocations de l'école de foot (des enfants), même connecté (elles sont dans l'espace
+     joueur et l'espace club) */
   if (typeof window.rendreCompos === "function"){
     const rcAvant = window.rendreCompos;
     window.rendreCompos = function(){
-      if (S.compte || S.editeur) return rcAvant.apply(this, arguments);
       const tous = S.compos;
       S.compos = (tous || []).filter(c => !estConvoc(c));
       try { return rcAvant.apply(this, arguments); } finally { S.compos = tous; }
@@ -14750,6 +14751,49 @@ ${S0}:has(.ong-eq-mb),${S0}:has(.ong-eq-cmp){overflow:visible;overflow-x:clip}
         if (estEcole(S.ui.eq)) racine.querySelectorAll('[data-a="nouvelle-compo"]').forEach(b => { b.innerHTML = b.innerHTML.replace(/Nouvelle compo/i, "Nouvelle convocation"); });
       });
     };
+  }
+
+  /* « Publier » sur la carte d'une convocation en brouillon : comme « Convoquer » (les convoqués sont prévenus, puis la story) */
+  window.addEventListener("click", async ev => {
+    const b = ev.target && ev.target.closest && ev.target.closest('[data-a="toggle-compo"]'); if (!b) return;
+    const carte = b.closest("[data-c]"), c = carte && (S.compos || []).find(x => x.id === carte.dataset.c);
+    if (!c || c.publie || !estConvoc(c) || typeof compoDepuis !== "function") return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    if (b.disabled) return; b.disabled = true;
+    try { S.ui.compo = compoDepuis(c); await window.enregistrerCompo(true); }
+    finally { b.disabled = false; if (S.ui.compo && S.ui.compo.id === c.id) { S.ui.compo = null; rendrePanneau(); } }
+  }, true);
+
+  /* l'espace joueur : un enfant convoqué avec une autre équipe de l'école de foot (ou dont le compte est encore sur « U6 à U11 »)
+     voit quand même sa convocation ; son nom est reconnu même écrit dans l'autre ordre ou sans accents */
+  const cleNom = n => { try { return slug(n).split("-").filter(Boolean).sort().join("-"); } catch(err){ return String(n || "").toLowerCase(); } };
+  if (typeof window.rendreJoueur === "function"){
+    const joueurAvant = window.rendreJoueur;
+    window.rendreJoueur = function(){
+      let eq = "", moi = "";
+      try { eq = monEquipe() || ""; const r = monRole(); moi = r && r.joueurNom ? r.joueurNom : (S.moi && S.moi.name) || ""; } catch(err){}
+      const tous = S.compos;
+      if (!moi || !Array.isArray(tous)) return joueurAvant.apply(this, arguments);
+      const k = cleNom(moi), hier = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      let change = false;
+      const vue = tous.map(c => {
+        if (!c || !c.publie || !estConvoc(c) || (c.date || "") < hier) return c;
+        const l = c.convoquesListe || [];
+        const ici = l.some(j => j && cleNom(j.nom) === k);
+        if (!ici && c.equipe !== eq) return c;
+        change = true;
+        return { ...c, equipe: ici ? eq : c.equipe, convoquesListe: l.map(j => j && cleNom(j.nom) === k ? { ...j, nom: moi } : j) };
+      });
+      if (!change) return joueurAvant.apply(this, arguments);
+      S.compos = vue;
+      try { return joueurAvant.apply(this, arguments); } finally { S.compos = tous; }
+    };
+  }
+
+  /* plus de « compo à faire » pour les équipes de l'école de foot (elles font une convocation, pas une compo) */
+  if (typeof window.mesEquipesCoach === "function"){
+    const mecAvant = window.mesEquipesCoach;
+    window.mesEquipesCoach = function(){ const l = mecAvant.apply(this, arguments); return Array.isArray(l) ? l.filter(n => !estEcole(n)) : l; };
   }
 
   /* ---------------- styles ---------------- */

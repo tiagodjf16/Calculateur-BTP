@@ -26,7 +26,9 @@ function rang_lecture(string $chemin, $data): int {
     if ($racine === 'notifs') return 99;                     // messages personnels des notifications : lus seulement par push.php
     if ($racine === 'compos') {
         if (empty($data['publie'])) return 2;                // brouillon : le staff seulement
-        if (!empty($data['convocationSeule'])) return 1;     // convocation de l'école de foot (des enfants) : le club seulement, jamais le public
+        // convocation de l'école de foot (des enfants, U6 à U11) : le club seulement, jamais le public
+        $eqC = (string) ($data['equipe'] ?? '');
+        if (!empty($data['convocationSeule']) || preg_match('/^\s*U\s?(?:[5-9]|1[01])(?!\d)/iu', $eqC) || preg_match('/u\s?6\s*(à|a)\s*u\s?11/iu', $eqC)) return 1;
         return compo_devoilee($data) ? 0 : 1;               // publiée : le public ne la voit qu'1 h avant le coup d'envoi, les joueurs du club tout de suite
     }
     if (in_array($racine, ['entrainements', 'presences', 'engagements'], true)) return 1;
