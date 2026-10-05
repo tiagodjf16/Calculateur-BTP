@@ -1,4 +1,8 @@
-/* École de foot (U6 · U7, U8 · U9, U10 · U11, et leurs groupes « Avenir », « Promotion »…) : pas de compo, une convocation.
+/* Les jeunes.
+   U13 (foot à 8) : la compo se fait seulement avec des dispositifs de foot à 8 (8 systèmes : 3-3-1, 3-1-3, 2-3-2, 3-2-2, 2-4-1,
+   3-2-1-1, 3-1-2-1 en losange, 2-1-3-1) ; une compo U13 ouverte avec un système à 11 passe en 3-3-1 (les convoqués restent).
+   Les mêmes dispositifs sont dans le serveur (api/affiches.php, ACP_FORMATIONS) pour la story de la composition.
+   École de foot (U6 · U7, U8 · U9, U10 · U11, et leurs groupes « Avenir », « Promotion »…) : pas de compo, une convocation.
    - Onglet Compos : pour une équipe de l'école de foot, l'éditeur devient « Convocation » : le plateau ou le match (choisi dans le
      calendrier ou saisi à la main), le rendez-vous (heure, lieu, mot du coach) et la liste des joueurs à cocher. Pas de système,
      pas de terrain, pas de poste.
@@ -20,6 +24,23 @@
   const jour = d => { try { return dateLongue(d); } catch(err){ return String(d || ""); } };
   const auj = () => { try { return aujourdhui(); } catch(err){ return new Date().toISOString().slice(0, 10); } };
   const ECOLE = ["U6 · U7", "U8 · U9", "U10 · U11"];
+
+  /* ---------------- U13 : foot à 8 ---------------- */
+  const estU13 = eq => /^\s*U\s?1[23](?!\d)/i.test(String(eq || ""));
+  const A8 = "Foot à 8 (3-3-1)";
+  const estA8 = f => /^Foot à 8/.test(String(f || ""));
+  // d'autres dispositifs de foot à 8 (gardien + 7) ; les mêmes positions que dans le serveur (affiches.php)
+  try {
+    if (typeof FORMATIONS === "object"){
+      const plus = {
+        "Foot à 8 (2-4-1)": [["GB",50,90],["DG",32,74],["DD",68,74],["MG",14,50],["MC",38,53],["MC",62,53],["MD",86,50],["BU",50,24]],
+        "Foot à 8 (3-2-1-1)": [["GB",50,90],["DG",20,73],["DC",50,76],["DD",80,73],["MC",33,56],["MC",67,56],["MOC",50,40],["BU",50,22]],
+        "Foot à 8 (3-1-2-1)": [["GB",50,90],["DG",20,73],["DC",50,76],["DD",80,73],["MDC",50,58],["MG",26,44],["MD",74,44],["BU",50,22]],
+        "Foot à 8 (2-1-3-1)": [["GB",50,90],["DG",32,75],["DD",68,75],["MDC",50,60],["MG",16,42],["MOC",50,40],["MD",84,42],["BU",50,21]],
+      };
+      Object.entries(plus).forEach(([k, v]) => { if (!FORMATIONS[k]) FORMATIONS[k] = v; });
+    }
+  } catch(err){}
 
   /* ---------------- les joueurs et les rendez-vous de l'équipe ---------------- */
   function joueursDe(eq){
@@ -89,6 +110,20 @@
   const editeurAvant = window.panCompoEditeur;
   window.panCompoEditeur = function(){
     const c = S.ui.compo;
+    if (c && estU13(c.equipe) && !estEcole(c.equipe)){
+      // U13 : seulement les dispositifs de foot à 8 (une compo à 11 passe en 3-3-1, les convoqués restent)
+      if (!estA8(c.formation) || !(typeof FORMATIONS === "object" && FORMATIONS[c.formation])){ c.formation = A8; c.slots = {}; c.capitaine = c.capitaine || ""; }
+      const h = editeurAvant.apply(this, arguments);
+      return ONG.transformer(h, r => {
+        r.querySelectorAll('select[data-c="formation"] option').forEach(o => {
+          const v = o.getAttribute("value") || o.textContent;
+          if (!estA8(v)){ o.remove(); return; }
+          o.setAttribute("value", v);                                   // la valeur reste le nom exact du système
+          o.textContent = v.replace(/^Foot à 8 \((.*)\)$/, "$1 (foot à 8)");
+        });
+        r.querySelectorAll('[data-a="choisir-systeme"][data-f]').forEach(b => { if (!estA8(b.dataset.f)) b.remove(); });
+      });
+    }
     if (!c || !estEcole(c.equipe)) return editeurAvant.apply(this, arguments);
     if (!Array.isArray(c.convoques)) c.convoques = [];
     return editeur();
@@ -141,6 +176,7 @@
         if (typeof FORMATIONS === "object" && !FORMATIONS[c.formation]) c.formation = Object.keys(FORMATIONS).find(k => /5/.test(k)) || Object.keys(FORMATIONS)[0];
         if (!String(c.adv || "").trim() && (c.date || c.lieu)) c.adv = c.dom ? "Plateau à domicile" : "Plateau";
       } else if (c && c.convocationSeule) delete c.convocationSeule;
+      if (c && !ecole && estU13(c.equipe) && !estA8(c.formation)){ c.formation = A8; c.slots = {}; }
       const n = ecole ? (c.convoques || []).length : 0;
       const r = await enrAvant.apply(this, arguments);
       if (ecole && !S.ui.compo) toast(publie ? `📣 Convocation envoyée : ${n > 1 ? `les ${n} convoqués sont prévenus` : "le convoqué est prévenu"}.` : "Convocation enregistrée (personne n'est encore prévenu).");
