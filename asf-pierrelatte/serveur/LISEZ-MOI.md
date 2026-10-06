@@ -151,7 +151,10 @@ Pour tout arrêter d'un coup, coupe l'interrupteur **« Stories des compos »**.
 
 ## Toujours servir la dernière version des pages
 
-Le service worker du site (`sw.js`) ne garde rien en cache : il ne sert qu'aux notifications. Quand un téléphone affiche
+Le service worker du site (`sw.js`, copie dans `racine/`) sert aux notifications et garde une copie des pages et des images pour
+s'ouvrir sans réseau (application Android / Play Store). Les pages passent toujours par le réseau d'abord : connecté, on a
+toujours la dernière version ; les données (`/api`) ne sont jamais gardées. Pour tout vider chez tout le monde, changer les
+numéros `asfp-pages-1` et `asfp-fichiers-1` en haut de `sw.js`. Quand un téléphone affiche
 encore l'ancienne page, c'est le cache du navigateur. Pour qu'il revérifie à chaque visite (sans tout retélécharger :
 le serveur répond « rien n'a changé » quand c'est le cas), ajouter en haut du fichier `.htaccess` à la racine du site :
 

@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "ASF Pierrelatte",
+  "short_name": "ASF Pierrelatte",
+  "description": "L'appli de l'Atom'Sports Football Pierrelatte : le match du week-end, les compos, les convocations, les entraînements, les messages, les résultats et les classements du club.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F2257",
+  "theme_color": "#0F2257",
+  "categories": ["sports"],
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/captures/telephone-1.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "Le site du club : matchs, résultats et équipes" },
+    { "src": "/captures/telephone-2.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "Espace joueur : le match du week-end, présent ou absent" },
+    { "src": "/captures/telephone-3.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "La compo publiée par le coach, sur le terrain" },
+    { "src": "/captures/telephone-4.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "Espace club : tous les outils des coachs et du bureau" },
+    { "src": "/captures/ordinateur-1.png", "sizes": "1920x1080", "type": "image/png", "form_factor": "wide", "label": "Le site du club sur ordinateur" },
+    { "src": "/captures/ordinateur-2.png", "sizes": "1920x1080", "type": "image/png", "form_factor": "wide", "label": "L'espace club sur ordinateur" }
+  ],
+  "shortcuts": [
+    { "name": "Espace joueur", "short_name": "Joueur", "description": "Le match du week-end, les compos et les messages", "url": "/#joueur",
+      "icons": [{ "src": "/icone-maskable-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Espace club", "short_name": "Club", "description": "Compos, convocations, effectifs et licences", "url": "/#espace",
+      "icons": [{ "src": "/icone-maskable-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}
