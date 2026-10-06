@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.asf_pierrelatte.twa",
+      "sha256_cert_fingerprints": [
+        "62:90:61:26:F8:67:48:4F:27:09:1E:75:5E:EE:3F:F1:70:F1:7D:21:FD:94:0B:55:F4:0E:FB:4E:AC:CD:C6:9A",
+        "FC:D5:DC:EB:BD:75:90:46:7F:14:7D:A9:C2:28:52:A1:1B:D4:6F:8E:7F:30:58:DE:61:C3:D0:89:82:65:DA:8E"
+      ]
+    }
+  }
+]
