@@ -21,8 +21,8 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="79bcb5684200">
-<meta name="asf-version-date" content="2026-10-06">
+<meta name="asf-version" content="59f4697b9946">
+<meta name="asf-version-date" content="2026-10-07">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11357,7 +11357,8 @@ void main(){
     const heures = String(st.horaires || "").match(/\b\d{1,2}\s*(?:h|:)\s*(?:\d{2})?/gi) || [];
     const h = !plusieursJours && heures.length === 1 ? heures[0].match(/(\d{1,2})\s*(?:h|:)\s*(\d{2})?/i) : null;
     const lieu = !st.lieu || st.lieu === (typeof ADRESSE_STADE === "string" ? ADRESSE_STADE : "") ? STADE : st.lieu;
-    const cats = (st.categories && st.categories.length ? st.categories : (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : [])).join(", ");
+    const lc = st.categories && st.categories.length ? st.categories : (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : []);
+    const cats = typeof window.plageCatsStage === "function" ? window.plageCatsStage(lc) : lc.join(", ");     // « U6 à U11 » (onglets-vie.js)
     const candidates = ["Inscriptions sur asf-pierrelatte.fr", st.horaires && "Horaires : " + st.horaires, cats && "Catégories : " + cats, st.tarif && "Tarif : " + st.tarif,
       st.limite && "Inscriptions jusqu'au " + dateLongue(st.limite), st.contact && "Contact : " + st.contact, st.places && st.places + " places"].filter(Boolean);
     const infos = [];
@@ -19221,6 +19222,91 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
       <li>Les inscrits arrivent ici tout seuls. <b>« Exporter la liste »</b> donne un fichier à ouvrir avec Excel.</li>
       <li>C'est complet ? Touche <b>« Fermer les inscriptions »</b>.</li></ol>`;
 
+  /* ---------- les catégories d'un stage : toutes les catégories jeunes, on coche celles qui peuvent s'inscrire ----------
+     (l'application ne proposait que U8 à U11). Rien n'est coché pour un nouveau stage ; il en faut au moins une. */
+  const GROUPES_CATS = [
+    ["École de foot", ["U6", "U7", "U8", "U9", "U10", "U11"]],
+    ["Foot à 8", ["U12", "U13"]],
+    ["Foot à 11", ["U14", "U15", "U16", "U17", "U18"]]];
+  const ORDRE_CATS = GROUPES_CATS.flatMap(g => g[1]);
+  const CATS_APPLI = () => (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : []);
+  const catsDu = st => (st && st.categories && st.categories.length ? st.categories : CATS_APPLI());
+  const numCat = c => { const m = /^U(\d{1,2})$/i.exec(String(c || "").trim()); return m ? +m[1] : 0; };
+  // la saison du stage commence le 1er juillet ; un U11 a 11 ans dans l'année où elle finit (stage d'octobre 2026 : nés en 2016)
+  const finSaison = d => {
+    const x = /^\d{4}-\d{2}-\d{2}/.test(d || "") ? new Date(String(d).slice(0, 10) + "T12:00:00") : new Date();
+    return isNaN(x) ? finSaison("") : (x.getMonth() >= 6 ? x.getFullYear() + 1 : x.getFullYear());
+  };
+  const neEn = (c, fin) => (numCat(c) ? fin - numCat(c) : null);
+  // « U6 à U11 », « U12, U13 », « U6 à U9, U13 » : les catégories qui se suivent sont regroupées
+  function plageCats(cats){
+    const l = [...new Set((cats || []).map(c => String(c).trim()).filter(Boolean))];
+    const morceaux = [];
+    let suite = [];
+    const finir = () => { if (suite.length) morceaux.push(suite.length > 2 ? `${suite[0]} à ${suite[suite.length - 1]}` : suite.join(", ")); suite = []; };
+    ORDRE_CATS.filter(c => l.includes(c)).forEach(c => { if (suite.length && numCat(c) !== numCat(suite[suite.length - 1]) + 1) finir(); suite.push(c); });
+    finir();
+    return [...morceaux, ...l.filter(c => !ORDRE_CATS.includes(c))].join(", ");
+  }
+  window.plageCatsStage = plageCats;
+  // « nés de 2016 à 2021 » (ou les années une à une si les catégories ne se suivent pas)
+  function nesTxt(cats, fin){
+    const a = [...new Set(cats.map(c => neEn(c, fin)).filter(Boolean))].sort((x, y) => x - y);
+    if (!a.length) return "";
+    if (a.length === 1) return `nés en ${a[0]}`;
+    return a[a.length - 1] - a[0] + 1 === a.length ? `nés de ${a[0]} à ${a[a.length - 1]}` : `nés en ${a.join(", ")}`;
+  }
+  function blocCats(cats, debut){
+    const fin = finSaison(debut), coche = new Set(cats);
+    const autres = cats.filter(c => !ORDRE_CATS.includes(c));                 // une catégorie déjà enregistrée hors de la liste
+    const groupes = autres.length ? [...GROUPES_CATS, ["Autres", autres]] : GROUPES_CATS;
+    const kase = c => { const an = neEn(c, fin);
+      return `<label class="ovk-c"><input type="checkbox" name="cat" value="${e(c)}" ${coche.has(c) ? "checked" : ""}><span><b>${e(c)}</b>${an ? `<small data-ovk-an="${e(c)}">${an}</small>` : ""}</span></label>`; };
+    return `<b class="an-titre">Catégories autorisées</b>
+      <p class="ovk-aide">Coche les catégories qui peuvent s'inscrire. Sous chaque catégorie : l'année de naissance des enfants pour la saison du stage.</p>
+      <div class="st-cats ovk">${groupes.map(([t, l]) => `<div class="ovk-grp"><div class="ovk-t"><span>${e(t)}</span>
+          <button type="button" class="ovk-tout" data-ovk-tout>${l.every(c => coche.has(c)) ? "Tout décocher" : "Tout cocher"}</button></div>
+        <div class="ovk-l">${l.map(kase).join("")}</div></div>`).join("")}</div>
+      <p class="ovk-res" data-ovk-res aria-live="polite">${resumeCats(cats, fin)}</p>`;
+  }
+  function resumeCats(cats, fin){
+    if (!cats.length) return `<span class="ovk-rien">Aucune catégorie cochée : coche au moins une catégorie.</span>`;
+    const nes = nesTxt(cats, fin);
+    return `Sur le site : <b>${e(plageCats(cats))}</b>${nes ? ` · enfants ${e(nes)}` : ""}`;
+  }
+  function majCats(f){
+    const z = f.querySelector(".ovk"); if (!z) return;
+    const deb = f.querySelector('[name="dateDebut"]'), fin = finSaison(deb ? deb.value : "");
+    z.querySelectorAll("[data-ovk-an]").forEach(s => { s.textContent = neEn(s.dataset.ovkAn, fin) || ""; });
+    z.querySelectorAll(".ovk-grp").forEach(g => {
+      const b = g.querySelector("[data-ovk-tout]"), l = [...g.querySelectorAll('input[name="cat"]')];
+      if (b) b.textContent = l.length && l.every(i => i.checked) ? "Tout décocher" : "Tout cocher";
+    });
+    const cases = [...z.querySelectorAll('input[name="cat"]')], choisies = cases.filter(i => i.checked).map(i => i.value);
+    if (choisies.length && cases[0]) cases[0].setCustomValidity("");
+    const r = f.querySelector("[data-ovk-res]");
+    if (r) r.innerHTML = resumeCats(choisies, fin);
+  }
+  const formCats = el => (el && el.closest ? el.closest('form[data-form="stage"]') : null);
+  document.addEventListener("click", ev => {
+    const b = ev.target.closest && ev.target.closest("[data-ovk-tout]"), f = formCats(b); if (!f) return;
+    const l = [...b.closest(".ovk-grp").querySelectorAll('input[name="cat"]')], tout = l.every(i => i.checked);
+    l.forEach(i => { i.checked = !tout; });
+    majCats(f);
+  });
+  document.addEventListener("change", ev => {
+    const i = ev.target, f = formCats(i);
+    if (f && f.querySelector(".ovk") && (i.name === "cat" || i.name === "dateDebut")) majCats(f);
+  });
+  // pas de catégorie cochée : on ne crée pas le stage (sinon l'application mettrait U8 à U11 d'office)
+  document.addEventListener("submit", ev => {
+    const f = ev.target; if (!f || !f.matches || !f.matches('form[data-form="stage"]') || !f.querySelector(".ovk")) return;
+    if (f.querySelector('.ovk input[name="cat"]:checked')) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    const c = f.querySelector('.ovk input[name="cat"]');
+    if (c){ c.setCustomValidity("Coche au moins une catégorie qui peut s'inscrire au stage."); c.reportValidity(); }
+  }, true);
+
   function rangerFormStage(f, edit){
     const lab = n => { const i = f.querySelector(`[name="${n}"]`); return i ? i.closest("label") : null; };
     const L = {};
@@ -19228,6 +19314,13 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
     const grille = f.querySelector(":scope > .grille"), btns = f.querySelector(":scope > .btns");
     if (!grille || !btns || !L.titre || !L.dateDebut) return;                            // forme inattendue : on laisse tel quel
     const cats = grille.querySelector(".st-cats"), catsBloc = cats ? cats.closest(".pleine") : null;
+    if (catsBloc){
+      const deb = f.querySelector('[name="dateDebut"]');
+      catsBloc.innerHTML = blocCats(edit ? [...catsDu(edit)] : [], deb ? deb.value : "");
+      catsBloc.classList.add("ovk-bloc");
+    }
+    const ti = f.querySelector('[name="titre"]');
+    if (ti) ti.placeholder = "Stage de la Toussaint U6 à U11";
     const apercu = [...grille.querySelectorAll(":scope > div.pleine")].find(d => d.querySelector("img"));
     const intro = f.querySelector(":scope > p.quoi");
     libelle(L.affiche, edit && edit.photo ? "Changer l'affiche (facultatif)" : "Affiche du stage (une image)");
@@ -19259,10 +19352,10 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
     const img = q("img.st-mini"), lien = img ? (img.closest("a") || img) : null;
     const table = q(".st-table-zone"), fiches = q(".st-ins-liste");
     const n = l.length, places = +x.places || 0, pct = places ? Math.min(100, Math.round(n / places * 100)) : 0;
-    const liste = typeof CATS_STAGE !== "undefined" ? CATS_STAGE : [];
+    const liste = ORDRE_CATS;
     const parCat = [...liste, ...[...new Set(l.map(i => i.categorie))].filter(k => k && !liste.includes(k))]
       .map(k => [k, l.filter(i => i.categorie === k).length]).filter(p => p[1]);
-    const cats = (x.categories && x.categories.length ? x.categories : liste).join(" · ");
+    const cats = plageCats(catsDu(x));
     const ouvert = x.ouvert !== false;
     const etats = [
       passe ? chip("Terminé", "gris") : "",
@@ -19343,6 +19436,29 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
       while (r.firstChild) r.firstChild.remove();
       r.appendChild(z);
     });
+  });
+
+  /* sur le site : « Catégories : U6 à U11 » plutôt que les catégories une à une */
+  ["ficheStageHtml", "carteStageActu"].forEach(nom => {
+    const avant = window[nom]; if (typeof avant !== "function") return;
+    window[nom] = function(st){
+      try { if (st && typeof st === "object"){ const p = plageCats(catsDu(st)); if (p) return avant.call(this, { ...st, categories: [p] }); } } catch(err){}
+      return avant.apply(this, arguments);
+    };
+  });
+  /* l'inscription en ligne : la catégorie se choisit toute seule avec la date de naissance ;
+     un enfant d'une autre catégorie : un mot pour le dire (l'inscription reste possible, le club décide) */
+  document.addEventListener("change", ev => {
+    const i = ev.target; if (!i || i.name !== "naissance" || !i.closest) return;
+    const f = i.closest("form[data-stage-form]"), sel = f ? f.querySelector('select[name="categorie"]') : null; if (!sel) return;
+    const st = (S.stages || []).find(x => x.id === f.dataset.stageForm) || {};
+    const fin = finSaison(st.dateDebut), an = /^\d{4}-/.test(i.value) ? +i.value.slice(0, 4) : 0;
+    let mot = f.querySelector(".ovk-public");
+    const o = an ? [...sel.options].find(x => x.value === "U" + (fin - an)) : null;
+    if (!an || o){ if (o) sel.value = o.value; if (mot) mot.remove(); return; }
+    if (!mot){ mot = document.createElement("p"); mot.className = "ovk-public"; mot.setAttribute("role", "status"); (sel.closest("label") || sel).after(mot); }
+    const cats = catsDu(st), nes = nesTxt(cats, fin);
+    mot.textContent = `Ce stage est pour les ${plageCats(cats)}${nes ? ` (enfants ${nes})` : ""}. Pour un enfant né en ${an}, renseigne-toi auprès du club.`;
   });
 
   /* =====================================================================
@@ -19592,6 +19708,27 @@ ${R} .ong-vie-grp-t span{display:inline-grid;place-items:center;width:24px;heigh
 ${R} .ong-vie-apercu img{max-width:100%!important;max-height:120px;object-fit:contain}
 ${R} .ong-vie-g .st-accord{text-transform:none;letter-spacing:0;font:600 14.5px var(--corps);border-radius:14px!important;line-height:1.4}
 ${R} .ong-vie-g .an-titre{display:block;font:700 12px var(--corps);letter-spacing:.06em;text-transform:uppercase;color:var(--texte-doux)}
+/* --- stage : les catégories autorisées (toutes les catégories jeunes, rangées par foot) --- */
+${R} .ovk-bloc{display:grid;gap:8px}
+${R} .ovk-aide{margin:0;color:#AFC0EA;font-size:14px;line-height:1.45}
+${R} .st-cats.ovk{display:grid;gap:12px;margin:2px 0 0}
+${R} .ovk-grp{display:grid;gap:8px}
+${R} .ovk-t{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+${R} .ovk-t span{font:700 14.5px var(--corps);color:#DCE5FF}
+${R} .ovk-tout{appearance:none;-webkit-appearance:none;border:0;background:none;padding:6px 2px;font:700 13.5px var(--corps);color:#9FC0FF;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+${R} .ovk-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+${R} .st-cats .ovk-c{display:flex!important;align-items:center;gap:9px;margin:0;padding:8px 12px;min-height:50px;box-sizing:border-box;border-radius:12px;border:1.5px solid rgba(143,168,240,.28);background:rgba(5,11,31,.25);cursor:pointer;font-weight:400}
+${R} .ovk-c input{width:20px;height:20px;margin:0;flex:none;accent-color:#5B8CFF}
+${R} .ovk-c span{display:grid;line-height:1.2}
+${R} .ovk-c b{font:800 16px var(--corps);color:#fff}
+${R} .ovk-c small{font:600 12.5px var(--corps);color:#AFC0EA}
+${R} .ovk-c:has(input:checked){border-color:#5B8CFF;background:rgba(91,140,255,.2)}
+${R} .ovk-c:focus-within{outline:3px solid rgba(91,140,255,.55);outline-offset:2px}
+${R} .ovk-res{margin:2px 0 0;font-size:14.5px;line-height:1.45;color:#C9D4F2}
+${R} .ovk-res b{color:#fff}
+${R} .ovk-rien{color:#FCA5A5;font-weight:700}
+/* l'inscription en ligne (sur le site) : l'enfant n'est pas d'une catégorie du stage */
+.st-form .ovk-public{grid-column:1/-1;margin:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(234,179,8,.55);background:rgba(234,179,8,.1);font-size:14px;line-height:1.45}
 /* --- cartes de liste : date à gauche, l'essentiel au milieu, les boutons à droite --- */
 ${R} .ovc{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 18px;align-items:start;padding:16px 18px;margin:0;border-radius:18px;
   background:linear-gradient(180deg,rgba(26,44,96,.5),rgba(14,26,60,.5));border:1px solid rgba(143,168,240,.18)}
@@ -19720,6 +19857,13 @@ ${R} .ovb-fl{color:#F3D48A}
 :root[data-theme="light"] ${R} .btn.danger{color:#B91C1C;border-color:rgba(220,38,38,.55);background:rgba(220,38,38,.06)}
 :root[data-theme="light"] ${R} input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]),:root[data-theme="light"] ${R} select,:root[data-theme="light"] ${R} textarea{background:#fff;border-color:#C9D4F2;color:var(--texte)}
 :root[data-theme="light"] ${R} .st-table td,:root[data-theme="light"] ${R} .st-table th{color:var(--texte)}
+:root[data-theme="light"] ${R} .ovk-aide,:root[data-theme="light"] ${R} .ovk-c small{color:var(--texte-doux)}
+:root[data-theme="light"] ${R} .ovk-t span,:root[data-theme="light"] ${R} .ovk-c b,:root[data-theme="light"] ${R} .ovk-res,:root[data-theme="light"] ${R} .ovk-res b{color:var(--texte)}
+:root[data-theme="light"] ${R} .st-cats .ovk-c{background:#fff;border-color:#C9D4F2}
+:root[data-theme="light"] ${R} .ovk-c:has(input:checked){background:rgba(28,79,214,.08);border-color:#1C4FD6}
+:root[data-theme="light"] ${R} .ovk-c input{accent-color:#1C4FD6}
+:root[data-theme="light"] ${R} .ovk-tout{color:#1C4FD6}
+:root[data-theme="light"] ${R} .ovk-rien{color:#B91C1C}
 /* --- tablette et téléphone --- */
 @media (max-width:900px){
   ${R} .ong-vie-g{grid-template-columns:repeat(2,minmax(0,1fr))}
