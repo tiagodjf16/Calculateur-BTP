@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="59f4697b9946">
+<meta name="asf-version" content="8694a14abaf5">
 <meta name="asf-version-date" content="2026-10-07">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -19230,7 +19230,9 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
     ["Foot à 11", ["U14", "U15", "U16", "U17", "U18"]]];
   const ORDRE_CATS = GROUPES_CATS.flatMap(g => g[1]);
   const CATS_APPLI = () => (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : []);
-  const catsDu = st => (st && st.categories && st.categories.length ? st.categories : CATS_APPLI());
+  // les catégories enregistrées d'un stage, toujours en liste (une ancienne fiche peut les avoir en texte : « U8, U9 »)
+  const enListe = c => (Array.isArray(c) ? c : typeof c === "string" ? c.split(/[,;·/]+/) : []).map(x => String(x == null ? "" : x).trim()).filter(Boolean);
+  const catsDu = st => { const c = enListe(st && st.categories); return c.length ? c : enListe(CATS_APPLI()); };
   const numCat = c => { const m = /^U(\d{1,2})$/i.exec(String(c || "").trim()); return m ? +m[1] : 0; };
   // la saison du stage commence le 1er juillet ; un U11 a 11 ans dans l'année où elle finit (stage d'octobre 2026 : nés en 2016)
   const finSaison = d => {
@@ -19240,7 +19242,7 @@ body.asf-sans-licence #nav-joueur,body.asf-sans-licence #tabbar-joueur{display:n
   const neEn = (c, fin) => (numCat(c) ? fin - numCat(c) : null);
   // « U6 à U11 », « U12, U13 », « U6 à U9, U13 » : les catégories qui se suivent sont regroupées
   function plageCats(cats){
-    const l = [...new Set((cats || []).map(c => String(c).trim()).filter(Boolean))];
+    const l = [...new Set(enListe(cats))];
     const morceaux = [];
     let suite = [];
     const finir = () => { if (suite.length) morceaux.push(suite.length > 2 ? `${suite[0]} à ${suite[suite.length - 1]}` : suite.join(", ")); suite = []; };

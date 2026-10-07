@@ -367,7 +367,8 @@
     const heures = String(st.horaires || "").match(/\b\d{1,2}\s*(?:h|:)\s*(?:\d{2})?/gi) || [];
     const h = !plusieursJours && heures.length === 1 ? heures[0].match(/(\d{1,2})\s*(?:h|:)\s*(\d{2})?/i) : null;
     const lieu = !st.lieu || st.lieu === (typeof ADRESSE_STADE === "string" ? ADRESSE_STADE : "") ? STADE : st.lieu;
-    const cats = (st.categories && st.categories.length ? st.categories : (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : [])).join(", ");
+    const lc = st.categories && st.categories.length ? st.categories : (typeof CATS_STAGE !== "undefined" ? CATS_STAGE : []);
+    const cats = typeof window.plageCatsStage === "function" ? window.plageCatsStage(lc) : lc.join(", ");     // « U6 à U11 » (onglets-vie.js)
     const candidates = ["Inscriptions sur asf-pierrelatte.fr", st.horaires && "Horaires : " + st.horaires, cats && "Catégories : " + cats, st.tarif && "Tarif : " + st.tarif,
       st.limite && "Inscriptions jusqu'au " + dateLongue(st.limite), st.contact && "Contact : " + st.contact, st.places && st.places + " places"].filter(Boolean);
     const infos = [];
