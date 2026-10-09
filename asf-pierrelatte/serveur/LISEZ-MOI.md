@@ -18,6 +18,16 @@ Le dossier `apercus/` ne va pas sur l'hébergeur : ce sont des exemples d'affich
 
 Conseil : avant de remplacer, télécharge les anciens `fond-domicile.jpg`, `fond-exterieur.jpg` et `affiches.php` sur ton ordinateur.
 
+## Quand ça part tout seul
+
+- **Le lundi à 9 h** : les **résultats** du week-end passé (championnats, vétérans, foot animation).
+- **Le mercredi à 9 h** : les **rencontres** du week-end qui arrive (championnats, vétérans, foot animation).
+- **Le jour d'un match à 9 h** : une story par équipe qui joue.
+
+Deux jours de publication dans la semaine : la page Facebook a des nouvelles plus souvent. Les heures et les jours sont dans
+`api/affiches.php` (fonction `affiches_cron`), appelé chaque heure par le cron de `sync.php`. Une annonce n'est publiée qu'une fois :
+des rencontres déjà publiées un lundi (ancienne version) ne repartent pas le mercredi de la même semaine.
+
 ## Publications : une pour le domicile, une pour l'extérieur
 
 Chaque annonce (rencontres, résultats, foot animation, vétérans) part en **deux publications séparées** : les matchs à domicile,
@@ -25,7 +35,7 @@ puis ceux à l'extérieur, chacune avec son message. Quand un lieu a trop de mat
 **deux** (« page 1/2 », « page 2/2 ») ; sinon une seule. Les stories suivent : une par page.
 Foot animation : tout sur une ou deux affiches quand il y a peu de plateaux ; sinon une affiche par catégorie
 (U6 · U7, U8 · U9, U10 · U11, U13 en brassage), toutes dans la même annonce (domicile, et une autre pour l'extérieur).
-C'est vrai le lundi à 9 h (publication automatique) comme avec le bouton « Publier maintenant » de l'onglet Affiches.
+C'est vrai pour les publications automatiques comme avec le bouton « Publier maintenant » de l'onglet Affiches.
 Les affiches d'événement (stage, loto, tournoi) ne changent pas.
 
 ## Domicile, extérieur, et chaque format

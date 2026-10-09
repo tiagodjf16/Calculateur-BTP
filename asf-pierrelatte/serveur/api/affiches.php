@@ -5,7 +5,8 @@
 //  - depuis la V33 : affiches « stade de nuit » quand img/fond-domicile.jpg et img/fond-exterieur.jpg sont les nouveaux fonds
 //    (1520 x 2180, voir la section du même nom), faites pour chaque format : story 1080 x 1920, publication Instagram
 //    1080 x 1350, publication Facebook 1080 x 2160 ; avec les anciens fonds (feuilles 1080 x 1620), rien ne change.
-//  - chaque lundi à 9 h : résultats du week-end passé + rencontres du week-end à venir (2 stories + 1 publication avec texte)
+//  - chaque lundi à 9 h : les résultats du week-end passé ; chaque mercredi à 9 h : les rencontres du week-end à venir
+//    (championnats, vétérans, foot animation ; pour chacun, une publication à domicile et une à l'extérieur, avec leurs stories)
 //  - le jour d'un match à 9 h : l'affiche de chaque équipe qui joue (story seule)
 // Appelé par sync.php (cron horaire). Aperçu pour le bureau : /api/affiches.php?apercu=programme|resultats|match
 require_once __DIR__ . '/session.php';
@@ -2828,7 +2829,7 @@ function aff_deja_publie(string $cle): bool {
        matchs: [{ equipe, comp, adv, dom, date, heure, bp, bc, adresse, adversaires: [..], resultats: [{adv, bp, bc}] }] }
    &message=1 : le texte de la publication ; &telecharger=1 : l'image en pièce jointe.
    Les matchs saisis remplacent ceux de la base le temps de la requête (aff_plan_weekend lit $GLOBALS['aff_plan_manuel']) :
-   les affiches et les messages sont donc exactement ceux du lundi, avec ces matchs-là. */
+   les affiches et les messages sont donc exactement ceux des publications automatiques (lundi, mercredi), avec ces matchs-là. */
 const AFN_TYPES_MANUEL = ['rencontres', 'resultats', 'fal-rencontres', 'fal-resultats', 'vet-rencontres', 'vet-resultats', 'match', 'score'];
 const AFN_MAX_MANUEL = 12;                                                  // au-delà, l'affiche devient illisible : en faire deux
 /* les émojis ne sont pas dans la police de l'affiche : on les retire du texte dessiné */
@@ -3050,7 +3051,7 @@ function afn_manuel_route(): void {
     exit;
 }
 /* GET /api/affiches.php?plan=1&type=…&date=AAAA-MM-JJ : les matchs automatiques du week-end pour ce type d'affiche
-   (exactement ceux des affiches du lundi : base, plateaux, vétérans, scores), pour remplir l'onglet « Affiches matchs » */
+   (exactement ceux des publications automatiques du lundi et du mercredi : base, plateaux, vétérans, scores), pour remplir l'onglet « Affiches matchs » */
 function afn_plan_route(): void {
     header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
     $type = (string) ($_GET['type'] ?? '');
@@ -5188,22 +5189,29 @@ function affiches_cron(array &$journal, bool $force = false): void {
     $auj = date('Y-m-d', $maintenant);
     $matchs = aff_matchs();
 
-    // lundi : résultats + rencontres, championnats, vétérans et foot animation ; une publication à domicile, une à l'extérieur
-    if ((int) date('N', $maintenant) === 1 || $force) {
+    // lundi à 9 h : les résultats du week-end passé ; mercredi à 9 h : les rencontres du week-end qui arrive
+    // (deux jours de publication dans la semaine). Championnats, vétérans et foot animation ; une publication à domicile,
+    // une à l'extérieur. Les clés ne changent pas (« lundi-<lundi de la semaine>-programme » pour les rencontres) :
+    // des rencontres déjà publiées un lundi par l'ancienne version ne repartent pas le mercredi.
+    $jourN = (int) date('N', $maintenant);
+    if ($jourN === 1 || $jourN === 3 || $force) {
         $lundi = date('Y-m-d', strtotime('monday this week', $maintenant));
         $sam = date('Y-m-d', strtotime($lundi . ' +5 days'));
         $samPasse = date('Y-m-d', strtotime($lundi . ' -2 days'));
-        if (!aff_deja_publie("lundi-$lundi"))
-            foreach (['resultats' => [$samPasse, true], 'programme' => [$sam, false]] as $type => [$samedi, $res])
+        $annonces = [];
+        if ($jourN === 1 || $force) $annonces[] = ['resultats', true, $samPasse, 'resultats'];
+        if ($jourN === 3 || $force) $annonces[] = ['rencontres', false, $sam, 'programme'];
+        foreach ($annonces as [$quoi, $res, $samedi, $type]) {
+            if (!aff_deja_publie("lundi-$lundi"))
                 foreach (aff_lieux($matchs, $samedi, $res, '') as $l)
-                    aff_traiter_lieu("lundi-$lundi-$type", $matchs, $samedi, $res, $l, '', ($res ? 'resultats' : 'rencontres') . "-$lundi", $journal);
-        // vétérans : seulement quand un match a été saisi (et son score pour les résultats) ; foot animation : rencontres et résultats
-        foreach (['vet', 'fal'] as $genre)
-            foreach ([['rencontres', false, $sam], ['resultats', true, $samPasse]] as [$quoi, $res, $samedi]) {
+                    aff_traiter_lieu("lundi-$lundi-$type", $matchs, $samedi, $res, $l, '', "$quoi-$lundi", $journal);
+            // vétérans : seulement quand un match a été saisi (et son score pour les résultats) ; foot animation : rencontres et résultats
+            foreach (['vet', 'fal'] as $genre) {
                 if (aff_deja_publie("$genre-$quoi-$samedi")) continue;
                 foreach (aff_lieux($matchs, $samedi, $res, $genre) as $l)
                     aff_traiter_lieu("$genre-$quoi-$samedi", $matchs, $samedi, $res, $l, $genre, "$genre-$quoi-$samedi", $journal);
             }
+        }
     }
 
     // jour de match : une story par équipe

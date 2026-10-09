@@ -1,4 +1,5 @@
-/* Onglet Affiches › « Affiches de la semaine » : toutes les affiches qui seront publiées.
+/* Onglet Affiches › « Affiches de la semaine » : toutes les affiches qui seront publiées (les résultats le lundi à 9 h,
+   les rencontres le mercredi à 9 h : sous le titre, une ligne pour chaque jour ; sur chaque annonce, son jour).
    Chaque annonce part en une publication à domicile et une à l'extérieur ; chacune peut avoir plusieurs affiches
    (page 1/2, 2/2, ou une par catégorie pour le foot animation). Le serveur dit lesquelles (?pages=1) et on montre
    une vignette pour chacune, dans la bande et dans la visionneuse, avec le texte de la publication de son lieu.
@@ -64,11 +65,35 @@
         .finally(() => enCours.delete(k));
     });
   }
+  /* les jours de publication : le lundi à 9 h les résultats du week-end passé, le mercredi à 9 h les rencontres du week-end
+     qui arrive (api/affiches.php, affiches_cron). Sous le titre, une ligne pour chacun ; sur chaque annonce, son jour. */
+  const MOIS_L = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  const jourTxt = x => `${x.getDate() === 1 ? "1er" : x.getDate()} ${MOIS_L[x.getMonth()]}`;
+  function joursPublication(racine){
+    const sm = racine.querySelector(".as-titre small"); if (!sm) return;
+    const decal = +(S.ui && S.ui.affSemDecal) || 0;
+    const lundi = new Date(); lundi.setDate(lundi.getDate() - (lundi.getDay() + 6) % 7 + 7 * decal); lundi.setHours(9, 0, 0, 0);   // comme l'application
+    const le = j => { const x = new Date(lundi); x.setDate(x.getDate() + j); return x; };
+    const lun = le(0), mer = le(2), maintenant = new Date();
+    sm.innerHTML = `<span class="as-pub"><span aria-hidden="true">📊</span> Résultats du week-end du ${jourTxt(le(-2))} · ${maintenant >= lun ? "publiés" : "publication"} le lundi ${jourTxt(lun)} à 9 h</span>`
+      + `<span class="as-pub"><span aria-hidden="true">📅</span> Rencontres du week-end du ${jourTxt(le(5))} · ${maintenant >= mer ? "publiées" : "publication"} le mercredi ${jourTxt(mer)} à 9 h</span>`
+      + (decal > 0 ? `<span class="as-pub as-pub-note">Aperçu : les matchs peuvent encore changer</span>` : "");
+    racine.querySelectorAll(".as-bande .as-groupe").forEach(g => {
+      const img = g.querySelector(".as-vignette img"), nom = g.querySelector(".as-nom");
+      if (!img || !nom || g.querySelector(".as-jour")) return;
+      const res = /resultats/.test(param(img.getAttribute("src") || "", "apercu"));
+      const j = document.createElement("span");
+      j.className = "as-jour " + (res ? "lun" : "mer");
+      j.textContent = res ? "Lundi 9 h" : "Mercredi 9 h";
+      nom.after(j);
+    });
+  }
   const avant = window.panAffichesSemaine;
   window.panAffichesSemaine = function(){
     const h = avant.apply(this, arguments);
-    if (!/class="as-bande"/.test(h)) return h;
     const t = document.createElement("template"); t.innerHTML = h;
+    try { joursPublication(t.content); } catch(err){}
+    if (!/class="as-bande"/.test(h)) return t.innerHTML;
     etendre(t.content);                                                 // déjà connu : tout de suite, sans clignoter
     setTimeout(demander, 0);
     return t.innerHTML;
@@ -80,6 +105,12 @@
   css.id = "affiches-semaine-css";
   css.textContent = `
 .as-vignette .as-page{position:absolute;right:4px;top:4px;font:800 10px var(--corps);font-style:normal;background:rgba(227,182,76,.92);color:#0B1633;border-radius:6px;padding:1px 5px;max-width:calc(100% - 8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.as-paire{flex-wrap:nowrap}`;
+.as-paire{flex-wrap:nowrap}
+.as-titre small .as-pub{display:block;line-height:1.45}
+.as-titre small .as-pub-note{font-style:italic}
+.as-groupe .as-jour{justify-self:start;font:700 11.5px var(--corps);letter-spacing:.02em;padding:2px 9px;border-radius:999px;background:rgba(143,168,240,.16);color:#DCE5FF}
+.as-groupe .as-jour.mer{background:rgba(91,140,255,.24);color:#E6EDFF}
+:root[data-theme="light"] .as-groupe .as-jour{background:rgba(28,79,214,.08);color:#1C3F9E}
+:root[data-theme="light"] .as-groupe .as-jour.mer{background:rgba(28,79,214,.16);color:#1C3F9E}`;
   document.head.appendChild(css);
 })();

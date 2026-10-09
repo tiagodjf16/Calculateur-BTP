@@ -45,8 +45,8 @@
   if (typeof window.panVeterans === "function"){
     const AIDE_VET = `<ol>
         <li>Touche <b>« + Ajouter un match »</b> : il s'ouvre tout seul. Choisis l'adversaire, la date et le lieu, puis touche <b>« Enregistrer »</b>.</li>
-        <li>Le match apparaît dans le calendrier du site et part sur les affiches du lundi à 9 h. Semaine sans match saisi : rien n'est publié.</li>
-        <li>Après le match, touche-le dans <b>« Scores à saisir »</b>, mets le score et enregistre : l'affiche des résultats part toute seule.</li>
+        <li>Le match apparaît dans le calendrier du site et part sur les affiches des rencontres, le mercredi à 9 h. Semaine sans match saisi : rien n'est publié.</li>
+        <li>Après le match, touche-le dans <b>« Scores à saisir »</b>, mets le score et enregistre : l'affiche des résultats part toute seule le lundi à 9 h.</li>
       </ol>`;
     const docVet = id => (S.matchs || []).find(x => x.id === id) || { id };
     const cleVet = m => (m.date || "") + (m.heure || "");
@@ -129,7 +129,7 @@
         const html = `<div class="ong-vet">
           ${ONG.aide("vet-aide", "Comment ça marche ?", AIDE_VET + (l.length ? `<p class="ong-vet-astuce">La FFF ne publie pas les matchs des vétérans : c'est ici qu'on les saisit.</p>` : ""))}
           ${ONG.barre("Matchs des vétérans", sous, `<span data-ong-place="ajout"></span>`)}
-          ${l.length ? "" : ONG.vide("Aucun match des vétérans", "Ajoute le prochain match : il partira sur les affiches du lundi.")}
+          ${l.length ? "" : ONG.vide("Aucun match des vétérans", "Ajoute le prochain match : il partira sur les affiches des rencontres, le mercredi à 9 h.")}
           ${prochain.length ? section("Prochain match", null, "prochain") : ""}
           ${aSaisir.length ? section("Scores à saisir", aSaisir.length, "saisir", "Touche un match pour mettre son score.") : ""}
           ${ensuite.length ? section("Plus tard", ensuite.length, "ensuite") : ""}

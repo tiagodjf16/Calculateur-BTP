@@ -1,8 +1,9 @@
 /* Onglet Communication › Affiches, rangé dans l'ordre de ce qu'on vient y faire :
    1. « Comment ça marche ? » replié tout en haut ;
-   2. les affiches de la semaine (celles qui partent toutes seules le lundi à 9 h), avec une barre d'outils rangée
+   2. les affiches de la semaine (elles partent toutes seules : les résultats le lundi à 9 h, les rencontres le mercredi à 9 h),
+      avec une barre d'outils rangée
       (quelle semaine, quel format d'aperçu, actualiser) ;
-   3. « Publier maintenant » (si le lundi n'a pas marché) : bloc dépliant ;
+   3. « Publier maintenant » (si une publication automatique n'a pas marché) : bloc dépliant ;
    4. « Publier une photo ou une vidéo » (une affiche faite à la main, des photos, des vidéos) : bloc dépliant ;
    5. les réglages Facebook et Instagram : bloc dépliant, fermé.
    On reprend les morceaux dessinés par l'application (mêmes éléments, mêmes data-a, id et name) et on les range autrement :
@@ -12,9 +13,9 @@
   if (typeof S === "undefined" || typeof window.panAffiches !== "function" || typeof ONG === "undefined") return;
 
   const AIDE = `<ol>
-      <li><b>Chaque lundi à 9 h</b>, le club publie tout seul les affiches de la semaine sur Facebook et Instagram : tu n'as rien à faire.</li>
+      <li>Le club publie tout seul sur Facebook et Instagram : <b>le lundi à 9 h</b> les résultats du week-end passé, <b>le mercredi à 9 h</b> les rencontres du week-end qui arrive. Tu n'as rien à faire.</li>
       <li>Regarde-les juste en dessous. Touche une affiche pour la voir en grand, copier son texte ou la télécharger (pour TikTok par exemple).</li>
-      <li>Le lundi n'a pas marché, ou tu veux republier ? Ouvre <b>« Publier maintenant »</b>.</li>
+      <li>Une publication du lundi ou du mercredi n'a pas marché, ou tu veux republier ? Ouvre <b>« Publier maintenant »</b>.</li>
       <li>Une photo, une vidéo ou une affiche faite par toi ? Ouvre <b>« Publier une photo ou une vidéo »</b>.</li>
     </ol>
     <p class="ong-aff-astuce">Une affiche de stage, de loto ou de tournoi ? Va dans l'onglet <button type="button" class="ong-aff-lien" data-ev-a="aller">Événements</button>.</p>`;
@@ -132,7 +133,7 @@
       const html = `<div class="ong-aff">
         ${ONG.aide("aff-aide", "Comment ça marche ?", AIDE)}
         <span data-ong-aff="semaine"></span>
-        ${ONG.pli("aff-publier", tete("Publier maintenant", "Si le lundi 9 h n'a pas marché, ou pour republier"), `<span data-ong-aff="ps"></span>`, !!c.etat, "📣")}
+        ${ONG.pli("aff-publier", tete("Publier maintenant", "Si la publication du lundi ou du mercredi n'a pas marché, ou pour republier"), `<span data-ong-aff="ps"></span>`, !!c.etat, "📣")}
         ${ONG.pli("aff-photo", tete("Publier une photo ou une vidéo", "Ton affiche, tes photos ou tes vidéos, tout de suite sur Facebook et Instagram"), `<span data-ong-aff="photo"></span>`, !!((u.fichiers && u.fichiers.length) || u.etat), "🖼️")}
         ${ONG.pli("aff-reglages", tete("Réglages Facebook et Instagram", "Page reliée, compte Instagram, pause, test"), REGLAGES, false, "⚙️")}
       </div>`;
