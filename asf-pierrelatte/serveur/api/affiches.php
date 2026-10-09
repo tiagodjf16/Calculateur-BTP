@@ -5118,6 +5118,12 @@ function aff_traiter(string $cle, string $titre, callable $creer, array $canaux,
 /* ---------- le programme, appelé à chaque passage du cron ---------- */
 /* Publication à la demande : 'resultats' (week-end passé) ou 'rencontres' (week-end à venir),
    championnats puis foot animation, chacune avec ses feuilles domicile et extérieur, ses stories et son texte */
+/* une annonce publiée à la main (« Publier maintenant ») : on écrit la clé que vérifie affiches_cron pour ce réseau et ce lieu,
+   pour que la publication automatique du lundi (résultats) ou du mercredi (rencontres) ne la publie pas une deuxième fois */
+function aff_noter_manuel(string $reseau, string $lundi, string $samedi, bool $res, string $genre, string $lieu): void {
+    $cle = $genre === '' ? "lundi-$lundi-" . ($res ? 'resultats' : 'programme') : "$genre-" . ($res ? 'resultats' : 'rencontres') . "-$samedi";
+    reglage_ecrire("pub_{$reseau}_$cle-$lieu", 'fait');
+}
 function aff_publier_annonce(string $quoi, array &$journal): void {
     if (!aff_polices_ok()) throw new RuntimeException('polices introuvables dans api/polices');
     $matchs = aff_matchs();
@@ -5132,11 +5138,13 @@ function aff_publier_annonce(string $quoi, array &$journal): void {
             $texte = aff_message_lieu($genre, $matchs, $samedi, $res, $l);
             $etats = [];
             if (fb_pret()) {
-                try { foreach (aff_pages($f, 'story') as $st) fb_story($st); fb_publication(aff_images_fb_lieu($f), $texte); $etats[] = 'Facebook : publié'; }
+                try { foreach (aff_pages($f, 'story') as $st) fb_story($st); fb_publication(aff_images_fb_lieu($f), $texte); $etats[] = 'Facebook : publié';
+                      aff_noter_manuel('facebook', $lundi, $samedi, $res, $genre, $l); }
                 catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
             }
             if (ig_pret()) {
-                try { foreach (aff_pages($f, 'story') as $st) ig_story($st); ig_publication(aff_pages($f, 'carre'), $texte); $etats[] = 'Instagram : publié'; }
+                try { foreach (aff_pages($f, 'story') as $st) ig_story($st); ig_publication(aff_pages($f, 'carre'), $texte); $etats[] = 'Instagram : publié';
+                      aff_noter_manuel('instagram', $lundi, $samedi, $res, $genre, $l); }
                 catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
             }
             $journal[] = ucfirst(aff_nom_annonce($genre, $res, $l)) . ' : ' . ($etats ? implode(', ', $etats) : 'aucun réseau relié');
@@ -5165,7 +5173,7 @@ function aff_publier_choix(array $annonces, array $o, array &$journal): void {
                 if (!fb_pret()) $etats[] = 'Facebook : non relié ou en pause';
                 else try {
                     if ($fbSt) foreach (aff_pages($f, 'story') as $st) fb_story($st);
-                    if ($fbPub && ($imgs = aff_images_fb_lieu($f))) fb_publication($imgs, $texte);
+                    if ($fbPub && ($imgs = aff_images_fb_lieu($f))) { fb_publication($imgs, $texte); aff_noter_manuel('facebook', $lundi, $samedi, $res, $genre, $l); }
                     $etats[] = 'Facebook : ' . implode(' + ', array_filter([$fbPub ? 'publication' : '', $fbSt ? 'story' : '']));
                 } catch (Throwable $e) { $etats[] = 'Facebook : ' . $e->getMessage(); }
             }
@@ -5173,7 +5181,7 @@ function aff_publier_choix(array $annonces, array $o, array &$journal): void {
                 if (!ig_pret()) $etats[] = 'Instagram : non relié ou en pause';
                 else try {
                     if ($igSt) foreach (aff_pages($f, 'story') as $st) ig_story($st);
-                    if ($igPub && ($imgs = aff_pages($f, 'carre'))) ig_publication($imgs, $texte);
+                    if ($igPub && ($imgs = aff_pages($f, 'carre'))) { ig_publication($imgs, $texte); aff_noter_manuel('instagram', $lundi, $samedi, $res, $genre, $l); }
                     $etats[] = 'Instagram : ' . implode(' + ', array_filter([$igPub ? 'publication' : '', $igSt ? 'story' : '']));
                 } catch (Throwable $e) { $etats[] = 'Instagram : ' . $e->getMessage(); }
             }

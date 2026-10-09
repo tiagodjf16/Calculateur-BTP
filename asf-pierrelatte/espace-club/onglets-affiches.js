@@ -120,8 +120,19 @@
   const REGLAGES = `<p class="ong-aff-reg-txt">La page Facebook reliée, le compte Instagram, la pause des publications automatiques et l'envoi d'un test se règlent sur une page à part.</p>
     <div class="btns ong-aff-reg-btns"><a class="btn contour" href="/api/facebook.php" target="_blank" rel="noopener">⚙️ Ouvrir les réglages Facebook et Instagram</a></div>`;
 
+  /* « Publier maintenant » : cochée d'office, l'annonce du jour qu'on rattrape (les résultats partent le lundi à 9 h, les rencontres
+     le mercredi à 9 h). L'application cochait les deux : rattraper le lundi aurait aussi publié les rencontres avant le mercredi.
+     (Le serveur note ce qui part à la main : le lundi ou le mercredi ne le republie pas.) */
+  function choixDuJour(){
+    if (S.ui.pubSem) return;
+    const d = new Date(), j = d.getDay();                                // 0 dimanche … 6 samedi
+    const resultats = j === 1 || j === 2 || (j === 3 && d.getHours() < 9);
+    S.ui.pubSem = { annonces: [resultats ? "resultats" : "rencontres"], fb_pub: true, fb_story: false, ig_pub: true, ig_story: false };
+  }
+
   const avant = window.panAffiches;
   window.panAffiches = function(){
+    if (S.heberge) try { choixDuJour(); } catch(err){}
     const h = avant.apply(this, arguments);
     if (!S.heberge) return h;                                           // fichier ouvert hors ligne : l'ancien outil, pas touché
     return ONG.transformer(h, racine => {
