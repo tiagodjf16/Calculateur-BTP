@@ -35,20 +35,27 @@
 
   /* ---------- l'adresse du stade d'un club ---------- */
   const valeur = v => propre(typeof v === "string" ? v : v && typeof v === "object" ? (v.adresse || v.address || "") : "");
+  const carnetBureau = () => (S.stades && typeof S.stades === "object" ? S.stades : {});
+  const carnetIntegre = () => (typeof STADES_CONNUS === "object" && STADES_CONNUS ? STADES_CONNUS : {});
+  /* l'entrée du carnet pour ce club : celle du bureau d'abord (une valeur vide = adresse retirée par le bureau), puis la liste intégrée */
+  function duCarnet(k){
+    const b = carnetBureau(), kb = Object.keys(b).filter(x => cle(x) === k);
+    if (kb.length) return { trouve: true, adresse: kb.map(x => valeur(b[x])).find(Boolean) || "" };
+    const i = carnetIntegre(), ki = Object.keys(i).find(x => cle(x) === k);
+    return ki ? { trouve: true, adresse: valeur(i[ki]) } : { trouve: false, adresse: "" };
+  }
   function adresseDuClub(nom){
     const k = cle(nom); if (k.length < 3) return "";                       // pas de club : pas d'adresse (et jamais celle d'un autre)
-    const carnet = { ...(typeof STADES_CONNUS === "object" && STADES_CONNUS ? STADES_CONNUS : {}), ...(S.stades && typeof S.stades === "object" ? S.stades : {}) };
-    const cles = Object.keys(carnet);
-    const exacte = cles.filter(x => cle(x) === k).map(x => valeur(carnet[x])).find(Boolean);
-    if (exacte) return exacte;
+    const c = duCarnet(k); if (c.trouve) return c.adresse;
     if (k.length >= 6){                                                    // « ES Boulieu » / « ES Boulieu les Annonay » : s'il n'y a qu'un candidat
-      const proches = [...new Set(cles.filter(x => { const c = cle(x); return c.length >= 6 && (c.includes(k) || k.includes(c)); }).map(x => valeur(carnet[x])).filter(Boolean))];
+      const carnet = { ...carnetIntegre(), ...carnetBureau() };
+      const proches = [...new Set(Object.keys(carnet).filter(x => { const y = cle(x); return y.length >= 6 && y !== k && (y.includes(k) || k.includes(y)); }).map(x => valeur(carnet[x])).filter(Boolean))];
       if (proches.length === 1) return proches[0];
     }
-    // notre dernier match chez lui (le plus récent, jamais une adresse de Pierrelatte)
+    // nos matchs chez lui : une adresse complète d'abord, la plus récente (jamais une adresse de Pierrelatte)
     const passe = [...(S.matchs || []), ...(S.matchsAnimation || [])]
       .filter(m => m && !m.dom && cle(m.adv) === k && valeur(m.adresse) && !estNotreStade(m.adresse))
-      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0];
+      .sort((a, b) => (complete(b.adresse) - complete(a.adresse)) || String(b.date || "").localeCompare(String(a.date || "")))[0];
     return passe ? valeur(passe.adresse) : "";
   }
   window.adresseStadeClub = adresseDuClub;
@@ -57,7 +64,10 @@
   function lieu(m){
     if (!m) return "";
     const a = valeur(m.adresse);
-    if (m.dom) return a && complete(a) && !estNotreStade(a) ? a : STADE;   // à domicile sur un autre terrain : l'adresse saisie
+    if (m.dom){                                                             // à domicile sur un autre terrain (gymnase…) : l'adresse saisie
+      if (!a || estNotreStade(a)) return STADE;
+      return complete(a) ? a : a + (/pierrelatte/i.test(a) ? ", 26700" : ", 26700 Pierrelatte");
+    }
     if (a && !estNotreStade(a)){
       if (complete(a)) return a;
       const connue = adresseDuClub(m.adv);                                  // « Stade municipal » tout seul : l'adresse connue du club, si elle est meilleure
@@ -78,7 +88,7 @@
   const RE_POI = /^(stade|complexe|terrain|parc (municipal )?des sports|plaine (des|de) (sports|jeux)|espace sportif|city[- ]?stade|gymnase|halle|centre sportif|base de loisirs)\b/i;
   const MOTS_VIDES = new Set("stade stades complexe sportif sportive sports sport terrain terrains municipal municipale communal communale du de des la le les l d au aux et parc plaine espace football foot".split(" "));
   function decouper(adr){
-    const segs = propre(adr).replace(/,?\s*france\s*$/i, "").split(/\s*[,;]\s*|\s+[-–]\s+/).map(s => s.trim()).filter(Boolean);
+    const segs = propre(adr).replace(/,?\s*france\s*$/i, "").replace(/\b(?:BP|CS|TSA)\s*\d+\b/gi, "").replace(/\s+cedex(?:\s*\d+)?\b/gi, "").split(/\s*[,;]\s*|\s+[-–]\s+/).map(s => s.trim()).filter(Boolean);
     let cp = "", ville = "", poi = "", attendVille = false; const rue = [];
     for (const s of segs){
       const m = !cp && s.match(/(?:^|\s)(\d{5})(?:\s+(.*))?$/);
@@ -87,7 +97,7 @@
       if (!poi && RE_POI.test(s)){ poi = s; continue; }
       rue.push(s);
     }
-    if (!cp && !ville && rue.length > 1) ville = rue.pop();
+    if (!cp && !ville && (rue.length > 1 || (poi && rue.length === 1))) ville = rue.pop();   // « Stade du Lac, Montélimar »
     return { poi, rue: rue.join(" "), cp, ville };
   }
   const q3 = s => { s = propre(s).replace(/^[^\p{L}\p{N}]+/u, "").slice(0, 200); return s.length >= 3 ? s : ""; };
@@ -107,7 +117,10 @@
     const lon = +c[0], lat = +c[1];
     return Number.isFinite(lat) && Number.isFinite(lon) && lat > 41 && lat < 51.5 && lon > -5.5 && lon < 10 ? { lat, lon } : null;   // France métropolitaine
   };
-  const memeLieu = (p, d) => d.cp ? tab(p.postcode).map(String).includes(d.cp) : tab(p.city).some(c => norm(c) === norm(d.ville));
+  const nomVille = s => norm(s).replace(/\bsainte\b/g, "ste").replace(/\bsaint\b/g, "st").replace(/\blez\b/g, "les").replace(/ /g, "");
+  const memeLieu = (p, d) => (!!d.cp || !!d.ville)
+    && (!d.cp || tab(p.postcode).map(String).includes(d.cp))
+    && (!d.ville || tab(p.city).some(c => nomVille(c) === nomVille(d.ville)));
   function choisir(k, json, d){
     const feats = json && Array.isArray(json.features) ? json.features : [];
     if (k === "poi"){
@@ -125,7 +138,7 @@
       .sort((a, b) => b.properties.score - a.properties.score)[0];
     return ok ? { ...point(ok), precision: ok.properties.type } : null;
   }
-  const CACHE = "asfp-geo1", jour = () => Math.floor(Date.now() / 864e5);
+  const CACHE = "asfp-geo2", jour = () => Math.floor(Date.now() / 864e5);
   function lireCache(adr){
     try { const c = JSON.parse(localStorage.getItem(CACHE) || "{}")[norm(adr)]; if (!c) return undefined;
       const age = jour() - c[3];
@@ -139,10 +152,11 @@
       localStorage.setItem(CACHE, JSON.stringify(t)); } catch(err){}
   }
   const enCours = new Map();
-  let pannes = 0;                                                          // le géocodeur ne répond pas (réseau, blocage) : on arrête pour cette visite
+  let pannes = 0, dernierePanne = 0;                                      // le géocodeur ne répond pas : on le laisse tranquille une minute
+  window.addEventListener("online", () => { pannes = 0; });
   function geocoder(adr){
     const c = lireCache(adr); if (c !== undefined) return Promise.resolve(c);
-    if (pannes >= 2 || typeof fetch !== "function") return Promise.resolve(null);
+    if ((pannes >= 2 && Date.now() - dernierePanne < 60000) || typeof fetch !== "function") return Promise.resolve(null);
     const k = norm(adr); if (enCours.has(k)) return enCours.get(k);
     const p = (async () => {
       const { d, out } = requetes(adr);
@@ -150,12 +164,15 @@
       for (const r of out){
         let json = null;
         const ac = typeof AbortController === "function" ? new AbortController() : null, t = setTimeout(() => { try { ac && ac.abort(); } catch(err){} }, 4000);
+        let panne = false;
         try {
           const rep = await fetch(r.u, { signal: ac ? ac.signal : undefined, headers: { Accept: "application/json" }, credentials: "omit" });
           if (rep.status === 429){ toutRepondu = false; break; }           // trop de demandes : on n'insiste pas
           if (rep.ok) json = await rep.json(); else toutRepondu = false;
-        } catch(err){ toutRepondu = false; pannes++; }
+          pannes = 0;
+        } catch(err){ toutRepondu = false; panne = true; }                  // hors ligne, trop lent, réponse illisible
         finally { clearTimeout(t); }
+        if (panne){ pannes++; dernierePanne = Date.now(); break; }
         const res = choisir(r.k, json, d);
         if (res){ ecrireCache(adr, res); return res; }
       }
@@ -185,14 +202,15 @@
     const outil = modifiable ? `<details class="fm-gps-stade"${adr ? "" : " open"}><summary>📍 ${adr ? "Corriger" : "Ajouter"} l'adresse du stade de ${e(club)}</summary>
         <div class="fm-gps-form"><input type="text" data-gps-adresse value="${e(adr)}" placeholder="Stade, rue, code postal ville" autocomplete="off">
           <button type="button" class="btn bleu petit" data-gps-a="stade" data-club="${e(sansNumero(m.adv))}">Enregistrer</button></div>
-        <small>Elle servira pour tous les matchs chez ce club.</small></details>` : "";
+        <small>Pour ce match et les prochains matchs chez ce club.</small></details>` : "";
     if (!adr){
       z.innerHTML = `<p class="fm-gps-note">L'adresse du stade${club ? " de " + e(club) : ""} n'est pas encore connue${modifiable ? "" : " : demande-la au coach"}.</p>`
         + (club ? `<a class="gmaps fm-gps-large" href="${gmapsCherche("stade " + club)}" target="_blank" rel="noopener">🔎 Chercher le stade sur Google Maps</a>` : "") + outil;
       return;
     }
-    z.innerHTML = `<a class="waze" href="${wazeTexte(adr)}" target="_blank" rel="noopener">Waze</a>
-      <a class="gmaps" href="${gmapsRoute(adr)}" target="_blank" rel="noopener">Google Maps</a>${outil}`;
+    const precise = complete(adr), cherche = precise ? adr : [adr, club].filter(Boolean).join(", ");   // « Stade municipal » tout seul : avec le club
+    z.innerHTML = `<a class="waze" href="${wazeTexte(cherche)}" target="_blank" rel="noopener">Waze</a>
+      <a class="gmaps" href="${precise ? gmapsRoute(adr) : gmapsCherche(cherche)}" target="_blank" rel="noopener">Google Maps</a>${outil}`;
     const w = z.querySelector(".waze");
     const poser = g => { if (g && g.precision !== "commune" && w && w.isConnected) w.href = wazeGps(g); };
     if (complete(adr)) geocoder(adr).then(poser).catch(() => {});
@@ -204,15 +222,22 @@
     if (!club) return;
     if (adr && !complete(adr)){ toast("Mets l'adresse complète, avec le code postal et la ville.", true); i.focus(); return; }
     if (adr && estNotreStade(adr)){ toast("C'est l'adresse de notre stade : mets celle du stade de " + nomClub(club) + ".", true); i.focus(); return; }
-    const k = typeof slug === "function" ? slug(club) : cle(club);
-    const carnet = { ...(S.stades || {}) };
-    if (adr) carnet[k] = adr; else delete carnet[k];
+    const k = typeof slug === "function" ? slug(club) : cle(club), kc = cle(club);
+    const carnet = { ...carnetBureau() };
+    Object.keys(carnet).forEach(x => { if (cle(x) === kc) delete carnet[x]; });          // le même club écrit autrement : une seule entrée
+    if (adr) carnet[k] = adr;
+    else if (Object.keys(carnetIntegre()).some(x => cle(x) === kc)) carnet[k] = "";     // retirer une adresse de la liste intégrée
     b.disabled = true;
     const ok = await ecrire(() => S.db.doc("site/stades").set(carnet), adr ? "Adresse du stade enregistrée." : "Adresse du stade retirée.");
     b.disabled = false;
     if (!ok) return;
     S.stades = carnet;
-    const m = S.ui.gpsFicheDoc; if (m) gpsFiche(m);
+    // la fiche ouverte avait sa propre adresse : elle prend la nouvelle (sinon elle garderait l'ancienne)
+    const m = S.ui.gpsFicheDoc;
+    if (m && m.id && !m.dom && valeur(m.adresse) && !estNotreStade(m.adresse) && valeur(m.adresse) !== adr){
+      if (await ecrire(() => S.db.doc("matchs/" + m.id).set({ ...m, id: undefined, _maj: undefined, adresse: adr }))) m.adresse = adr;
+    }
+    if (m) gpsFiche(m);
   }, true);
 
   /* les fiches : on garde l'ouverture de l'application, puis on refait l'adresse et les boutons */
@@ -236,58 +261,80 @@
   };
 
   /* ---------- formulaires : l'adresse suit le club choisi ----------
-     (après l'application : elle ne remplissait l'adresse que si la case était vide, et un club vide donnait n'importe quel stade) */
-  const derniers = () => S.ui.gpsAuto || (S.ui.gpsAuto = {});               // fiche → { adv, adresse } remplis automatiquement
+     L'application ne remplissait l'adresse que si la case était vide (le club d'avant gardait la sienne), un club vide donnait
+     le stade d'un club au hasard, et « Vider le champ » pouvait effacer une adresse. On note la fiche juste avant le changement
+     (écoute sur window, avant les écoutes de l'application), puis on corrige après elles. Le repère « adresseAuto » vit dans
+     le brouillon de la fiche : il disparaît avec lui (Annuler, Enregistrer). */
   const stadeAppli = nom => { try { return typeof stadeDuClub === "function" ? propre(stadeDuClub(nom)) : ""; } catch(err){ return ""; } };
-  /* l'adresse affichée vient-elle d'un remplissage automatique (et pas de la main du coach) ? */
-  function automatique(actuelle, id, avant, nouveau, doc){
-    const a = propre(actuelle), mem = derniers()[id] || {};
-    if (!a || estNotreStade(a)) return true;
-    return [adresseDuClub(avant), stadeAppli(avant), stadeAppli(nouveau), stadeAppli(""), propre(mem.adresse)].filter(Boolean).includes(a)
-      || (!!doc && cle(doc.adv) === cle(avant) && propre(doc.adresse) === a);
+  function fiche(t){
+    if (t.matches('[data-anc="adv"], [data-an-lieu]')){
+      const carte = t.closest("[data-an]"); if (!carte) return null;
+      const id = carte.dataset.an;
+      return { sorte: "an", carte, id, doc: (S.matchsAnimation || []).find(x => x.id === id) || {}, champ: () => carte.querySelector('[data-anc="adresse"]'),
+        br: () => (S.ui.anBrouillon = S.ui.anBrouillon || {})[id] || (S.ui.anBrouillon[id] = {}), noter: "noterBrouillonAn" };
+    }
+    if (t.matches('[data-vc="adv"], [data-vet-lieu]')){
+      const carte = t.closest("[data-vet]"); if (!carte) return null;
+      const id = carte.dataset.vet;
+      return { sorte: "vet", carte, id, doc: (S.matchs || []).find(x => x.id === id) || {}, champ: () => carte.querySelector('[data-vc="adresse"]'),
+        br: () => (S.ui.vetBrouillon = S.ui.vetBrouillon || {})[id] || (S.ui.vetBrouillon[id] = {}), noter: "noterBrouillonVet" };
+    }
+    return null;
   }
-  const noter = (fn, champ) => { try { if (typeof window[fn] === "function") window[fn](champ); } catch(err){} };
+  const avantChange = new Map();                                         // fiche → { adv, adresse } juste avant le changement
+  window.addEventListener("change", ev => {
+    const t = ev.target; if (!t || !t.matches) return;
+    const f = fiche(t); if (!f) return;
+    const b = f.br(), c = f.champ();
+    avantChange.set(f.id, { adv: propre(b.adv !== undefined ? b.adv : f.doc.adv), adresse: propre(c ? c.value : (b.adresse !== undefined ? b.adresse : f.doc.adresse)), auto: propre(b.adresseAuto) });
+  }, true);
+  /* l'adresse d'avant venait-elle d'un remplissage automatique (et pas de la main du coach) ? */
+  function automatique(a, f, avant){
+    if (!a || estNotreStade(a)) return true;
+    if ([adresseDuClub(avant.adv), stadeAppli(avant.adv), stadeAppli(""), avant.auto].filter(Boolean).includes(a)) return true;
+    return !!cle(avant.adv) && cle(f.doc.adv) === cle(avant.adv) && propre(f.doc.adresse) === a;   // l'adresse enregistrée du club d'avant
+  }
+  /* écrire l'adresse : dans la case si elle est là, sinon dans le brouillon (puis on redessine) */
+  function poser(f, adr, auto){
+    const c = f.champ(), b = f.br();
+    if (c && c.isConnected){
+      if (propre(c.value) !== adr){ c.value = adr; try { window[f.noter](c); } catch(err){} }
+      b.adresseAuto = auto ? adr : "";
+      return false;
+    }
+    const change = propre(b.adresse !== undefined ? b.adresse : f.doc.adresse) !== adr;
+    b.adresse = adr; b.adresseAuto = auto ? adr : "";
+    return change;
+  }
+  const exterieur = f => { const s = f.carte.querySelector(f.sorte === "an" ? '[data-anc="dom"]' : '[data-vc="dom"]');
+    if (s && s.isConnected) return s.value === "0";
+    const b = f.br(); return b.dom !== undefined ? b.dom === "0" : !f.doc.dom; };
   document.addEventListener("change", ev => {
     const t = ev.target; if (!t || !t.matches) return;
-    // foot animation : le club qui reçoit
-    if (t.matches('[data-anc="adv"]')){
-      const carte = t.closest("[data-an]"), champ = carte && carte.querySelector('[data-anc="adresse"]'); if (!champ) return;
-      const id = carte.dataset.an, doc = (S.matchsAnimation || []).find(x => x.id === id) || {};
-      const nouveau = propre(t.value), avant = derniers()[id] && derniers()[id].adv !== undefined ? derniers()[id].adv : (doc.adv || "");
-      if (cle(nouveau) === cle(avant) && propre(champ.value)) return;
-      if (!automatique(champ.value, id, avant, nouveau, doc)){ derniers()[id] = { ...(derniers()[id] || {}), adv: nouveau }; return; }
-      const adr = adresseDuClub(nouveau), changee = adr !== propre(champ.value);
-      champ.value = adr; noter("noterBrouillonAn", champ);
-      derniers()[id] = { adv: nouveau, adresse: adr };
-      if (changee && nouveau) toast(adr ? "Adresse du stade remplie : vérifie-la, puis enregistre." : "Adresse de ce stade inconnue pour l'instant : saisis-la une fois, elle sera reprise la prochaine fois.");
-      return;
+    const f = fiche(t); if (!f) return;
+    const avant = avantChange.get(f.id) || { adv: propre(f.doc.adv), adresse: propre(f.doc.adresse), auto: "" };
+    avantChange.delete(f.id);
+    if (!exterieur(f)) return;                                            // à domicile : l'application met notre stade
+    let redessiner = false;
+    if (t.matches('[data-anc="adv"], [data-vc="adv"]')){
+      const nouveau = propre(t.value);
+      if (!cle(nouveau)){                                                  // « Vider le champ » : l'adresse ne bouge pas
+        const c = f.champ(), remplie = c && c.isConnected && propre(c.value) !== avant.adresse;
+        redessiner = poser(f, avant.adresse, avant.auto === avant.adresse);
+        if (remplie) toast(avant.adresse ? "Club retiré : l'adresse du stade ne change pas." : "Club retiré.");
+      }
+      else if (cle(nouveau) === cle(avant.adv)) redessiner = avant.adresse ? poser(f, avant.adresse, avant.auto === avant.adresse) : poser(f, adresseDuClub(nouveau), true);
+      else if (!automatique(avant.adresse, f, avant)) redessiner = poser(f, avant.adresse, false);   // tapée par le coach : on la garde
+      else {
+        const adr = adresseDuClub(nouveau);
+        redessiner = poser(f, adr, true);
+        toast(adr ? "Adresse du stade remplie : vérifie-la, puis enregistre." : "Adresse de ce stade inconnue pour l'instant : saisis-la une fois, elle sera reprise la prochaine fois.");
+      }
+    } else {                                                              // à domicile → à l'extérieur : l'adresse d'avant était celle du terrain à domicile
+      const b = f.br(), adv = f.sorte === "vet" ? propre((f.carte.querySelector('[data-vc="adv"]') || {}).value) : propre(b.adv !== undefined ? b.adv : f.doc.adv);
+      redessiner = poser(f, adresseDuClub(adv), true);
     }
-    // foot animation : à domicile → à l'extérieur
-    if (t.matches("[data-an-lieu]") && t.value === "0"){
-      const carte = t.closest("[data-an]"); if (!carte) return;
-      const id = carte.dataset.an, doc = (S.matchsAnimation || []).find(x => x.id === id); if (!doc) return;
-      const b0 = (S.ui.anBrouillon = S.ui.anBrouillon || {})[id] = { ...((S.ui.anBrouillon || {})[id] || {}) };
-      const adr = b0.adresse !== undefined ? b0.adresse : (doc.adresse || "");
-      if (propre(adr) && !estNotreStade(adr)) return;
-      const x = adresseDuClub(b0.adv !== undefined ? b0.adv : doc.adv);
-      if (propre(adr) === x) return;
-      b0.adresse = x; derniers()[id] = { adv: b0.adv !== undefined ? b0.adv : (doc.adv || ""), adresse: x };
-      try { rendrePanneau(); } catch(err){}
-      return;
-    }
-    // vétérans : l'adversaire, ou le lieu
-    if ((t.matches('[data-vc="adv"]') || t.matches("[data-vet-lieu]")) && t.closest("[data-vet]")){
-      const carte = t.closest("[data-vet]"), champ = carte.querySelector('[data-vc="adresse"]'), lieuSel = carte.querySelector('[data-vc="dom"]');
-      if (!champ || !lieuSel || lieuSel.value !== "0") return;              // à domicile : l'application met notre stade
-      const id = carte.dataset.vet, doc = (S.matchs || []).find(x => x.id === id) || {};
-      const advEl = carte.querySelector('[data-vc="adv"]'), nouveau = propre(advEl ? advEl.value : "");
-      const avant = derniers()[id] && derniers()[id].adv !== undefined ? derniers()[id].adv : (doc.adv || "");
-      if (t.matches('[data-vc="adv"]') && cle(nouveau) === cle(avant) && propre(champ.value) && !estNotreStade(champ.value)) return;
-      if (!automatique(champ.value, id, avant, nouveau, doc)){ derniers()[id] = { ...(derniers()[id] || {}), adv: nouveau }; return; }
-      const adr = adresseDuClub(nouveau);
-      if (adr !== propre(champ.value)){ champ.value = adr; noter("noterBrouillonVet", champ); }
-      derniers()[id] = { adv: nouveau, adresse: adr };
-    }
+    if (redessiner) try { rendrePanneau(); } catch(err){}
   });
 
   const css = document.createElement("style");
