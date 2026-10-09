@@ -267,6 +267,9 @@
 
   /* ---------- enregistrer : la fiche avec son organisation, ses horaires et ses scores ---------- */
   const nombre = v => vide(v) || isNaN(+v) ? null : Math.max(0, Math.min(99, Math.round(+v)));
+  /* à l'extérieur : l'adresse telle qu'elle est dans la case, même vide (avant, une case vidée reprenait l'ancienne adresse,
+     et un rendez-vous créé à domicile puis passé à l'extérieur gardait l'adresse de Pierrelatte) ; jamais notre stade */
+  const adresseExterieur = a => (!a || a === ADRESSE_CLUB || /\bgustave\s+jaume\b/i.test(a)) ? "" : a;
   async function enregistrer(carte, id){
     const v = k => { const e = carte.querySelector(`[data-anc="${k}"]`); return e ? e.value.trim() : ""; };
     const m = docDe(id), d = etat(id);
@@ -294,7 +297,7 @@
     const ok = await ecrire(() => S.db.doc("matchs/" + id).set({ ...m, id: undefined, _maj: undefined,
       ...(cible ? { equipe: cible[0] } : {}), comp,
       date: v("date") || m.date, heure: v("heure") || m.heure || "10:00", dom,
-      adv: dom ? "" : (v("adv") || m.adv || ""), adresse: v("adresse") || (dom ? ADRESSE_CLUB : (m.adresse || "")),
+      adv: dom ? "" : (v("adv") || m.adv || ""), adresse: dom ? (v("adresse") || ADRESSE_CLUB) : adresseExterieur(v("adresse")),
       adversaires, resultats, bp: null, bc: null,
       format: d.format, rencontres, poules }), "Rendez-vous enregistré.");
     if (!ok) return;
