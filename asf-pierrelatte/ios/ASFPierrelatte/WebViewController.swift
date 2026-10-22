@@ -228,7 +228,7 @@ final class WebViewController: UIViewController {
         return r
     }
 
-    fileprivate func recevoir(_ message: WKScriptMessage) async -> (Any?, String?) {
+    func recevoir(_ message: WKScriptMessage) async -> (Any?, String?) {
         guard let d = message.body as? [String: Any], let action = d["action"] as? String else { return (nil, "message illisible") }
         // seules les pages du club parlent à l'appli
         guard message.frameInfo.isMainFrame, Appli.hotes.contains(message.frameInfo.securityOrigin.host.lowercased()) else {
