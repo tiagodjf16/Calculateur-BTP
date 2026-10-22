@@ -7,6 +7,8 @@
 if (!defined('VAPID_PUBLIC')) define('VAPID_PUBLIC', 'BGo4HM10InuBdXxhKhoFHQ1NLdCfGOFXe2yiMv-IcFwPDA5LZfSXxLI0za1UxzsdWVp5AJuwuahiFZn80Xo_4fc');
 if (!defined('VAPID_SUJET'))  define('VAPID_SUJET', 'mailto:contact@asf-pierrelatte.fr');
 
+if (is_file(__DIR__ . '/apns.php')) require_once __DIR__ . '/apns.php';   // notifications de l'appli iPhone
+
 if (!function_exists('b64u')) {
     function b64u(string $d): string { return rtrim(strtr(base64_encode($d), '+/', '-_'), '='); }
 }
@@ -58,11 +60,12 @@ function chiffrer_webpush(string $message, array $abo): ?string {
 function envoyer_notification(array $abo, array &$journal, ?array $message = null): bool {
     $url = $abo['endpoint'] ?? '';
     if (!$url) return false;
-    // iPhone avec l'appli du club : notification Apple (APNs), voir apns.php
+    // iPhone avec l'appli du club : notification Apple (APNs), voir apns.php. L'appareil n'est oublié (réponse false)
+    // que si Apple dit que le jeton est mort : une clé pas encore réglée ou une panne ne fait jamais perdre un iPhone.
     if (str_starts_with($url, 'apns:')) {
-        if (!is_file(__DIR__ . '/apns.php')) return true;
-        require_once __DIR__ . '/apns.php';
-        return apns_envoyer($abo, $journal, $message);
+        if (!function_exists('envoyer_apns')) return true;
+        $ok = envoyer_apns($abo, $journal, $message ?? ['titre' => 'ASF Pierrelatte', 'texte' => 'Nouveauté sur le site du club', 'lien' => '/']);
+        return $ok || empty($GLOBALS['push_a_oublier'][$url]);
     }
     $parts = parse_url($url);
     $origine = $parts['scheme'] . '://' . $parts['host'];
@@ -115,6 +118,7 @@ function notifier_cibles(PDO $pdo, array $comptes, array $roles, string $titre, 
         push_ecrire($pdo, "notifs/c$id", $message);             // lu par l'appareil de cette personne quand la notification arrive
     $journal = []; $n = 0;
     foreach ($cibles as $a) if (envoyer_notification($a, $journal, $message)) $n++;
+    if (function_exists('push_purger')) push_purger($pdo);                  // les iPhone dont l'appli a été supprimée
     $GLOBALS['push_journal'] = $journal;
     return $n;
 }
@@ -175,5 +179,6 @@ function notifier_convocation(PDO $pdo, array $d): array {
         foreach ($siens as $a) if (envoyer_notification($a, $journal, $message)) $appareils++;
         $prevenus[] = (string) $nom;
     }
+    if (function_exists('push_purger')) push_purger($pdo);
     return ['prevenus' => count($prevenus), 'appareils' => $appareils, 'sansAppareil' => $sans, 'exemple' => $corps, 'journal' => $journal];
 }

@@ -27,9 +27,9 @@ RewriteRule ^api/upload/?$ api/upload.php [L]
 <FilesMatch "\.(p8|pem)$">
   Require all denied
 </FilesMatch>
-<Files "apns-reglages.php">
+<FilesMatch "^apns-.*\.(php|json)$">
   Require all denied
-</Files>
+</FilesMatch>
 
 # Liens universels de l'appli iPhone : le fichier d'association est du JSON (sans extension)
 <Files "apple-app-site-association">
