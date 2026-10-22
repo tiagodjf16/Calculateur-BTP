@@ -19,6 +19,8 @@ final class WebViewController: UIViewController {
     private var basSurBarre: NSLayoutConstraint!
     private var basSurVue: NSLayoutConstraint!
     private var pageActuelle = ""
+    /// la dernière page demandée (notification, lien, raccourci) : rechargée telle quelle après une coupure de réseau
+    private var derniereDemande: URL?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
@@ -107,7 +109,9 @@ final class WebViewController: UIViewController {
             // page de départ : lien en attente (notification, lien universel, raccourci), sinon l'accueil
             // (« -page /#calendrier » au lancement : captures d'écran automatiques sur le simulateur)
             let demandee = UserDefaults.standard.string(forKey: "page").flatMap { URL(string: $0, relativeTo: Appli.site)?.absoluteURL }
-            self.webView.load(URLRequest(url: Navigation.shared.prendreEnAttente() ?? demandee ?? Appli.site))
+            let depart = Navigation.shared.prendreEnAttente() ?? demandee ?? Appli.site
+            self.derniereDemande = depart
+            self.webView.load(URLRequest(url: depart))
         }
     }
 
@@ -127,10 +131,12 @@ final class WebViewController: UIViewController {
 
     /// ouvre une page du site ; si seule l'ancre change (#joueur, #espace…), pas de rechargement
     func aller(_ url: URL) {
-        if let actuelle = webView.url, memeDocument(actuelle, url), let ancre = url.fragment {
-            let js = "location.hash = \(Pont.json(ancre))"
-            webView.evaluateJavaScript(js, completionHandler: nil)
+        // raccourci par l'ancre seulement si une page est vraiment chargée (pas pendant un chargement : l'ancre serait perdue)
+        if !webView.isLoading, let actuelle = webView.url, memeDocument(actuelle, url) {
+            let ancre = url.fragment ?? "accueil"                  // lien « / » : l'accueil, sans recharger le site
+            webView.evaluateJavaScript("location.hash = \(Pont.json(ancre))", completionHandler: nil)
         } else {
+            derniereDemande = url
             webView.load(URLRequest(url: url))
         }
     }
@@ -174,13 +180,18 @@ final class WebViewController: UIViewController {
         // revenue après longtemps en arrière-plan avec une page en erreur : on réessaie
         if !horsLigne.isHidden && reseauOK { recharger() }
         derniereActivite = Date()
-        // notifications autorisées ou coupées dans les Réglages pendant ce temps
-        Notifications.shared.etat { [weak self] etat, jeton in self?.majPont(etat: etat, jeton: jeton) }
+        // notifications autorisées ou coupées dans les Réglages pendant ce temps (autorisées sans jeton : on le demande)
+        Notifications.shared.etat { [weak self] etat, jeton in
+            self?.majPont(etat: etat, jeton: jeton)
+            if etat == "accorde" && jeton == nil { UIApplication.shared.registerForRemoteNotifications() }
+        }
     }
 
     private func recharger() {
         horsLigne.isHidden = true
-        if webView.url == nil { webView.load(URLRequest(url: Appli.site)) } else { webView.reload() }
+        if let u = derniereDemande { webView.load(URLRequest(url: u)) }
+        else if webView.url == nil { webView.load(URLRequest(url: Appli.site)) }
+        else { webView.reload() }
     }
 
     @objc private func tirerPourRecharger(_ r: UIRefreshControl) {
@@ -191,7 +202,7 @@ final class WebViewController: UIViewController {
             let a = UIAlertController(title: "Recharger la page ?", message: "Ce que tu es en train de saisir n'est pas encore enregistré.", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "Annuler", style: .cancel) { _ in r.endRefreshing() })
             a.addAction(UIAlertAction(title: "Recharger", style: .destructive) { _ in r.endRefreshing(); self.recharger() })
-            self.present(a, animated: true)
+            self.presenter(a, echec: { r.endRefreshing() })
         }
     }
 
@@ -213,6 +224,7 @@ final class WebViewController: UIViewController {
 
     /// le jeton de notifications a changé : la page (si elle est chargée) le renvoie au serveur
     private func prevenirPage(jeton: String) {
+        majPont(etat: "accorde", jeton: jeton)                    // d'abord l'autorisation et le jeton, puis l'événement
         let js = "window.dispatchEvent(new CustomEvent('asf-app-jeton', { detail: { jeton: \(Pont.json(jeton)) } }))"
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
@@ -226,12 +238,22 @@ final class WebViewController: UIViewController {
 
     func partager(_ elements: [Any], source: CGRect?, fin: ((Bool) -> Void)? = nil) {
         let feuille = UIActivityViewController(activityItems: elements, applicationActivities: nil)
-        feuille.completionWithItemsHandler = { _, fait, _, _ in fin?(fait) }
+        // fin n'est appelé qu'une fois : iOS rappelle le gestionnaire quand on annule une appli (WhatsApp…) puis à la fermeture
+        var fini = false
+        let terminer: (Bool) -> Void = { ok in
+            guard !fini else { return }
+            fini = true
+            fin?(ok)
+        }
+        feuille.completionWithItemsHandler = { type, fait, _, _ in
+            if !fait && type != nil { return }                     // appli annulée : la feuille de partage reste ouverte
+            terminer(fait)
+        }
         if let pop = feuille.popoverPresentationController {
             pop.sourceView = view
             pop.sourceRect = source ?? CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
         }
-        presenter(feuille)
+        presenter(feuille, echec: { terminer(false) })
     }
 
     /// fichier envoyé par le site (base64) → fichier temporaire à partager
@@ -260,10 +282,20 @@ final class WebViewController: UIViewController {
     }
 
     /// présente par-dessus ce qui est déjà affiché (une fenêtre peut déjà être ouverte)
-    func presenter(_ vc: UIViewController) {
+    /// une fenêtre en train de s'ouvrir ou de se fermer : on attend la fin de l'animation ; si c'est impossible, echec()
+    func presenter(_ vc: UIViewController, essais: Int = 0, echec: (() -> Void)? = nil) {
         var haut: UIViewController = self
         while let p = haut.presentedViewController, !p.isBeingDismissed { haut = p }
+        if essais < 6, let tc = haut.transitionCoordinator ?? haut.presentedViewController?.transitionCoordinator {
+            tc.animate(alongsideTransition: nil) { [weak self] _ in
+                guard let self else { echec?(); return }
+                self.presenter(vc, essais: essais + 1, echec: echec)
+            }
+            return
+        }
+        guard haut.viewIfLoaded?.window != nil, !haut.isBeingDismissed else { echec?(); return }
         haut.present(vc, animated: true)
+        if vc.presentingViewController == nil { echec?() }
     }
 
     // MARK: pont avec le site
@@ -385,22 +417,26 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard webView === self.webView else { return }
+        derniereDemande = nil
         horsLigne.isHidden = true
         webView.scrollView.refreshControl?.endRefreshing()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard webView === self.webView else { return }
         webView.scrollView.refreshControl?.endRefreshing()
         afficherHorsLigne(error)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard webView === self.webView else { return }
         webView.scrollView.refreshControl?.endRefreshing()
         afficherHorsLigne(error)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        webView.reload()
+        if webView === self.webView { recharger() }
     }
 }
 
@@ -416,7 +452,9 @@ extension WebViewController: WKUIDelegate {
         if vide {
             // page fabriquée par le site (fiches à imprimer…) : une fenêtre de l'appli, avec Imprimer et Fermer
             let fenetre = FenetreVC(configuration: configuration, parent: self)
-            presenter(UINavigationController(rootViewController: fenetre))
+            let nav = UINavigationController(rootViewController: fenetre)
+            nav.modalPresentationStyle = .fullScreen
+            presenter(nav)
             return fenetre.webView
         }
         if let url {
@@ -432,29 +470,29 @@ extension WebViewController: WKUIDelegate {
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        guard viewIfLoaded?.window != nil else { completionHandler(); return }
+        guard webView.window != nil else { completionHandler(); return }
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
-        presenter(a)
+        presenter(a, echec: { completionHandler() })
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        guard viewIfLoaded?.window != nil else { completionHandler(false); return }
+        guard webView.window != nil else { completionHandler(false); return }
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "Annuler", style: .cancel) { _ in completionHandler(false) })
         a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
-        presenter(a)
+        presenter(a, echec: { completionHandler(false) })
     }
 
     func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
-        guard viewIfLoaded?.window != nil else { completionHandler(nil); return }
+        guard webView.window != nil else { completionHandler(nil); return }
         let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
         a.addTextField { $0.text = defaultText }
         a.addAction(UIAlertAction(title: "Annuler", style: .cancel) { _ in completionHandler(nil) })
         a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(a.textFields?.first?.text ?? "") })
-        presenter(a)
+        presenter(a, echec: { completionHandler(nil) })
     }
 }
 

@@ -17,7 +17,12 @@ final class Calendrier: NSObject, EKEventEditViewDelegate {
             ev.title = titre
             ev.isAllDay = journee
             ev.startDate = debut
-            ev.endDate = fin ?? debut.addingTimeInterval(journee ? 86_400 : 2 * 3_600)
+            if journee {
+                // EventKit compte le jour de fin : la fin exclusive (lendemain 0 h, .ics) est ramenée au dernier jour
+                ev.endDate = fin.map { $0.addingTimeInterval(-1) }.flatMap { $0 >= debut ? $0 : nil } ?? debut
+            } else {
+                ev.endDate = fin ?? debut.addingTimeInterval(2 * 3_600)
+            }
             ev.location = lieu
             ev.notes = notes
             ev.url = url

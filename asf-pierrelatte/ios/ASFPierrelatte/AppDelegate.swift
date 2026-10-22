@@ -33,7 +33,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list, .sound])
+        let c = notification.request.content
+        center.getDeliveredNotifications { liste in
+            let doublon = liste.contains { $0.request.identifier != notification.request.identifier
+                && $0.request.content.title == c.title && abs($0.date.timeIntervalSince(notification.date)) < 90 }
+            completionHandler(doublon ? [] : [.banner, .list, .sound])
+        }
     }
 
     /// toucher une notification ouvre la bonne page du site (champ « url » envoyé par le serveur)

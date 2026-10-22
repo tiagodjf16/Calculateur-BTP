@@ -21,7 +21,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0F2257">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="ab4e7ad36a54">
+<meta name="asf-version" content="aea9e82dc53c">
 <meta name="asf-version-date" content="2026-10-22">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -20744,7 +20744,7 @@ location.href=SITE+"/?fal=1#fal="+encodeURIComponent(JSON.stringify({type:"asf-f
       const carte = document.querySelector("#zone-connexion .cx-carte");
       if ((S.heberge || /^https?:$/.test(location.protocol)) && S.compte && !S.compte.doitChanger && carte && !carte.querySelector(".cx-suppr")){
         carte.insertAdjacentHTML("beforeend", `<details class="cx-mdp cx-suppr"><summary>Supprimer mon compte</summary>
-          <p class="cx-note">Ton compte est supprimé tout de suite : identifiant, mot de passe, connexions et téléphones reliés aux notifications.
+          <p class="cx-note">Ton compte est supprimé tout de suite : identifiant, mot de passe, connexions, téléphones reliés aux notifications et messages envoyés dans la messagerie.
           Ta fiche de licencié (équipe, licence) reste gérée par le club : pour la faire effacer aussi, écris au bureau
           (<a href="mailto:contact@asf-pierrelatte.fr">contact@asf-pierrelatte.fr</a>).</p>
           <form class="cx-form" data-cpt-suppr>
@@ -20766,7 +20766,7 @@ location.href=SITE+"/?fal=1#fal="+encodeURIComponent(JSON.stringify({type:"asf-f
     if (!confirm("Supprimer définitivement ton compte ? Tu ne pourras plus te connecter avec cet identifiant.")) return;
     const b = f.querySelector("button"); b.disabled = true;
     try {
-      await delierAppareil();                                           // tant que la connexion est encore valable
+      // le serveur retire lui-même les téléphones reliés au compte (et seulement si le mot de passe est bon)
       const r = await fetch(api() + "/auth?action=supprimer_moi", { method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mdp: f.mdp.value }) });
       const d = await r.json().catch(() => ({}));
@@ -20777,6 +20777,61 @@ location.href=SITE+"/?fal=1#fal="+encodeURIComponent(JSON.stringify({type:"asf-f
       location.hash = "#accueil"; location.reload();
     } catch(e){ dire("Pas de connexion : réessaie dans un instant.", true); b.disabled = false; }
   }, true);
+
+  /* ---------- appli iPhone : réglages des notifications, fiche d'un match (calendrier, partage) ---------- */
+  if (window.ASFApp && typeof window.ASFApp.appeler === "function"){
+    // « Activer » sur le site : le choix « Désactiver » fait avant est oublié (le téléphone peut de nouveau être relié)
+    document.addEventListener("click", ev => {
+      if (ev.target.closest && ev.target.closest('[data-a="notif-on"]')) { try { localStorage.removeItem("asf-app-push-coupe"); } catch(e){} }
+    }, true);
+    // les conseils « installe le site sur l'écran d'accueil » n'ont pas de sens dans l'appli
+    const conseil = /Sur iPhone : installe d'abord le site[^.]*\.(?: et ouvre-le depuis l'icône\.)?/;
+    const nettoyer = racine => {
+      const it = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
+      for (let n = it.nextNode(); n; n = it.nextNode())
+        if (conseil.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(conseil, "Dans l'appli : touche Plus, puis Notifications (ou Réglages de l'iPhone › ASF Pierrelatte › Notifications), puis réessaie.");
+    };
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) nettoyer(n); else if (n.nodeType === 3 && conseil.test(n.nodeValue)) nettoyer(n.parentNode); })))
+      .observe(document.documentElement, { childList: true, subtree: true });
+
+    // fiche d'un match à venir : « Ajouter à mon calendrier » (fiche du calendrier de l'iPhone) et « Partager »
+    const matchDe = id => (S.matchs || []).find(x => x.id === id) || (S.matchsAnimation || []).find(x => x.id === id);
+    const hFr2 = h => /^\d{1,2}:\d{2}/.test(h || "") ? String(h).slice(0, 5).replace(":", "h") : "";
+    const lieuDe = m => { try { return m.adresse || (typeof lieuMatch === "function" ? lieuMatch(m) : "") || ""; } catch(e){ return m.adresse || ""; } };
+    const titreDe = m => /^pl-/.test(m.id || "") ? `${m.equipe || "Foot animation"} · ${m.comp || "Plateau"}` : `${m.equipe || "ASF"} – ${m.adv || ""}`;
+    const avantFiche = window.ouvrirFiche;
+    if (typeof avantFiche === "function"){
+      window.ouvrirFiche = function(id){
+        const r = avantFiche.apply(this, arguments);
+        try {
+          const m = matchDe(id), d = document.getElementById("fiche-match");
+          const auj = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+          const gps = d && d.querySelector(".fm-gps");
+          if (m && gps && m.date && m.date >= auj && !d.querySelector(".fm-appli")){
+            gps.insertAdjacentHTML("afterend", `<div class="fm-appli btns" style="justify-content:center;margin-top:10px">
+              <button type="button" class="btn bleu petit" data-app-cal="${String(id).replace(/"/g, "")}">📅 Ajouter à mon calendrier</button>
+              <button type="button" class="btn contour petit" data-app-partage="${String(id).replace(/"/g, "")}">Partager</button></div>`);
+          }
+        } catch(e){}
+        return r;
+      };
+    }
+    document.addEventListener("click", ev => {
+      const cal = ev.target.closest && ev.target.closest("[data-app-cal]");
+      const par = ev.target.closest && ev.target.closest("[data-app-partage]");
+      if (!cal && !par) return;
+      ev.preventDefault();
+      const m = matchDe((cal || par).dataset.appCal || (cal || par).dataset.appPartage); if (!m) return;
+      const lieu = lieuDe(m), heure = hFr2(m.heure);
+      if (cal){
+        window.ASFApp.appeler("calendrier", { titre: titreDe(m), debut: m.date + (/^\d{1,2}:\d{2}/.test(m.heure || "") ? "T" + String(m.heure).slice(0, 5).padStart(5, "0") : ""),
+          lieu, notes: [m.comp, m.dom === false ? "À l'extérieur" : m.dom ? "À domicile" : ""].filter(Boolean).join(" · "), url: "/#calendrier" }).catch(() => {});
+      } else {
+        const quand = typeof dateLongue === "function" ? dateLongue(m.date) : m.date;
+        window.ASFApp.appeler("partager", { texte: `⚽ ${titreDe(m)}\n📅 ${quand}${heure ? " à " + heure : ""}${lieu ? "\n📍 " + lieu : ""}\nAllez Pierrelatte 💙🤍`, url: "https://asf-pierrelatte.fr/#calendrier" }).catch(() => {});
+      }
+    }, true);
+  }
 
   /* ---------- appli iPhone : rester connecté ---------- */
   if (window.ASFApp || document.documentElement.classList.contains("app-ios")){

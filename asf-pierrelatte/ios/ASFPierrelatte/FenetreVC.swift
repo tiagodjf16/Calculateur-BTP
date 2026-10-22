@@ -11,7 +11,6 @@ final class FenetreVC: UIViewController {
         webView = WKWebView(frame: .zero, configuration: configuration)
         parentWeb = parent
         super.init(nibName: nil, bundle: nil)
-        modalPresentationStyle = .fullScreen
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }

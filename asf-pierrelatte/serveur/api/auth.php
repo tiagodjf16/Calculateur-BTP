@@ -152,6 +152,11 @@ try {
             push_ecrire($pdo, 'site/abonnes', array_values(array_filter($abos, fn($a) => (string) ($a['compte'] ?? '') !== (string) $id)));
         }
         $pdo->prepare('DELETE FROM documents WHERE path IN (?, ?)')->execute(["notifs/c$id", "acces/c$id"]);
+        // messagerie : ses messages sont effacés (leur place reste dans les conversations) et il quitte les conversations
+        try {
+            $pdo->prepare("UPDATE msg_msg SET texte = '', supprime = 1 WHERE compte_id = ?")->execute([$id]);
+            $pdo->prepare('DELETE FROM msg_part WHERE compte_id = ?')->execute([$id]);
+        } catch (Throwable $e) {}                                    // messagerie pas encore utilisée : pas de tables
         $pdo->prepare('DELETE FROM sessions WHERE compte_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM comptes WHERE id = ?')->execute([$id]);
         fermer_session();

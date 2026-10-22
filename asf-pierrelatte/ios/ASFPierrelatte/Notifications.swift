@@ -55,7 +55,7 @@ final class Notifications {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { accorde, _ in
             DispatchQueue.main.async {
                 guard accorde else { fin("refuse", nil); return }
-                self.attentes.append { j in fin(j == nil ? "erreur" : "accorde", j) }
+                self.attentes.append { j in fin("accorde", j) }      // autorisé ; sans jeton, le site le dira (subscribe refusé)
                 UIApplication.shared.registerForRemoteNotifications()
                 // sans réponse d'Apple au bout de 20 s (pas de réseau…) : on rend ce qu'on a
                 DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in

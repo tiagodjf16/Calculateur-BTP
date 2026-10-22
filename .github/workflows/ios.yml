@@ -7,7 +7,8 @@ on:
     paths: ["asf-pierrelatte/ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
 concurrency:
-  group: ios-${{ github.ref }}
+  # un envoi TestFlight n'est jamais annulé par un push suivant ; les simples compilations, si
+  group: ios-${{ github.ref }}-${{ (contains(github.event.head_commit.message, '[testflight]') || github.event_name == 'workflow_dispatch') && github.run_id || 'compil' }}
   cancel-in-progress: true
 jobs:
   compiler:
@@ -34,8 +35,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee compilation.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
           grep -q "BUILD SUCCEEDED" compilation.log
 
-  # 2. « captures » : l'appli lancée dans un iPhone virtuel (17 Pro Max, écran 6,9 pouces, celui demandé par l'App Store) :
-  #    elle doit démarrer et afficher le site ; les captures servent aussi pour la fiche App Store.
+  # 2. « captures » : l'appli lancée dans deux iPhone virtuels : 17 Pro (6,3 pouces, 1206 x 2622, la taille exigée par
+  #    l'App Store) et 17 Pro Max (6,9 pouces, 1320 x 2868, facultative). Elle doit démarrer et afficher le site ;
+  #    les captures servent aussi pour la fiche App Store.
   captures:
     needs: compiler
     runs-on: macos-26
@@ -55,37 +57,36 @@ jobs:
           xcodebuild -project ASFPierrelatte.xcodeproj -scheme ASFPierrelatte -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build -quiet
-      - name: iPhone virtuel
-        timeout-minutes: 12
+      - name: Captures dans deux iPhone virtuels
+        timeout-minutes: 30
         run: |
-          xcrun simctl list devices available | grep -E "iPhone 1[6-9] Pro Max" || true
-          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          prendre() {   # $1 : modèle, $2 : dossier
+            UDID=$(xcrun simctl list devices available -j | python3 -c "
           import json,sys
           d=json.load(sys.stdin)['devices']
-          for nom in ['iPhone 17 Pro Max','iPhone 16 Pro Max','iPhone 17 Pro','iPhone 16 Pro']:
-              for rt,l in sorted(d.items(), reverse=True):
-                  for x in l:
-                      if x['name']==nom and x.get('isAvailable'): print(x['udid']); sys.exit()
+          for rt,l in sorted(d.items(), reverse=True):
+              for x in l:
+                  if x['name']=='$1' and x.get('isAvailable'): print(x['udid']); sys.exit()
           ")
-          echo "UDID=$UDID" >> $GITHUB_ENV
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/ASFPierrelatte.app
-      - name: Captures
-        timeout-minutes: 12
-        run: |
-          mkdir -p captures
-          for p in accueil calendrier resultats classement compos club; do
-            echo "::group::$p"
-            xcrun simctl launch --terminate-running-process "$UDID" fr.asfpierrelatte.app -page "/#$p" || echo "lancement impossible"
-            sleep 14
-            # l'appli doit tourner encore (pas de plantage au démarrage)
-            xcrun simctl spawn "$UDID" launchctl list | grep -i "fr.asfpierrelatte" || echo "::warning::l'appli ne tourne plus après l'ouverture de $p"
-            xcrun simctl io "$UDID" screenshot --type=png "captures/$p.png" || echo "capture impossible"
+            if [ -z "$UDID" ]; then echo "::warning::$1 introuvable"; return; fi
+            echo "::group::$1 ($UDID)"
+            xcrun simctl boot "$UDID" || true
+            xcrun simctl bootstatus "$UDID" -b
+            xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+            xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/ASFPierrelatte.app
+            mkdir -p "captures/$2"
+            for p in accueil calendrier resultats classement compos club; do
+              xcrun simctl launch --terminate-running-process "$UDID" fr.asfpierrelatte.app -page "/#$p" || echo "lancement impossible"
+              sleep 14
+              xcrun simctl spawn "$UDID" launchctl list | grep -qi "fr.asfpierrelatte" || echo "::warning::l'appli ne tourne plus après l'ouverture de $p ($1)"
+              xcrun simctl io "$UDID" screenshot --type=png "captures/$2/$p.png" || echo "capture impossible"
+            done
+            xcrun simctl shutdown "$UDID" || true
             echo "::endgroup::"
-          done
-          ls -la captures
+          }
+          prendre "iPhone 17 Pro" "6.3-pouces"
+          prendre "iPhone 17 Pro Max" "6.9-pouces"
+          ls -laR captures
       - uses: actions/upload-artifact@v4
         with:
           name: captures-iphone
@@ -96,6 +97,7 @@ jobs:
   #    Seulement quand le message du commit contient [testflight], et quand les clés Apple sont dans les secrets du dépôt :
   #    APPLE_TEAM_ID, ASC_ISSUER_ID, ASC_KEY_ID, ASC_KEY_P8 (clé API App Store Connect, rôle Admin),
   #    CERTIFICATE_PRIVATE_KEY (clé RSA du certificat « Apple Distribution », créée une fois avec ssh-keygen).
+  #    Avant : l'App ID fr.asfpierrelatte.app (Push Notifications + Associated Domains) et la fiche de l'appli dans App Store Connect.
   #    Le certificat et le profil App Store sont créés la première fois, puis réutilisés (codemagic-cli-tools, libre).
   testflight:
     needs: compiler
@@ -141,6 +143,17 @@ jobs:
           sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD\"/" project.yml
           xcodegen generate
           echo "Build $BUILD"
+      - name: Prérequis chez Apple (identifiant de l'appli, fiche App Store Connect)
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          if app-store-connect bundle-ids list --bundle-id-identifier "$BUNDLE_ID" --strict-match-identifier --platform IOS --json > "$RUNNER_TEMP/bid.json" 2> "$RUNNER_TEMP/bid.err"; then
+            python3 -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])) else 1)" "$RUNNER_TEMP/bid.json" \
+              || { echo "::error title=Identifiant manquant::Crée d'abord l'App ID $BUNDLE_ID sur developer.apple.com (Identifiers), avec Push Notifications et Associated Domains."; exit 1; }
+          else echo "::warning::Vérification de l'identifiant impossible :"; cat "$RUNNER_TEMP/bid.err"; fi
+          if app-store-connect apps list --bundle-id-identifier "$BUNDLE_ID" --strict-match-identifier --json > "$RUNNER_TEMP/app.json" 2> "$RUNNER_TEMP/app.err"; then
+            python3 -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])) else 1)" "$RUNNER_TEMP/app.json" \
+              || { echo "::error title=Fiche manquante::Crée d'abord la fiche de l'appli dans App Store Connect (Apps > + > New App) avec le Bundle ID $BUNDLE_ID."; exit 1; }
+          else echo "::warning::Vérification de la fiche impossible :"; cat "$RUNNER_TEMP/app.err"; fi
       - name: Signature (certificat Apple Distribution et profil App Store)
         if: steps.cles.outputs.ok == '1'
         run: |

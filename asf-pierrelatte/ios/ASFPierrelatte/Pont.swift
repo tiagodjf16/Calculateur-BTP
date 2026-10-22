@@ -18,7 +18,12 @@ enum Pont {
           var versWeb = function(e){ return e === "accorde" ? "granted" : e === "refuse" ? "denied" : "default"; };
           var etat = versWeb(\(e)), jeton = \(j);
           var appeler = function(action, d){ var m = {}; for (var k in (d || {})) m[k] = d[k]; m.action = action; return h.postMessage(m); };
-          window.ASFApp = { plateforme: "ios", appeler: appeler, _maj: function(e, j){ etat = versWeb(e); if (j) jeton = j; } };
+          /* notifications coupées sur le site (bouton « Désactiver ») : l'appli ne réabonne plus ce téléphone toute seule */
+          var coupe = function(){ try { return localStorage.getItem("asf-app-push-coupe") === "1"; } catch(err){ return false; } };
+          var relier = function(){ if (etat === "granted" && !coupe() && typeof window.lierAppareil === "function") { try { window.lierAppareil(true); } catch(err){} } };
+          window.ASFApp = { plateforme: "ios", appeler: appeler,
+            /* autorisation donnée hors du site (panneau Plus, Réglages) ou nouveau jeton : le téléphone est relié tout de suite */
+            _maj: function(e, j){ var avant = etat, ancien = jeton; etat = versWeb(e); if (j) jeton = j; if (etat === "granted" && (avant !== "granted" || jeton !== ancien)) relier(); } };
           var definir = function(o, nom, valeur){ try { Object.defineProperty(o, nom, { configurable: true, get: function(){ return valeur; } }); } catch(err){} };
 
           /* l'appli est installée : pas de bouton « Installer l'application » */
@@ -31,10 +36,17 @@ enum Pont {
           function Abonnement(){ this.endpoint = "apns:" + jeton; this.expirationTime = null; this.options = { userVisibleOnly: true }; }
           Abonnement.prototype.getKey = function(){ return null; };
           Abonnement.prototype.toJSON = function(){ return { endpoint: this.endpoint, expirationTime: null, keys: {} }; };
-          Abonnement.prototype.unsubscribe = function(){ return Promise.resolve(true); };
+          Abonnement.prototype.unsubscribe = function(){ try { localStorage.setItem("asf-app-push-coupe", "1"); } catch(err){} return Promise.resolve(true); };
           var pushManager = {
-            getSubscription: function(){ return Promise.resolve(etat === "granted" && jeton ? new Abonnement() : null); },
-            subscribe: function(){ return demander().then(function(e){ if (e !== "granted" || !jeton){ var x = new Error("Notifications refusées"); x.name = "NotAllowedError"; throw x; } return new Abonnement(); }); },
+            getSubscription: function(){ return Promise.resolve(etat === "granted" && jeton && !coupe() ? new Abonnement() : null); },
+            subscribe: function(){
+              if (coupe()){ var c = new Error("Notifications coupées sur le site"); c.name = "NotAllowedError"; return Promise.reject(c); }
+              return demander().then(function(e){
+                if (e !== "granted"){ var x = new Error("Notifications refusées"); x.name = "NotAllowedError"; throw x; }
+                if (!jeton){ var y = new Error("Pas de réponse d'Apple : réessaie avec du réseau"); y.name = "AbortError"; throw y; }
+                return new Abonnement();
+              });
+            },
             permissionState: function(){ return Promise.resolve(etat === "default" ? "prompt" : etat); }
           };
           var rien = function(){};
@@ -56,7 +68,8 @@ enum Pont {
 
           /* nouveau jeton (appli réinstallée…) : l'appareil est de nouveau relié au compte connecté */
           window.addEventListener("asf-app-jeton", function(ev){
-            if (ev.detail && ev.detail.jeton) jeton = ev.detail.jeton;
+            if (ev.detail && ev.detail.jeton){ jeton = ev.detail.jeton; etat = "granted"; }
+            if (coupe()) return;
             try { for (var i = sessionStorage.length - 1; i >= 0; i--){ var k = sessionStorage.key(i); if (k && k.indexOf("asfp-appareil2-") === 0) sessionStorage.removeItem(k); } } catch(err){}
             if (typeof window.lierAppareil === "function") window.lierAppareil(true);
           });
