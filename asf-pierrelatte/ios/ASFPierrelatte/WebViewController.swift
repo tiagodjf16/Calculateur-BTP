@@ -6,6 +6,7 @@ import Network
 final class WebViewController: UIViewController {
 
     private var webView: WKWebView!
+    private let contenu = WKUserContentController()
     private let progression = UIProgressView(progressViewStyle: .bar)
     private let horsLigne = HorsLigneVue()
     private let moniteur = NWPathMonitor()
@@ -26,9 +27,7 @@ final class WebViewController: UIViewController {
         config.applicationNameForUserAgent = "Mobile/15E148 ASFPierrelatteApp/\(Appli.version) (iOS)"
         config.allowsInlineMediaPlayback = true
         config.dataDetectorTypes = []
-        let contenu = WKUserContentController()
         contenu.addScriptMessageHandler(PontFaible(self), contentWorld: .page, name: "asf")
-        contenu.addUserScript(WKUserScript(source: Pont.scriptDebut, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController = contenu
 
         webView = WKWebView(frame: .zero, configuration: config)
@@ -85,8 +84,20 @@ final class WebViewController: UIViewController {
         Notifications.shared.surNouveauJeton = { [weak self] jeton in self?.prevenirPage(jeton: jeton) }
 
         Navigation.shared.controleur = self
-        estPret = true
-        webView.load(URLRequest(url: Navigation.shared.prendreEnAttente() ?? Appli.site))
+        Notifications.shared.etat { [weak self] etat, jeton in
+            guard let self else { return }
+            self.majPont(etat: etat, jeton: jeton)
+            self.estPret = true
+            self.webView.load(URLRequest(url: Navigation.shared.prendreEnAttente() ?? Appli.site))
+        }
+    }
+
+    /// l'état des notifications est donné au site (pages suivantes : script injecté ; page ouverte : mise à jour)
+    private func majPont(etat: String, jeton: String?) {
+        contenu.removeAllUserScripts()
+        contenu.addUserScript(WKUserScript(source: Pont.script(etat: etat, jeton: jeton), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let j = jeton.map(Pont.json) ?? "null"
+        webView?.evaluateJavaScript("window.ASFApp && ASFApp._maj(\(Pont.json(etat)), \(j))", completionHandler: nil)
     }
 
     deinit {
@@ -117,6 +128,8 @@ final class WebViewController: UIViewController {
         // revenue après longtemps en arrière-plan avec une page en erreur : on réessaie
         if !horsLigne.isHidden && reseauOK { recharger() }
         derniereActivite = Date()
+        // notifications autorisées ou coupées dans les Réglages pendant ce temps
+        Notifications.shared.etat { [weak self] etat, jeton in self?.majPont(etat: etat, jeton: jeton) }
     }
 
     private func recharger() {
@@ -165,13 +178,39 @@ final class WebViewController: UIViewController {
         partager([url], source: nil)
     }
 
-    func partager(_ elements: [Any], source: CGRect?) {
+    func partager(_ elements: [Any], source: CGRect?, fin: ((Bool) -> Void)? = nil) {
         let feuille = UIActivityViewController(activityItems: elements, applicationActivities: nil)
+        feuille.completionWithItemsHandler = { _, fait, _, _ in fin?(fait) }
         if let pop = feuille.popoverPresentationController {
             pop.sourceView = view
             pop.sourceRect = source ?? CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
         }
         presenter(feuille)
+    }
+
+    /// fichier envoyé par le site (base64) → fichier temporaire à partager
+    private static func fichierTemporaire(_ f: [String: Any]) -> URL? {
+        guard let b64 = f["donnees"] as? String, let data = Data(base64Encoded: b64) else { return nil }
+        var nom = ((f["nom"] as? String) ?? "fichier").replacingOccurrences(of: "/", with: "-")
+        if nom.isEmpty { nom = "fichier" }
+        let dossier = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
+            let url = dossier.appendingPathComponent(nom)
+            try data.write(to: url)
+            return url
+        } catch { return nil }
+    }
+
+    /// la fenêtre d'impression d'iOS (fiches d'accès des joueurs, compos…)
+    func imprimer(_ vue: WKWebView) {
+        let p = UIPrintInteractionController.shared
+        let info = UIPrintInfo(dictionary: nil)
+        info.outputType = .general
+        info.jobName = vue.title?.isEmpty == false ? vue.title! : "ASF Pierrelatte"
+        p.printInfo = info
+        p.printFormatter = vue.viewPrintFormatter()
+        p.present(animated: true)
     }
 
     /// présente par-dessus ce qui est déjà affiché (une fenêtre peut déjà être ouverte)
@@ -207,17 +246,29 @@ final class WebViewController: UIViewController {
             let (e, j) = await withCheckedContinuation { (c: CheckedContinuation<(String, String?), Never>) in
                 Notifications.shared.demander { e, j in c.resume(returning: (e, j)) }
             }
+            majPont(etat: e, jeton: j)
             return (WebViewController.reponseNotifications(e, j), nil)
+        case "notifier":
+            Notifications.shared.locale(titre: d["titre"] as? String ?? "ASF Pierrelatte", texte: d["texte"] as? String ?? "", url: d["url"] as? String)
+            return (true, nil)
+        case "imprimer":
+            imprimer(message.webView ?? webView)
+            return (true, nil)
         case "reglages":
             if let u = URL(string: UIApplication.openSettingsURLString) { _ = await UIApplication.shared.open(u) }
             return (true, nil)
         case "partager":
             var elements: [Any] = []
+            for f in (d["fichiers"] as? [[String: Any]] ?? []) {
+                if let url = WebViewController.fichierTemporaire(f) { elements.append(url) }
+            }
             if let t = d["texte"] as? String, !t.isEmpty { elements.append(t) }
-            if let s = d["url"] as? String, let u = URL(string: s, relativeTo: Appli.site)?.absoluteURL { elements.append(u) }
+            if let s = d["url"] as? String, !s.isEmpty, let u = URL(string: s, relativeTo: Appli.site)?.absoluteURL { elements.append(u) }
             guard !elements.isEmpty else { return (false, nil) }
-            partager(elements, source: nil)
-            return (true, nil)
+            let fait = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+                partager(elements, source: nil) { ok in c.resume(returning: ok) }
+            }
+            return (fait, nil)
         case "calendrier":
             guard let titre = d["titre"] as? String, let debut = (d["debut"] as? String).flatMap(Calendrier.date) else { return (false, "date illisible") }
             let fin = (d["fin"] as? String).flatMap(Calendrier.date)
@@ -310,11 +361,23 @@ extension WebViewController: WKUIDelegate {
     /// lien « nouvel onglet » (target=_blank, window.open) : page du club ici, le reste dehors
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = navigationAction.request.url {
+        let url = navigationAction.request.url
+        let vide = url == nil || url?.absoluteString == "" || url?.absoluteString == "about:blank"
+        if vide {
+            // page fabriquée par le site (fiches à imprimer…) : une fenêtre de l'appli, avec Imprimer et Fermer
+            let fenetre = FenetreVC(configuration: configuration, parent: self)
+            presenter(UINavigationController(rootViewController: fenetre))
+            return fenetre.webView
+        }
+        if let url {
             if Appli.estInterne(url) { webView.load(navigationAction.request) }
             else if let s = url.scheme?.lowercased(), !["about", "blob", "data", "javascript"].contains(s) { UIApplication.shared.open(url) }
         }
         return nil
+    }
+
+    func webViewDidClose(_ webView: WKWebView) {
+        if webView !== self.webView { presentedViewController?.dismiss(animated: true) }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
@@ -369,41 +432,5 @@ extension WebViewController: WKDownloadDelegate {
         let a = UIAlertController(title: "Téléchargement impossible", message: error.localizedDescription, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         presenter(a)
-    }
-}
-
-// MARK: - pont JavaScript ↔ appli
-
-/// le site appelle : await window.webkit.messageHandlers.asf.postMessage({ action: "…", … }) (ou ASFApp.appeler)
-final class PontFaible: NSObject, WKScriptMessageHandlerWithReply {
-    weak var cible: WebViewController?
-    init(_ cible: WebViewController) { self.cible = cible }
-
-    @MainActor
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
-        guard let cible else { return (nil, "appli indisponible") }
-        return await cible.recevoir(message)
-    }
-}
-
-enum Pont {
-    /// injecté dans chaque page du site avant ses scripts : window.ASFApp, et la classe « app-ios » sur <html>
-    static let scriptDebut = """
-    (function(){
-      var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.asf;
-      if (!h || window.ASFApp) return;
-      window.ASFApp = {
-        plateforme: "ios",
-        appeler: function(action, donnees){ var m = {}; for (var k in (donnees || {})) m[k] = donnees[k]; m.action = action; return h.postMessage(m); }
-      };
-      var marquer = function(){ if (document.documentElement) document.documentElement.classList.add("app-ios"); };
-      marquer(); document.addEventListener("DOMContentLoaded", marquer);
-    })();
-    """
-
-    /// une chaîne pour JavaScript (guillemets et caractères spéciaux échappés)
-    static func json(_ s: String) -> String {
-        guard let d = try? JSONSerialization.data(withJSONObject: [s]), let t = String(data: d, encoding: .utf8) else { return "\"\"" }
-        return String(t.dropFirst().dropLast())
     }
 }

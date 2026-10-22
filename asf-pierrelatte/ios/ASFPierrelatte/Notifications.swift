@@ -66,6 +66,17 @@ final class Notifications {
         }
     }
 
+    /// notification affichée par l'appli elle-même (nouveau message vu par le site pendant qu'il est ouvert)
+    func locale(titre: String, texte: String, url: String?) {
+        let c = UNMutableNotificationContent()
+        c.title = titre
+        c.body = texte
+        c.sound = .default
+        if let url, !url.isEmpty { c.userInfo = ["url": url] }
+        let r = UNNotificationRequest(identifier: "asf-locale-" + UUID().uuidString, content: c, trigger: nil)
+        UNUserNotificationCenter.current().add(r)
+    }
+
     static func estAccorde(_ s: UNAuthorizationStatus) -> Bool {
         s == .authorized || s == .provisional || s == .ephemeral
     }
