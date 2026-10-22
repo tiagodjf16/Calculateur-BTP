@@ -10,13 +10,41 @@
 //   POST /api/messagerie.php?lu=1         { conv }                -> { ok }
 //   POST /api/messagerie.php?supprimer=1  { message }             -> { ok }
 //   POST /api/messagerie.php?muet=1       { conv, muet }          -> { ok }
+//   POST /api/messagerie.php?effacer=1    { conv }                -> { ok, pourTous }   (coachs et bureau)
+// Signaler et bloquer (règle 1.2 de l'App Store : contenu écrit par les membres) :
+//   POST /api/messagerie.php?signaler=1   { message, motif }      -> { ok }   (motif facultatif, 300 caractères au plus)
+//   POST /api/messagerie.php?bloquer=1    { compte, bloque }      -> { ok }   (bloque : true = bloquer, false = débloquer)
+//   GET  /api/messagerie.php?bloques=1                        -> { bloques: [{ id, nom }] }   (ceux que le compte a bloqués)
+//   GET  /api/messagerie.php?signalements=1                   -> { signalements: [...] }      (bureau seulement : les 100 derniers,
+//                                                                 sauf ceux qui visent le compte qui demande)
 // Qui peut écrire à qui est décidé ICI, côté serveur (beaucoup de joueurs sont mineurs) :
 //   - joueur : à ses coachs, au bureau, dans le groupe de son équipe ; JAMAIS en privé à un autre joueur ;
 //   - coach  : à ses joueurs, aux autres coachs, au bureau, dans les groupes de ses équipes ;
 //   - bureau : à tout le monde ; lit et écrit dans tous les groupes d'équipe.
 // Un compte au code provisoire pas encore changé (rang 0) n'a pas accès à la messagerie, et personne ne peut lui écrire.
-// Les messages sont dans trois tables à part (msg_conv, msg_part, msg_msg), créées au premier appel,
-// JAMAIS dans la table « documents » (db.php la renvoie à tout le monde selon des rangs).
+// Signaler un message : seulement un message d'une autre personne que le compte voit (mêmes contrôles que la lecture de la
+//   conversation), 10 signalements au plus par heure et par compte, une seule fois par message (le refaire répond ok sans
+//   doublon). Une exception : dans une conversation privée, chacune des deux personnes peut toujours signaler un message que
+//   l'autre lui a écrit, même si l'autre l'a bloquée ou a supprimé la conversation (sinon l'auteur d'un message déplacé
+//   pourrait empêcher qu'on le signale). Le bureau est prévenu (notifier_cibles, rôle « bureau », lien vers la conversation)
+//   et retrouve le message, même dans une conversation privée qu'il ne peut pas lire, dans ?signalements=1, avec son texte
+//   même si l'auteur l'a supprimé ensuite (supprime: true). Si l'auteur ou celui qui signale est du bureau, seuls les AUTRES
+//   membres du bureau sont prévenus (par leurs comptes), et un membre du bureau ne voit jamais, dans ?signalements, les
+//   signalements qui le visent (il n'apprend pas qui l'a signalé).
+// Bloquer un membre (A bloque B ; sauf soi-même ; débloquer quand on veut) : B doit être quelqu'un que A voit déjà dans la
+//   messagerie (un contact, l'autre personne d'une de ses conversations privées, un membre ou l'auteur d'un message d'un groupe
+//   qu'il lit ; pour le bureau, qui a déjà la liste des comptes : tout compte). Sinon 404 « Ce compte n'existe pas. », comme
+//   pour un compte qui n'existe pas : on ne peut pas se servir du blocage pour découvrir les noms des membres du club.
+//   - A ne voit plus les messages de B : ni dans les conversations (groupes compris), ni dans les aperçus de la liste,
+//     ni dans les non-lus (liste et pastille) ; B disparaît des contacts de A ; A n'est plus prévenu des messages de B ;
+//   - leur conversation privée disparaît chez les deux ; ni A ni B ne peut plus l'ouvrir, y écrire ou la recréer
+//     (403 avec une phrase claire pour chacun : B lit « Cette personne t'a bloqué… ») ; B peut quand même signaler les
+//     messages que A lui avait écrits (voir plus haut) ;
+//   - dans un groupe d'équipe, B écrit toujours normalement : les autres membres le lisent, pas A.
+// Les messages sont dans des tables à part (msg_conv, msg_part, msg_msg, et msg_bloc, msg_signal), créées au premier appel
+// (et ajoutées au premier appel sur un serveur qui a déjà les premières), JAMAIS dans la table « documents » (db.php la
+// renvoie à tout le monde selon des rangs). « Supprimer mon compte » (auth.php) retire aussi les blocages faits par le compte
+// ou qui le visent, et vide le motif de ses signalements.
 // Les dates sont enregistrées en heure UTC et renvoyées à l'heure de Paris (2026-10-05T14:02:11+02:00).
 require __DIR__ . '/session.php';
 header('Content-Type: application/json; charset=utf-8');
@@ -30,6 +58,12 @@ const MG_LIMITE = 30;        // messages au plus par compte…
 const MG_FENETRE = 600;      // …sur 10 minutes (en secondes)
 const MG_APERCU = 140;       // longueur du texte dans la notification
 const MG_FAMILLES = ['Mes coachs', 'Coachs', 'Bureau', 'Mes joueurs', 'Joueurs'];
+const MG_SIGNAL_LIMITE = 10;     // signalements au plus par compte…
+const MG_SIGNAL_FENETRE = 3600;  // …sur une heure (en secondes)
+const MG_SIGNAL_MOTIF = 300;     // caractères du motif
+const MG_SIGNAL_EXTRAIT = 100;   // longueur de l'extrait du message dans la notification du bureau
+const MG_TU_AS_BLOQUE = 'Tu as bloqué cette personne. Pour lui écrire ou revoir vos messages, débloque-la dans Messages → Personnes bloquées.';
+const MG_TA_BLOQUE = 'Cette personne t\'a bloqué : tu ne peux plus lui écrire ni ouvrir votre conversation privée.';
 
 function mg_sortir(int $code, array $data): never {
     http_response_code($code);
@@ -37,12 +71,35 @@ function mg_sortir(int $code, array $data): never {
     exit;
 }
 
-/* Les trois tables, créées au premier appel (comme session.php le fait pour les comptes). */
+/* Les tables, créées au premier appel (comme session.php le fait pour les comptes) ; celles qui manquent sont ajoutées
+   (serveur qui a déjà les tables de la première version). Une seule requête quand tout est en place. */
 function mg_preparer(PDO $pdo): void {
     // les emojis demandent une connexion en utf8mb4 (utf8 tout court n'en prend que 3 octets)
     $cs = strtolower((string) $pdo->query('SELECT @@character_set_connection')->fetchColumn());
     if ($cs === 'utf8' || $cs === 'utf8mb3') $pdo->exec('SET NAMES utf8mb4');
-    if ($pdo->query("SHOW TABLES LIKE 'msg\\_msg'")->fetchColumn()) { mg_migrer($pdo); return; }
+    $tables = array_map('strtolower', $pdo->query("SHOW TABLES LIKE 'msg\\_%'")->fetchAll(PDO::FETCH_COLUMN));
+    // blocages : « par » a bloqué « compte »
+    if (!in_array('msg_bloc', $tables, true)) $pdo->exec("CREATE TABLE IF NOT EXISTS msg_bloc (
+        par INT NOT NULL,
+        compte INT NOT NULL,
+        cree DATETIME NOT NULL,
+        PRIMARY KEY (par, compte),
+        INDEX (compte)
+    ) DEFAULT CHARSET=utf8mb4");
+    // signalements : « par » a signalé le message « message_id » écrit par « auteur » (un seul par message et par compte)
+    if (!in_array('msg_signal', $tables, true)) $pdo->exec("CREATE TABLE IF NOT EXISTS msg_signal (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        message_id INT NOT NULL,
+        conv_id INT NOT NULL,
+        par INT NOT NULL,
+        auteur INT NOT NULL,
+        motif VARCHAR(300) NOT NULL DEFAULT '',
+        cree DATETIME NOT NULL,
+        UNIQUE KEY message_par (message_id, par),
+        INDEX (par, cree),
+        INDEX (cree)
+    ) DEFAULT CHARSET=utf8mb4");
+    if (in_array('msg_msg', $tables, true)) { mg_migrer($pdo); return; }
     $pdo->exec("CREATE TABLE IF NOT EXISTS msg_conv (
         id INT AUTO_INCREMENT PRIMARY KEY,
         type VARCHAR(10) NOT NULL,
@@ -290,6 +347,59 @@ function mg_peut_ecrire(PDO $pdo, array $moi, array $c): bool {
     return true;
 }
 
+/* ===== blocages ===== */
+
+/* Les blocages qui concernent ce compte (lus une fois par appel) :
+   'moi' => [id => true] les comptes qu'il a bloqués ; 'lui' => [id => true] ceux qui l'ont bloqué. */
+function mg_blocs(PDO $pdo, int $me): array {
+    static $cache = [];
+    if (!isset($cache[$me])) {
+        $b = ['moi' => [], 'lui' => []];
+        $st = $pdo->prepare('SELECT par, compte FROM msg_bloc WHERE par = ? OR compte = ?');
+        $st->execute([$me, $me]);
+        foreach ($st->fetchAll(PDO::FETCH_NUM) as [$par, $compte]) {
+            if ((int) $par === $me) $b['moi'][(int) $compte] = true;
+            if ((int) $compte === $me) $b['lui'][(int) $par] = true;
+        }
+        $cache[$me] = $b;
+    }
+    return $cache[$me];
+}
+/* Morceau de requête : sans les messages des comptes que $me a bloqués (« AND m.compte_id NOT IN (4,9) », ou rien). */
+function mg_sans_bloques(PDO $pdo, int $me, string $colonne): string {
+    $ids = array_map('intval', array_keys(mg_blocs($pdo, $me)['moi']));
+    return $ids ? " AND $colonne NOT IN (" . implode(',', $ids) . ')' : '';
+}
+/* Conversation privée entre ce compte et quelqu'un qu'il a bloqué ('moi') ou qui l'a bloqué ('lui') ; '' sinon (et pour un groupe). */
+function mg_bloc_prive(PDO $pdo, int $me, array $c): string {
+    if (($c['type'] ?? '') !== 'prive') return '';
+    $ids = mg_ids_prive((string) $c['cle']);
+    if (count($ids) !== 2) return '';
+    $autre = $ids[0] === $me ? $ids[1] : $ids[0];
+    $b = mg_blocs($pdo, $me);
+    return isset($b['moi'][$autre]) ? 'moi' : (isset($b['lui'][$autre]) ? 'lui' : '');
+}
+function mg_refus_bloc(string $bloc): never { mg_sortir(403, ['erreur' => $bloc === 'moi' ? MG_TU_AS_BLOQUE : MG_TA_BLOQUE]); }
+/* $moi peut-il bloquer le compte $id ? Seulement quelqu'un qu'il voit déjà dans la messagerie (sinon, en essayant les ids un
+   par un puis en lisant ?bloques, on aurait le nom de chaque compte du club) : un contact, l'autre personne d'une de ses
+   conversations privées, un membre ou l'auteur d'un message d'un groupe qu'il lit. Le bureau, qui a déjà la liste de tous
+   les comptes (Accès et rôles, auth.php) : n'importe quel compte. */
+function mg_peut_bloquer(PDO $pdo, array $moi, int $id): bool {
+    $me = (int) $moi['id'];
+    $c = mg_comptes($pdo)[$id] ?? null;
+    if (!$c || $id === $me) return false;
+    if (rang($moi) >= 3 || isset(mg_blocs($pdo, $me)['moi'][$id]) || mg_peut_ecrire_a($pdo, $moi, $c)) return true;
+    $st = $pdo->prepare('SELECT 1 FROM msg_conv WHERE cle = ?');
+    $st->execute(['p:' . min($me, $id) . '-' . max($me, $id)]);
+    if ($st->fetchColumn()) return true;
+    $groupes = array_filter(mg_visibles($pdo, $moi, false), fn($x) => $x['type'] === 'equipe');
+    if (!$groupes) return false;
+    foreach ($groupes as $g) if (in_array($id, mg_membres_groupe($pdo, $g), true)) return true;
+    $st = $pdo->prepare('SELECT 1 FROM msg_msg WHERE compte_id = ? AND conv_id IN (' . implode(',', array_fill(0, count($groupes), '?')) . ') LIMIT 1');
+    $st->execute(array_merge([$id], array_keys($groupes)));
+    return (bool) $st->fetchColumn();
+}
+
 /* ===== conversations ===== */
 
 /* Une conversation, avec l'état du compte (part = participant, lu, muet). */
@@ -343,7 +453,10 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
     }
     $l = [];
     foreach ($lignes as $c) {
-        if ($c['type'] === 'prive') { if (!in_array($me, mg_ids_prive((string) $c['cle']), true)) continue; }
+        if ($c['type'] === 'prive') {
+            if (!in_array($me, mg_ids_prive((string) $c['cle']), true)) continue;
+            if (mg_bloc_prive($pdo, $me, $c) !== '') continue;                         // bloquée (d'un côté ou de l'autre) : disparaît
+        }
         elseif ($c['type'] === 'equipe') {
             if (!isset($eqs[mg_eq_conv($c)]) && !($c['part'] !== null && rang($moi) >= 3)) continue;
             if (mg_joueur($moi) && !mg_groupe_lance($pdo, (int) $c['id'])) continue;      // pas encore lancé par un coach
@@ -352,9 +465,10 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
         $l[(int) $c['id']] = $c;
     }
     // conversation supprimée (privée effacée, groupe supprimé ou jamais lancé) : elle n'apparaît que s'il y a des messages après la suppression
+    // (sans compter ceux des comptes bloqués : un groupe où seul un compte bloqué a écrit n'apparaît pas)
     if ($l) {
         $st = $pdo->prepare('SELECT m.conv_id, COUNT(*) FROM msg_msg m JOIN msg_conv c ON c.id = m.conv_id
-            WHERE m.conv_id IN (' . implode(',', array_fill(0, count($l), '?')) . ') AND m.id > c.efface GROUP BY m.conv_id');
+            WHERE m.conv_id IN (' . implode(',', array_fill(0, count($l), '?')) . ') AND m.id > c.efface' . mg_sans_bloques($pdo, $me, 'm.compte_id') . ' GROUP BY m.conv_id');
         $st->execute(array_keys($l));
         $vivants = [];
         foreach ($st->fetchAll(PDO::FETCH_NUM) as [$cid, $n]) $vivants[(int) $cid] = (int) $n;
@@ -374,26 +488,27 @@ function mg_visibles(PDO $pdo, array $moi, bool $creer): array {
     }
     return $l;
 }
-/* Messages non lus [conv_id => nombre] : ceux des autres, plus récents que le dernier lu, pas supprimés. */
+/* Messages non lus [conv_id => nombre] : ceux des autres (sauf des comptes bloqués), plus récents que le dernier lu, pas supprimés. */
 function mg_nonlus(PDO $pdo, int $me, array $ids): array {
     if (!$ids) return [];
     $st = $pdo->prepare('SELECT m.conv_id, COUNT(*) FROM msg_msg m JOIN msg_conv c ON c.id = m.conv_id LEFT JOIN msg_part p ON p.conv_id = m.conv_id AND p.compte_id = ?
         WHERE m.conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND m.compte_id <> ? AND m.supprime = 0
-          AND m.id > GREATEST(COALESCE(p.lu, 0), COALESCE(p.efface, 0), c.efface)
+          AND m.id > GREATEST(COALESCE(p.lu, 0), COALESCE(p.efface, 0), c.efface)' . mg_sans_bloques($pdo, $me, 'm.compte_id') . '
         GROUP BY m.conv_id');
     $st->execute(array_merge([$me], array_values($ids), [$me]));
     $l = [];
     foreach ($st->fetchAll(PDO::FETCH_NUM) as [$conv, $n]) $l[(int) $conv] = (int) $n;
     return $l;
 }
-/* Dernier message (non supprimé) de chaque conversation [conv_id => message], que ce compte voit encore (après ses suppressions). */
+/* Dernier message (non supprimé) de chaque conversation [conv_id => message], que ce compte voit encore
+   (après ses suppressions, sans les messages des comptes qu'il a bloqués). */
 function mg_derniers(PDO $pdo, int $me, array $ids): array {
     if (!$ids) return [];
     $st = $pdo->prepare('SELECT m.id, m.conv_id, m.compte_id, m.texte, m.cree FROM msg_msg m
         JOIN (SELECT x1.conv_id, MAX(x1.id) AS mid FROM msg_msg x1 JOIN msg_conv c1 ON c1.id = x1.conv_id
               LEFT JOIN msg_part p1 ON p1.conv_id = x1.conv_id AND p1.compte_id = ?
               WHERE x1.conv_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') AND x1.supprime = 0
-                AND x1.id > GREATEST(c1.efface, COALESCE(p1.efface, 0)) GROUP BY x1.conv_id) x
+                AND x1.id > GREATEST(c1.efface, COALESCE(p1.efface, 0))' . mg_sans_bloques($pdo, $me, 'x1.compte_id') . ' GROUP BY x1.conv_id) x
         ON x.mid = m.id');
     $st->execute(array_merge([$me], array_values($ids)));
     $l = [];
@@ -443,18 +558,20 @@ function mg_marquer_lu(PDO $pdo, array $moi, array $c): void {
     }
 }
 /* Notifications : les autres participants (privé) ou les membres et participants (groupe),
-   sauf l'auteur, sauf ceux qui ont coupé la conversation, et seulement des comptes qui peuvent encore la lire. */
+   sauf l'auteur, sauf ceux qui ont coupé la conversation, sauf ceux qui ont bloqué l'auteur,
+   et seulement des comptes qui peuvent encore la lire. */
 function mg_notifier(PDO $pdo, array $moi, array $c, string $texte): void {
     $me = (int) $moi['id'];
     $dest = $c['type'] === 'prive' ? mg_ids_prive((string) $c['cle']) : mg_membres_groupe($pdo, $c);
     $st = $pdo->prepare('SELECT compte_id FROM msg_part WHERE conv_id = ? AND muet = 1');
     $st->execute([(int) $c['id']]);
     $muets = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+    $bloqueurs = mg_blocs($pdo, $me)['lui'];
     $tous = mg_comptes($pdo);
     $joueurs = []; $staff = [];
     foreach (array_unique($dest) as $id) {
         $x = $tous[$id] ?? null;
-        if ($id === $me || in_array($id, $muets, true) || !mg_joignable($x)) continue;
+        if ($id === $me || in_array($id, $muets, true) || isset($bloqueurs[$id]) || !mg_joignable($x)) continue;
         if ($x['role'] === 'joueur') $joueurs[] = (string) $id; else $staff[] = (string) $id;
     }
     if ((!$joueurs && !$staff) || !is_file(__DIR__ . '/push-lib.php')) return;
@@ -467,6 +584,34 @@ function mg_notifier(PDO $pdo, array $moi, array $c, string $texte): void {
         if (!$ids) continue;
         try { notifier_cibles($pdo, $ids, [], $titre, $corps, '/?conv=' . (int) $c['id'] . $ancre); } catch (Throwable $e) { /* jamais bloquant */ }
     }
+}
+/* Un message signalé : le bureau est prévenu (rôle « bureau »). Si l'auteur du message ou celui qui le signale est du bureau,
+   on prévient seulement les autres membres du bureau, compte par compte (l'auteur n'apprend pas qui l'a signalé). */
+function mg_prevenir_bureau(PDO $pdo, array $moi, array $m): void {
+    if (!is_file(__DIR__ . '/push-lib.php')) return;
+    require_once __DIR__ . '/push-lib.php';
+    if (!function_exists('notifier_cibles')) return;
+    $tous = mg_comptes($pdo);
+    $auteur = $tous[(int) $m['compte_id']] ?? null;
+    $texte = (string) $moi['nom'] . ' a signalé un message de ' . ($auteur ? (string) $auteur['nom'] : 'Compte supprimé')
+        . ' : « ' . mg_couper((string) $m['texte'], MG_SIGNAL_EXTRAIT) . ' »';
+    $comptes = []; $roles = ['bureau'];
+    if (rang($moi) >= 3 || ($auteur && ($auteur['role'] ?? '') === 'bureau')) {
+        $roles = [];
+        foreach ($tous as $id => $x)
+            if ($x['role'] === 'bureau' && mg_joignable($x) && $id !== (int) $moi['id'] && $id !== (int) $m['compte_id']) $comptes[] = (string) $id;
+        if (!$comptes) return;
+    }
+    try { notifier_cibles($pdo, $comptes, $roles, '⚠️ Message signalé', $texte, '/?conv=' . (int) $m['conv_id'] . '#espace'); } catch (Throwable $e) { /* jamais bloquant */ }
+}
+/* Répondre tout de suite, puis faire le reste (notifications) sans faire attendre l'app ; jamais bloquant. */
+function mg_repondre_puis(array $data, callable $ensuite): never {
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if (function_exists('litespeed_finish_request')) litespeed_finish_request();
+    elseif (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    ignore_user_abort(true);
+    try { @set_time_limit(120); $ensuite(); } catch (Throwable $e) { /* une notification ratée ne change rien à la réponse */ }
+    exit;
 }
 
 try {
@@ -501,12 +646,13 @@ try {
                 'nonlus' => array_sum($nonlus), 'conversations' => $l]);
         }
 
-        // à qui le compte peut écrire : exactement les règles de mg_peut_ecrire_a()
+        // à qui le compte peut écrire : exactement les règles de mg_peut_ecrire_a(), sans les comptes qu'il a bloqués
         if (isset($_GET['contacts'])) {
             $bureau = rang($moi) >= 3;
+            $bloques = mg_blocs($pdo, $me)['moi'];
             $personnes = [];
             foreach (mg_comptes($pdo) as $id => $c) {
-                if ($id === $me || !mg_peut_ecrire_a($pdo, $moi, $c)) continue;
+                if ($id === $me || isset($bloques[$id]) || !mg_peut_ecrire_a($pdo, $moi, $c)) continue;
                 if ($c['role'] === 'bureau') $famille = 'Bureau';
                 elseif ($c['role'] === 'entraineur') $famille = $moi['role'] === 'joueur' ? 'Mes coachs' : 'Coachs';
                 else $famille = $moi['role'] === 'entraineur' ? 'Mes joueurs' : 'Joueurs';
@@ -530,11 +676,13 @@ try {
         if (isset($_GET['conv'])) {
             $c = mg_conv($pdo, mg_entier($_GET['conv']), $me);
             if (!$c || !mg_peut_lire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => $refus]);
+            if (($bloc = mg_bloc_prive($pdo, $me, $c)) !== '') mg_refus_bloc($bloc);   // privée avec un compte bloqué (d'un côté ou de l'autre)
             $id = (int) $c['id'];
             $avant = mg_entier($_GET['avant'] ?? null);
             $apres = mg_entier($_GET['apres'] ?? null);
-            $borne = mg_borne($c);                                // après une suppression : seulement les messages plus récents
-            $champs = 'SELECT id, conv_id, compte_id, IF(supprime = 1, \'\', texte) AS texte, cree, supprime FROM msg_msg WHERE conv_id = ? AND id > ' . $borne;
+            // après une suppression : seulement les messages plus récents ; jamais ceux des comptes bloqués
+            $visibles = 'id > ' . mg_borne($c) . mg_sans_bloques($pdo, $me, 'compte_id');
+            $champs = 'SELECT id, conv_id, compte_id, IF(supprime = 1, \'\', texte) AS texte, cree, supprime FROM msg_msg WHERE conv_id = ? AND ' . $visibles;
             if ($apres > 0) {                                     // seulement les nouveaux (appelé toutes les 5 s)
                 $st = $pdo->prepare("$champs AND id > ? ORDER BY id ASC LIMIT " . MG_NOUVEAUX);
                 $st->execute([$id, $apres]);
@@ -548,7 +696,7 @@ try {
             $haut = $msgs ? (int) $msgs[0]['id'] : ($apres > 0 ? $apres + 1 : 0);
             $plus = false;
             if ($haut > 0) {
-                $st = $pdo->prepare('SELECT 1 FROM msg_msg WHERE conv_id = ? AND id < ? AND id > ' . $borne . ' LIMIT 1');
+                $st = $pdo->prepare('SELECT 1 FROM msg_msg WHERE conv_id = ? AND id < ? AND ' . $visibles . ' LIMIT 1');
                 $st->execute([$id, $haut]);
                 $plus = (bool) $st->fetchColumn();
             }
@@ -560,7 +708,38 @@ try {
             mg_sortir(200, ['conv' => $el, 'messages' => array_map(fn($m) => mg_message($pdo, $m, $me), $msgs), 'plusAnciens' => $plus]);
         }
 
-        foreach (['ouvrir', 'envoyer', 'lu', 'supprimer', 'muet', 'effacer'] as $a) if (isset($_GET[$a])) mg_sortir(405, ['erreur' => 'Méthode refusée.']);
+        // les personnes que le compte a bloquées (pour les débloquer)
+        if (isset($_GET['bloques'])) {
+            $l = array_map(fn($id) => ['id' => (int) $id, 'nom' => mg_personne($pdo, (int) $id)['nom']], array_keys(mg_blocs($pdo, $me)['moi']));
+            usort($l, fn($a, $b) => strnatcmp(mg_simple($a['nom']), mg_simple($b['nom'])) ?: $a['id'] <=> $b['id']);
+            mg_sortir(200, ['bloques' => $l]);
+        }
+
+        // les derniers messages signalés, pour le bureau (même ceux d'une conversation privée qu'il ne peut pas ouvrir) ;
+        // jamais ceux qui visent le compte qui demande : un membre du bureau n'apprend pas qui l'a signalé, ni pourquoi
+        if (isset($_GET['signalements'])) {
+            if (rang($moi) < 3) mg_sortir(403, ['erreur' => 'Seul le bureau peut voir les messages signalés.']);
+            $st = $pdo->prepare('SELECT s.id, s.message_id, s.conv_id, s.par, s.auteur, s.motif, s.cree, m.texte, m.cree AS mcree, m.supprime, c.type, c.cle, c.equipe
+                FROM msg_signal s LEFT JOIN msg_msg m ON m.id = s.message_id LEFT JOIN msg_conv c ON c.id = s.conv_id WHERE s.auteur <> ? ORDER BY s.id DESC LIMIT 100');
+            $st->execute([$me]);
+            $l = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $s) {
+                $par = mg_personne($pdo, (int) $s['par']); $auteur = mg_personne($pdo, (int) $s['auteur']);
+                // supprimé par son auteur (ou par le bureau) après le signalement : le texte reste en base comme preuve,
+                // et le bureau le relit ici (jamais dans les conversations), marqué « supprime »
+                $sup = $s['texte'] === null || (int) $s['supprime'] === 1;
+                if ($s['type'] === 'equipe') $titre = 'Groupe ' . $s['equipe'];
+                elseif ($s['type'] === 'prive') $titre = 'Privée : ' . implode(' et ', array_map(fn($i) => mg_personne($pdo, $i)['nom'], mg_ids_prive((string) $s['cle'])));
+                else $titre = 'Conversation supprimée';
+                $l[] = ['id' => (int) $s['id'], 'date' => mg_iso($s['cree']), 'motif' => (string) $s['motif'],
+                    'par' => ['id' => $par['id'], 'nom' => $par['nom']], 'auteur' => ['id' => $auteur['id'], 'nom' => $auteur['nom'], 'libelle' => $auteur['libelle']],
+                    'message' => ['id' => (int) $s['message_id'], 'texte' => (string) ($s['texte'] ?? ''), 'date' => mg_iso($s['mcree']), 'supprime' => $sup],
+                    'conv' => ['id' => (int) $s['conv_id'], 'type' => (string) ($s['type'] ?? ''), 'titre' => $titre]];
+            }
+            mg_sortir(200, ['signalements' => $l]);
+        }
+
+        foreach (['ouvrir', 'envoyer', 'lu', 'supprimer', 'muet', 'effacer', 'signaler', 'bloquer'] as $a) if (isset($_GET[$a])) mg_sortir(405, ['erreur' => 'Méthode refusée.']);
         mg_sortir(400, ['erreur' => 'Action inconnue.']);
     }
 
@@ -577,6 +756,9 @@ try {
             $autre = $id > 0 ? (mg_comptes($pdo)[$id] ?? null) : null;
             // même refus si le compte n'existe pas, est désactivé ou n'est pas autorisé : rien ne fuit
             if (!mg_peut_ecrire_a($pdo, $moi, $autre)) mg_sortir(403, ['erreur' => 'Tu ne peux pas écrire à cette personne.']);
+            $b = mg_blocs($pdo, $me);
+            if (isset($b['moi'][$id])) mg_refus_bloc('moi');
+            if (isset($b['lui'][$id])) mg_refus_bloc('lui');
             $cle = 'p:' . min($me, $id) . '-' . max($me, $id);
             $t = mg_maintenant();
             $pdo->prepare("INSERT IGNORE INTO msg_conv (type, cle, equipe, cree, maj) VALUES ('prive', ?, '', ?, ?)")->execute([$cle, $t, $t]);
@@ -635,6 +817,7 @@ try {
         $id = (int) $c['id'];
 
         if (isset($_GET['envoyer'])) {
+            if (($bloc = mg_bloc_prive($pdo, $me, $c)) !== '') mg_refus_bloc($bloc);
             if (!mg_peut_ecrire($pdo, $moi, $c)) mg_sortir(403, ['erreur' => $c['type'] === 'equipe' && mg_joueur($moi) && !mg_groupe_lance($pdo, (int) $c['id'])
                 ? 'Seul un coach peut lancer la conversation du groupe de ton équipe.' : 'Tu ne peux plus écrire dans cette conversation.']);
             $texte = mg_nettoyer($corps['texte'] ?? '');
@@ -679,13 +862,65 @@ try {
         mg_sortir(200, ['ok' => true]);
     }
 
+    // signaler le message d'une autre personne au bureau (motif facultatif)
+    if (isset($_GET['signaler'])) {
+        $pasAcces = 'Tu n\'as pas accès à ce message.';          // même réponse s'il n'existe pas : rien ne fuit
+        $st = $pdo->prepare('SELECT id, conv_id, compte_id, texte, supprime FROM msg_msg WHERE id = ?');
+        $st->execute([mg_entier($corps['message'] ?? null)]);
+        $m = $st->fetch(PDO::FETCH_ASSOC);
+        $c = $m ? mg_conv($pdo, (int) $m['conv_id'], $me) : null;
+        // le compte doit voir ce message, comme en lisant la conversation : droit de lecture, pas d'un compte qu'il a bloqué,
+        // pas d'avant une suppression de la conversation. Sauf dans une conversation privée dont il est l'une des deux
+        // personnes : le message lui était adressé, il peut le signaler même si l'autre l'a bloqué ou a supprimé la
+        // conversation pour les deux (sinon l'auteur d'un message déplacé pourrait empêcher qu'on le signale) ;
+        // seulement pas d'avant sa propre suppression (msg_part.efface, ancienne version).
+        $vu = $m && $c && mg_peut_lire($pdo, $moi, $c) && !isset(mg_blocs($pdo, $me)['moi'][(int) $m['compte_id']])
+            && (int) $m['id'] > ($c['type'] === 'prive' ? (int) ($c['peff'] ?? 0) : mg_borne($c));
+        if (!$vu) mg_sortir(403, ['erreur' => $pasAcces]);
+        if ((int) $m['compte_id'] === $me) mg_sortir(400, ['erreur' => 'Tu ne peux pas signaler ton propre message. Tu peux le supprimer.']);
+        if ((int) $m['supprime'] === 1) mg_sortir(400, ['erreur' => 'Ce message a déjà été supprimé.']);
+        // déjà signalé par ce compte : rien de plus (ni doublon, ni nouvelle notification)
+        $st = $pdo->prepare('SELECT 1 FROM msg_signal WHERE message_id = ? AND par = ?');
+        $st->execute([(int) $m['id'], $me]);
+        if ($st->fetchColumn()) mg_sortir(200, ['ok' => true]);
+        $st = $pdo->prepare('SELECT COUNT(*) FROM msg_signal WHERE par = ? AND cree > ?');
+        $st->execute([$me, mg_maintenant(-MG_SIGNAL_FENETRE)]);
+        if ((int) $st->fetchColumn() >= MG_SIGNAL_LIMITE) mg_sortir(429, ['erreur' => 'Tu as déjà signalé beaucoup de messages. Attends un peu avant d\'en signaler d\'autres, ou écris directement au bureau.']);
+        $motif = mg_couper(mg_nettoyer($corps['motif'] ?? ''), MG_SIGNAL_MOTIF);
+        $ins = $pdo->prepare('INSERT IGNORE INTO msg_signal (message_id, conv_id, par, auteur, motif, cree) VALUES (?, ?, ?, ?, ?, ?)');
+        $ins->execute([(int) $m['id'], (int) $m['conv_id'], $me, (int) $m['compte_id'], $motif, mg_maintenant()]);
+        if ($ins->rowCount() < 1) mg_sortir(200, ['ok' => true]);    // signalé au même instant par une autre demande
+        mg_repondre_puis(['ok' => true], fn() => mg_prevenir_bureau($pdo, $moi, $m));
+    }
+
+    // bloquer / débloquer un membre
+    if (isset($_GET['bloquer'])) {
+        $id = mg_entier($corps['compte'] ?? null);
+        $v = $corps['bloque'] ?? null;
+        if (in_array($v, [true, 1, '1', 'true'], true)) $bloque = true;
+        elseif (in_array($v, [false, 0, '0', 'false'], true)) $bloque = false;
+        else mg_sortir(400, ['erreur' => 'Indique s\'il faut bloquer ou débloquer cette personne.']);
+        if ($id === $me) mg_sortir(400, ['erreur' => 'Tu ne peux pas te bloquer toi-même.']);
+        if ($bloque) {
+            // seulement quelqu'un que le compte voit déjà dans la messagerie ; même réponse sinon que pour un compte inexistant
+            if ($id <= 0 || !mg_peut_bloquer($pdo, $moi, $id)) mg_sortir(404, ['erreur' => 'Ce compte n\'existe pas.']);
+            $pdo->prepare('INSERT IGNORE INTO msg_bloc (par, compte, cree) VALUES (?, ?, ?)')->execute([$me, $id, mg_maintenant()]);
+        } else {
+            // débloquer marche toujours, même si le compte a été supprimé depuis
+            if ($id <= 0) mg_sortir(404, ['erreur' => 'Ce compte n\'existe pas.']);
+            $pdo->prepare('DELETE FROM msg_bloc WHERE par = ? AND compte = ?')->execute([$me, $id]);
+        }
+        mg_sortir(200, ['ok' => true]);
+    }
+
     // supprimer un message : son auteur, ou le bureau (n'importe lequel)
     if (isset($_GET['supprimer'])) {
         $st = $pdo->prepare('SELECT id, compte_id FROM msg_msg WHERE id = ?');
         $st->execute([mg_entier($corps['message'] ?? null)]);
         $m = $st->fetch(PDO::FETCH_ASSOC);
         if (!$m || ((int) $m['compte_id'] !== $me && rang($moi) < 3)) mg_sortir(403, ['erreur' => 'Tu ne peux pas supprimer ce message.']);
-        // le texte reste dans la base (preuve en cas d'abus), mais n'est plus jamais renvoyé
+        // le texte reste dans la base (preuve en cas d'abus), mais n'est plus jamais renvoyé dans les conversations
+        // (seul le bureau le relit, si le message a été signalé, dans ?signalements)
         $pdo->prepare('UPDATE msg_msg SET supprime = 1 WHERE id = ?')->execute([(int) $m['id']]);
         mg_sortir(200, ['ok' => true]);
     }

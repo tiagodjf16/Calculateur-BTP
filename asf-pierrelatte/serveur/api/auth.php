@@ -157,6 +157,11 @@ try {
             $pdo->prepare("UPDATE msg_msg SET texte = '', supprime = 1 WHERE compte_id = ?")->execute([$id]);
             $pdo->prepare('DELETE FROM msg_part WHERE compte_id = ?')->execute([$id]);
         } catch (Throwable $e) {}                                    // messagerie pas encore utilisée : pas de tables
+        // ses blocages (faits par lui ou qui le visent) disparaissent ; ses signalements restent pour le bureau, sans le motif qu'il a écrit
+        try {
+            $pdo->prepare('DELETE FROM msg_bloc WHERE par = ? OR compte = ?')->execute([$id, $id]);
+            $pdo->prepare("UPDATE msg_signal SET motif = '' WHERE par = ?")->execute([$id]);
+        } catch (Throwable $e) {}                                    // tables pas encore créées
         $pdo->prepare('DELETE FROM sessions WHERE compte_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM comptes WHERE id = ?')->execute([$id]);
         fermer_session();
@@ -261,6 +266,8 @@ try {
         if ($moi && $id === (int) $moi['id']) sortir(400, ['erreur' => 'Tu ne peux pas supprimer ton propre compte.']);
         $pdo->prepare('DELETE FROM sessions WHERE compte_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM comptes WHERE id = ?')->execute([$id]);
+        // messagerie : les blocages faits par ce compte ou qui le visent n'ont plus de sens
+        try { $pdo->prepare('DELETE FROM msg_bloc WHERE par = ? OR compte = ?')->execute([$id, $id]); } catch (Throwable $e) {}
         sortir(200, ['ok' => true]);
     }
     sortir(404, ['erreur' => 'action inconnue']);

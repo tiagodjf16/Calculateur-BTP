@@ -11,6 +11,14 @@
    - Rien de ce qu'on tape n'est perdu : l'écran de la messagerie est construit une seule fois et remis en place quand
      l'application redessine l'espace (elle le fait souvent) ; le texte en cours est aussi gardé par conversation dans S.ui.
    - ?conv=ID dans l'adresse (lien d'une notification) ouvre cette conversation, puis disparaît de l'adresse.
+   - Signaler et bloquer (règle 1.2 de l'App Store) : un petit bouton « ⋯ » sur chaque message d'une autre personne
+     (visible au survol sur ordinateur, discret mais toujours là sur téléphone) ouvre « Signaler ce message » (motif
+     facultatif, le bureau est prévenu) et « Bloquer <prénom> » (confirmation qui explique l'effet) ; « Bloquer » aussi dans
+     l'en-tête d'une conversation privée ; « Personnes bloquées » (pour débloquer) en bas de la liste des conversations, et
+     pour le bureau « Messages signalés » (le texte d'un message supprimé après son signalement y reste lisible).
+     La confirmation d'un blocage dit ce que l'autre personne verra (« Cette personne t'a bloqué » si elle essaie d'écrire
+     en privé) et, depuis un message, propose de le signaler en même temps (après le blocage, on ne voit plus ses messages).
+     Après un blocage, l'écran se met à jour sans recharger la page.
    Ajouté sans modifier le script de l'application. */
 (function(){
   "use strict";
@@ -30,6 +38,7 @@
      Rang ≥ 1 : un compte du club connecté (site hébergé) dont le code provisoire a été changé. */
   const actif = () => !!(S.heberge && S.compte && !S.compte.doitChanger && ["joueur", "entraineur", "bureau"].includes(S.compte.role));
   const estJoueur = () => !!(S.compte && S.compte.role === "joueur");
+  const estBureau = () => !!(S.compte && S.compte.role === "bureau");
   const roleCle = () => (S.compte && ["joueur", "entraineur", "bureau"].includes(S.compte.role)) ? S.compte.role : "joueur";
   const PHRASES = {
     joueur: { barre: "Écris à tes coachs et au bureau. Le groupe de ton équipe apparaît ici dès que ton coach le lance.", vide: "à ton coach ou au bureau", liste: "Écris à ton coach ou au bureau : ils reçoivent une notification sur leur téléphone. Le groupe de ton équipe apparaît dès que ton coach y écrit." },
@@ -103,6 +112,10 @@
   let resume = { nonlus: 0, maj: null }, dernierResume = 0, resumeEnCours = false, horsLigne = false;
   let liste = null, moi = null, listeEnCours = false, erreurListe = "", listeDemandee = false;
   let contacts = null, contactsDate = 0, contactsEnCours = false, erreurContacts = "";
+  let bloques = null;                // [{ id, nom }] : les personnes que le compte a bloquées (lues à l'ouverture de leur liste)
+  let signalements = null;           // bureau : les derniers messages signalés
+  const signales = new Set();        // les messages que ce compte a signalés depuis l'ouverture de la page (« Déjà signalé au bureau »),
+                                     // gardés même quand la conversation est relue (les messages du serveur n'ont pas ce champ)
   const fils = new Map();            // id → { conv, messages:[], plusAnciens, charge, erreur, envois:[], nonlusDepart, avantEnCours }
   let seqTmp = 0, pollEnCours = false, nbPoll = 0;
   const filDe = id => { let f = fils.get(id); if (!f){ f = { conv: null, messages: [], plusAnciens: false, charge: false, erreur: "", envois: [], nonlusDepart: 0 }; fils.set(id, f); } return f; };
@@ -128,6 +141,9 @@
     return majuscule(`${JOURS[d.getDay()]} ${d.getDate() === 1 ? "1er" : d.getDate()} ${MOIS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : ""}`);
   }
   const initiales = n => { const m = String(n || "").trim().split(/\s+/).filter(Boolean); return ((m[0] || "?")[0] + (m.length > 1 ? m[m.length - 1][0] : "")).toUpperCase(); };
+  /* « Mehdi BENALI » -> « Mehdi » (les mots qui ne sont pas en capitales ; sinon le premier) */
+  const prenomDe = n => { const m = String(n || "").trim().split(/\s+/).filter(Boolean); const p = m.filter(x => x !== x.toUpperCase()); return p.length ? p.join(" ") : (m[0] || "cette personne"); };
+  const extrait = (t, max = 140) => { t = String(t == null ? "" : t).replace(/\s+/g, " ").trim(); return [...t].length > max ? [...t].slice(0, max - 1).join("").trimEnd() + "…" : t; };
   function initialesEquipe(eq){
     const m = String(eq || "").split(/[\s·]+/).filter(Boolean);
     if (!m.length) return "⚽";
@@ -162,7 +178,7 @@
   };
 
   /* ================= L'ÉCRAN (construit une fois, remis en place après chaque dessin de l'application) ================= */
-  let racine = null, zNotif, zListe, zDroite, zVide, zTete, zFil, zNouveaux, zSaisie, ta, btEnvoi, zErreur, zCompteur, zChoix, zChoixListe, zCherche;
+  let racine = null, zNotif, zListe, zPied, zDroite, zVide, zTete, zFil, zNouveaux, zSaisie, ta, btEnvoi, zErreur, zCompteur, zChoix, zChoixListe, zCherche;
   let filRendu = [];                 // ce qui est affiché dans le fil : [[clé, html], …]
   let filConv = null;                // la conversation dont le fil est affiché
   const SVG_ENVOI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg>`;
@@ -175,7 +191,7 @@
       <div class="mg-barre"><div class="mg-barre-txt"><h2>Messages</h2><p>${e(PHRASES[roleCle()].barre)}</p></div>
         <button type="button" class="btn bleu mg-nouveau-bt" data-mg-nouveau><span aria-hidden="true">✏️</span> Nouveau message</button></div>
       <div class="mg-grille">
-        <section class="mg-gauche" aria-label="Conversations"><div class="mg-liste-zone"></div></section>
+        <section class="mg-gauche" aria-label="Conversations"><div class="mg-liste-zone"></div><div class="mg-pied"></div></section>
         <section class="mg-droite" aria-label="Conversation ouverte">
           <div class="mg-vide"></div>
           <div class="mg-choix" hidden>
@@ -202,7 +218,7 @@
         </section>
       </div>`;
     const q = s => racine.querySelector(s);
-    zNotif = q(".mg-notif"); zListe = q(".mg-liste-zone"); zDroite = q(".mg-droite"); zVide = q(".mg-vide");
+    zNotif = q(".mg-notif"); zListe = q(".mg-liste-zone"); zPied = q(".mg-pied"); zDroite = q(".mg-droite"); zVide = q(".mg-vide");
     zChoix = q(".mg-choix"); zChoixListe = q(".mg-choix-liste"); zCherche = q("[data-mg-cherche]");
     zTete = q(".mg-conv-tete"); zFil = q(".mg-fil"); zNouveaux = q("[data-mg-bas]"); zSaisie = q(".mg-saisie");
     ta = q("[data-mg-texte]"); btEnvoi = q(".mg-envoyer"); zErreur = q(".mg-erreur"); zCompteur = q(".mg-compteur");
@@ -280,6 +296,7 @@
     racine.querySelector(".mg-conv").hidden = vue !== "conv";
     zVide.hidden = vue !== "liste";
     rendreListe();
+    rendrePied();
     if (vue === "liste" && !zVide.firstChild) zVide.innerHTML = `<div class="mg-vide-c"><span class="mg-vide-ico" aria-hidden="true">💬</span><b>Choisis une conversation</b>
       <span>ou écris un nouveau message ${e(PHRASES[roleCle()].vide)}.</span>
       <button type="button" class="btn bleu" data-mg-nouveau><span aria-hidden="true">✏️</span> Nouveau message</button></div>`;
@@ -323,6 +340,13 @@
     }
     if (zListe.dataset.h !== h){ const y = zListe.scrollTop; zListe.innerHTML = h; zListe.dataset.h = h; zListe.scrollTop = y; }
   }
+  /* sous la liste : les personnes bloquées (pour les débloquer) ; pour le bureau, les messages signalés */
+  function rendrePied(){
+    if (!zPied) return;
+    const h = `<button type="button" class="mg-pied-bt" data-mg-bloques aria-haspopup="dialog"><span aria-hidden="true">⛔</span> Personnes bloquées</button>`
+      + (estBureau() ? `<button type="button" class="mg-pied-bt" data-mg-signalements aria-haspopup="dialog"><span aria-hidden="true">🚩</span> Messages signalés</button>` : "");
+    if (zPied.dataset.h !== h){ zPied.innerHTML = h; zPied.dataset.h = h; }
+  }
 
   /* ---------- choisir à qui écrire ---------- */
   const simple = s => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -357,6 +381,8 @@
     const u = U(), f = filDe(u.conv), c = f.conv || itemDe(u.conv);
     const groupe = c && c.type === "equipe";
     const membres = f.conv && Array.isArray(f.conv.membres) ? f.conv.membres : null;
+    // conversation privée : l'autre personne (pour « Bloquer »)
+    const autre = c && c.type === "prive" && Array.isArray(c.avec) ? c.avec.find(a => a && +a.id && +a.id !== moiId()) : null;
     const tete = `<button type="button" class="mg-retour" data-mg-retour aria-label="Retour à la liste des conversations"><span aria-hidden="true">←</span></button>
       ${c ? avatar(c, "mg-av-tete") : `<span class="mg-av mg-av-tete" aria-hidden="true">…</span>`}
       <div class="mg-tete-txt"><b>${e(c ? c.titre : "Conversation")}</b>
@@ -365,6 +391,8 @@
       ${groupe ? `<button type="button" class="mg-muet ${c.muet ? "on" : ""}" data-mg-muet aria-pressed="${c.muet ? "true" : "false"}"
           title="${c.muet ? "Les notifications de ce groupe sont coupées : appuie pour les remettre" : "Couper les notifications de ce groupe"}"
           aria-label="${c.muet ? "Notifications du groupe coupées. Les remettre" : "Couper les notifications de ce groupe"}"><span aria-hidden="true">${c.muet ? "🔕" : "🔔"}</span><span class="mg-muet-t">${c.muet ? "Notifications coupées" : "Couper les notifications"}</span></button>` : ""}
+      ${autre ? `<button type="button" class="mg-bloquer" data-mg-bloquer="${+autre.id}" data-nom="${e(autre.nom)}" aria-haspopup="dialog"
+          title="Bloquer ${e(autre.nom)}" aria-label="Bloquer ${e(autre.nom)}"><span aria-hidden="true">⛔</span><span class="mg-muet-t">Bloquer</span></button>` : ""}
       ${c && ["entraineur", "bureau"].includes(roleCle()) ? `<button type="button" class="mg-effacer" data-mg-effacer
           title="Supprimer cette conversation" aria-label="Supprimer la conversation"><span aria-hidden="true">🗑</span><span class="mg-muet-t">Supprimer la conversation</span></button>` : ""}
       ${groupe && membres && u.membres ? `<div class="mg-membres"><ul role="list">${membres.map(m => `<li><span class="mg-av mg-av-mini" style="--av:${teinte(m.id)}" aria-hidden="true">${e(initiales(m.nom))}</span><b>${e(m.nom)}</b><small>${e(m.libelle || "")}</small></li>`).join("")}</ul></div>` : ""}`;
@@ -386,7 +414,9 @@
     const c = f.conv || itemDe(u.conv), groupe = c && c.type === "equipe";
     const items = [];
     // en haut : charger les plus anciens, ou le début de la conversation
-    items.push(["haut", f.erreur && !f.messages.length ? `<div class="mg-etat"><b>Conversation indisponible</b><span>${e(f.erreur)}</span><button type="button" class="btn contour petit" data-mg-recharger-conv>Réessayer</button></div>`
+    // (le bureau qui arrive par la notification d'un message signalé dans une privée qu'il ne lit pas : vers les messages signalés)
+    items.push(["haut", f.erreur && !f.messages.length ? `<div class="mg-etat"><b>Conversation indisponible</b><span>${e(f.erreur)}</span><button type="button" class="btn contour petit" data-mg-recharger-conv>Réessayer</button>
+        ${f.status === 403 && estBureau() ? `<button type="button" class="btn bleu petit" data-mg-signalements aria-haspopup="dialog"><span aria-hidden="true">🚩</span> Voir les messages signalés</button>` : ""}</div>`
       : !f.charge ? `<div class="mg-etat mg-charge" aria-busy="true"><span class="mg-roue" aria-hidden="true"></span><span>Chargement des messages…</span></div>`
       : f.plusAnciens ? `<div class="mg-haut-fil"><button type="button" class="mg-plus" data-mg-plus ${f.avantEnCours ? "disabled" : ""}>${f.avantEnCours ? "Chargement…" : "Charger les messages précédents"}</button></div>`
       : `<div class="mg-haut-fil"><span class="mg-debut">${f.messages.length ? "Début de la conversation" : groupe ? "Aucun message dans ce groupe pour l'instant : écris le premier !" : "Aucun message pour l'instant : écris le premier !"}</span></div>`]);
@@ -433,11 +463,15 @@
     const auteur = groupe && !moiMsg && !suite && !m.supprime ? `<div class="mg-auteur" style="--c:${teinte(m.auteurId)}"><b>${e(m.auteur)}</b>${m.libelle ? `<small>${e(m.libelle)}</small>` : ""}</div>` : "";
     const d = date(m.date);
     const etat = m.tmp ? `<span class="mg-envoi">envoi…</span>` : "";
-    const peutSuppr = !m.tmp && !m.supprime && (moiMsg || (S.compte && S.compte.role === "bureau"));
+    // ses propres messages : « Supprimer » ; ceux des autres : « ⋯ » (signaler, bloquer, et supprimer pour le bureau)
+    const peutSuppr = !m.tmp && !m.supprime && moiMsg;
+    const actions = !m.tmp && !m.supprime && !moiMsg && +m.auteurId > 0 && +m.auteurId !== moiId();
     const corps = m.supprime ? `<div class="mg-t mg-t-suppr"><span aria-hidden="true">🚫</span> Message supprimé</div>` : `<div class="mg-t">${texteHtml(m.texte)}</div>`;
     return `<div class="mg-l ${moiMsg ? "mg-moi" : "mg-lui"} ${suite ? "mg-suite" : ""} ${m.tmp ? "mg-tmp" : ""}" ${m.tmp ? "" : `data-mg-id="${+m.id}"`}>
       <div class="mg-b ${m.supprime ? "mg-b-suppr" : ""}" data-mg-bulle>${auteur}${corps}<span class="mg-meta">${etat}<time datetime="${e(m.date || "")}">${d ? heure(d) : ""}</time></span></div>
-      ${peutSuppr ? `<button type="button" class="mg-suppr" data-mg-suppr="${+m.id}" aria-label="Supprimer ce message${moiMsg ? "" : " de " + e(m.auteur)}">Supprimer ce message</button>` : ""}
+      ${peutSuppr ? `<button type="button" class="mg-suppr" data-mg-suppr="${+m.id}" aria-label="Supprimer ce message">Supprimer ce message</button>` : ""}
+      ${actions ? `<button type="button" class="mg-act" data-mg-act="${+m.id}" aria-haspopup="dialog" title="Signaler ou bloquer"
+          aria-label="Plus d'actions sur le message de ${e(m.auteur)} : signaler, bloquer"><span aria-hidden="true">⋯</span></button>` : ""}
     </div>`;
   }
 
@@ -675,6 +709,235 @@
   }
   const toastMg = (t, err) => { try { toast(t, err); } catch(x){} };
 
+  /* ================= SIGNALER ET BLOQUER ================= */
+  /* Une seule fenêtre (dialog), posée sur la page : menu d'un message, signalement, confirmation d'un blocage,
+     personnes bloquées, messages signalés (bureau). Sur téléphone, elle monte du bas de l'écran. */
+  let dlg = null, dlgType = "", dlgRetour = null;
+  function dialogue(){
+    if (dlg && dlg.isConnected) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.className = "mg-dlg";
+    dlg.setAttribute("aria-labelledby", "mg-dlg-titre");
+    document.body.appendChild(dlg);
+    // un appui à côté (sur le fond) ferme ; seulement si l'appui a COMMENCÉ sur le fond : sélectionner le motif à la souris en
+    // relâchant à côté de la fenêtre envoie aussi un « clic » sur le fond, qui ne doit pas la fermer (le motif serait perdu)
+    let appuiFond = false;
+    dlg.addEventListener("pointerdown", ev => { appuiFond = ev.target === dlg; });
+    dlg.addEventListener("click", ev => { const fond = appuiFond; appuiFond = false; if (ev.target === dlg && fond) fermerDlg(); });
+    dlg.addEventListener("close", () => {
+      dlgType = ""; dlg.classList.remove("sans-modal");
+      const r = dlgRetour; dlgRetour = null;
+      if (r && r.isConnected && r.getClientRects().length) try { r.focus({ preventScroll: true }); } catch(err){}
+    });
+    return dlg;
+  }
+  function ouvrirDlg(type, html){
+    const d = dialogue();
+    if (!d.open) dlgRetour = document.activeElement;
+    dlgType = type;
+    d.innerHTML = `<div class="mg-dlg-c">${html}</div>`;
+    if (!d.open){
+      let modal = false;
+      if (typeof d.showModal === "function") try { d.showModal(); modal = true; } catch(err){}
+      if (!modal){ d.setAttribute("open", ""); d.classList.add("sans-modal"); }
+    }
+    placerFocusDlg();
+  }
+  function majDlg(type, html){ if (dlg && dlg.open && dlgType === type){ dlg.innerHTML = `<div class="mg-dlg-c">${html}</div>`; placerFocusDlg(); } }
+  /* le focus : sur téléphone, le titre (pas de clavier qui surgit) ; sur ordinateur, la zone de texte ou l'action principale */
+  function placerFocusDlg(){
+    if (!dlg) return;
+    const q = s => dlg.querySelector(s);
+    const c = doigt() ? q("#mg-dlg-titre") : (q("[data-mg-focus-pc]") || q("[data-mg-dlg-focus]") || q("button:not(:disabled)") || q("#mg-dlg-titre"));
+    if (c) try { c.focus({ preventScroll: true }); } catch(err){}
+  }
+  function fermerDlg(){
+    if (!dlg) return;
+    if (dlg.open){ if (typeof dlg.close === "function" && !dlg.classList.contains("sans-modal")) dlg.close(); else { dlg.removeAttribute("open"); dlg.dispatchEvent(new Event("close")); } }
+  }
+  function erreurDlg(t){ const z = dlg && dlg.querySelector(".mg-dlg-erreur"); if (z){ z.textContent = t; z.hidden = false; } else toastMg(t, true); }
+  function infoDlg(t){ const z = dlg && dlg.querySelector(".mg-dlg-info"); if (z) z.textContent = t; }
+  const btsDlg = (...b) => `<div class="mg-dlg-btns">${b.join("")}</div>`;
+  const annuler = (t = "Annuler") => `<button type="button" class="btn contour" data-mg-dlg-fermer>${e(t)}</button>`;
+  const ERREUR_DLG = `<p class="mg-dlg-erreur" role="alert" hidden></p>`;
+  const messageDe = id => { const f = filDe(U().conv); return f.messages.find(x => x.id === id) || null; };
+
+  /* « ⋯ » sur le message d'une autre personne */
+  function menuMessage(id){
+    const m = messageDe(id);
+    if (!m || m.supprime) return;
+    const p = prenomDe(m.auteur);
+    ouvrirDlg("menu", `<div class="mg-dlg-tete"><b id="mg-dlg-titre" tabindex="-1">Message de ${e(m.auteur)}</b><p class="mg-dlg-extrait">« ${e(extrait(m.texte))} »</p></div>
+      <div class="mg-dlg-actions">
+        ${signales.has(m.id) ? `<button type="button" class="mg-dlg-bt" disabled><span aria-hidden="true">✓</span> Déjà signalé au bureau</button>`
+          : `<button type="button" class="mg-dlg-bt" data-mg-signaler="${+m.id}" data-mg-dlg-focus><span aria-hidden="true">🚩</span> Signaler ce message</button>`}
+        <button type="button" class="mg-dlg-bt rouge" data-mg-bloquer="${+m.auteurId}" data-nom="${e(m.auteur)}" data-msg="${+m.id}"><span aria-hidden="true">⛔</span> Bloquer ${e(p)}</button>
+        ${estBureau() ? `<button type="button" class="mg-dlg-bt" data-mg-suppr="${+m.id}"><span aria-hidden="true">🗑</span> Supprimer ce message pour tout le monde</button>` : ""}
+        <button type="button" class="mg-dlg-bt doux" data-mg-dlg-fermer>Annuler</button>
+      </div>`);
+  }
+  /* signaler : motif facultatif, confirmation */
+  function formSignaler(id){
+    const m = messageDe(id);
+    if (!m || m.supprime) return;
+    ouvrirDlg("signaler", `<form class="mg-dlg-form" data-mg-sig-form data-id="${+m.id}" novalidate>
+        <div class="mg-dlg-tete"><b id="mg-dlg-titre" tabindex="-1"><span aria-hidden="true">🚩</span> Signaler ce message ?</b>
+          <p>Le bureau du club est prévenu tout de suite et va relire ce message de ${e(m.auteur)}. Il pourra le supprimer et réagir si besoin.</p>
+          <p class="mg-dlg-extrait">« ${e(extrait(m.texte))} »</p></div>
+        <label class="mg-dlg-label" for="mg-motif">Pourquoi ? <small>(facultatif)</small></label>
+        <textarea id="mg-motif" class="mg-dlg-motif" data-mg-focus-pc maxlength="300" rows="3" placeholder="Par exemple : insulte, moquerie, message qui te met mal à l'aise…"></textarea>
+        ${ERREUR_DLG}
+        ${btsDlg(annuler(), `<button type="submit" class="btn bleu" data-mg-dlg-focus><span aria-hidden="true">🚩</span> Signaler</button>`)}
+      </form>`);
+  }
+  async function envoyerSignalement(form){
+    const id = +form.dataset.id, bt = form.querySelector('[type="submit"]'), motif = (form.querySelector("textarea") || {}).value || "";
+    if (bt) bt.disabled = true;
+    try {
+      await api({ signaler: 1 }, { message: id, motif: motif.trim() });
+      signales.add(id);
+      fermerDlg();
+      toastMg("Merci, le bureau est prévenu.");
+    } catch(err){ erreurDlg(err.message); if (bt) bt.disabled = false; }
+  }
+  /* bloquer : la confirmation dit exactement ce qui va se passer (y compris ce que l'autre personne verra).
+     Depuis le menu d'un message (idMsg) : une case pour signaler aussi ce message au bureau, AVANT le blocage
+     (après, on ne voit plus ses messages, donc on ne peut plus les signaler). */
+  function confirmerBlocage(id, nom, idMsg){
+    if (!id || id === moiId()) return;
+    const p = e(prenomDe(nom)), privee = (liste || []).some(c => avecLui(c, id));
+    const m = idMsg ? messageDe(idMsg) : null;
+    const caseSig = !!(m && !m.supprime && !m.moi && +m.auteurId === id && !signales.has(m.id));
+    ouvrirDlg("bloquer", `<div class="mg-dlg-tete"><b id="mg-dlg-titre" tabindex="-1"><span aria-hidden="true">⛔</span> Bloquer ${e(nom || "cette personne")} ?</b></div>
+      <ul class="mg-dlg-effets">
+        <li>Tu ne verras plus ses messages, ni en privé ni dans les groupes d'équipe, et tu ne seras plus prévenu quand ${p} écrit.</li>
+        <li>${privee ? `Votre conversation privée disparaît et ${p} ne pourra plus t'écrire en privé.` : `${p} ne pourra pas t'écrire en privé.`}</li>
+        <li>Aucune notification n'est envoyée à ${p}. Mais si ${p} essaie de t'écrire en privé, l'appli lui répondra : « Cette personne t'a bloqué ».</li>
+        <li>Tu peux débloquer quand tu veux, dans « Personnes bloquées », en bas de la liste des conversations.</li>
+      </ul>
+      ${caseSig ? `<label class="mg-dlg-case"><input type="checkbox" data-mg-sig-aussi="${+m.id}"> <span><b>Signaler aussi ce message au bureau</b>
+          <small>« ${e(extrait(m.texte, 80))} »</small></span></label>
+        <p class="mg-dlg-note">Si ce message est blessant ou t'inquiète, coche la case : après le blocage, tu ne verras plus ses messages et tu ne pourras plus les signaler.</p>`
+        : `<p class="mg-dlg-note">Si ses messages sont blessants ou t'inquiètent, signale-les au bureau <b>avant</b> de bloquer (bouton ⋯ sur le message) : après le blocage, tu ne les verras plus et tu ne pourras plus les signaler.</p>`}
+      ${ERREUR_DLG}
+      ${btsDlg(annuler(), `<button type="button" class="btn danger" data-mg-bloquer-ok="${+id}" data-nom="${e(nom)}" data-mg-dlg-focus><span aria-hidden="true">⛔</span> Bloquer</button>`)}`);
+  }
+  async function bloquer(id, nom, bt){
+    const caseSig = dlg && dlg.querySelector("[data-mg-sig-aussi]");
+    const idSig = caseSig && caseSig.checked ? +caseSig.dataset.mgSigAussi : 0;
+    if (bt) bt.disabled = true;
+    if (caseSig) caseSig.disabled = true;
+    try {
+      // d'abord le signalement (s'il échoue, rien n'est bloqué : la fenêtre reste ouverte avec l'erreur)
+      if (idSig && !signales.has(idSig)){
+        try { await api({ signaler: 1 }, { message: idSig, motif: "" }); signales.add(idSig); }
+        catch(err){ throw new Error("Signalement impossible : " + err.message + " Rien n'a été bloqué. Décoche la case pour bloquer sans signaler."); }
+      }
+      await api({ bloquer: 1 }, { compte: id, bloque: true });
+      fermerDlg();
+      apresBlocage(id, nom);
+      toastMg(idSig ? `Merci, le bureau est prévenu. Tu as bloqué ${prenomDe(nom)} : tu ne verras plus ses messages.` : `Tu as bloqué ${prenomDe(nom)}. Tu ne verras plus ses messages.`);
+    } catch(err){
+      erreurDlg(err.message);
+      if (bt) bt.disabled = false;
+      if (caseSig){ caseSig.disabled = false; if (idSig && signales.has(idSig)) caseSig.closest("label").hidden = true; }   // déjà signalé : la case n'a plus lieu d'être
+    }
+  }
+  const avecLui = (c, id) => !!(c && c.type === "prive" && Array.isArray(c.avec) && c.avec.some(a => a && +a.id === id));
+  /* après un blocage, sans recharger la page : ses messages disparaissent des conversations chargées, la conversation privée
+     avec lui disparaît de la liste (et se ferme si elle était ouverte), les contacts et les compteurs sont relus */
+  function apresBlocage(id, nom){
+    if (bloques && !bloques.some(b => b.id === id)) bloques = [...bloques, { id, nom: nom || "" }];
+    const u = U(), privees = new Set((liste || []).filter(c => avecLui(c, id)).map(c => c.id));
+    fils.forEach((f, cid) => {
+      if (avecLui(f.conv || itemDe(cid), id)) privees.add(cid);
+      else f.messages = f.messages.filter(m => +m.auteurId !== id);
+    });
+    privees.forEach(cid => fils.delete(cid));
+    if (liste) liste = liste.filter(c => !privees.has(c.id));
+    resume.nonlus = (liste || []).reduce((n, c) => n + (+c.nonlus || 0), 0); majPastilles();
+    contacts = null; contactsDate = 0;
+    if (u.conv && privees.has(u.conv)){
+      if (u.brouillons) delete u.brouillons[u.conv];
+      u.conv = null; u.vue = "liste"; filConv = null; filRendu = [];
+      if (history.state && history.state.mg){ try { history.back(); } catch(err){} }
+    }
+    if (racine) afficher();
+    chargerListe(); chargerResume();      // aperçus et non-lus recalculés par le serveur, sans ses messages
+  }
+  /* après un déblocage : les conversations déjà chargées sont relues (ses messages reviennent) */
+  function apresDeblocage(id){
+    if (bloques) bloques = bloques.filter(b => b.id !== id);
+    contacts = null; contactsDate = 0;
+    fils.forEach((f, cid) => { if (!f.envois.length && !f.enCours) fils.delete(cid); });
+    const u = U();
+    if (u.conv && !fils.has(u.conv)){ filConv = null; filRendu = []; if (zFil) zFil.textContent = ""; }
+    if (racine) afficher();
+    if (u.conv && racine && racine.isConnected) chargerConv(u.conv);
+    chargerListe(); chargerResume();
+  }
+  /* « Personnes bloquées » : la liste, avec « Débloquer » */
+  function htmlBloques(etat){
+    const l = bloques || [];
+    const corps = !bloques ? (etat ? `<p class="mg-dlg-vide">${e(etat)}</p>` : `<p class="mg-dlg-vide mg-charge"><span class="mg-roue" aria-hidden="true"></span> Chargement…</p>`)
+      : !l.length ? `<p class="mg-dlg-vide">Tu n'as bloqué personne.</p>`
+      : `<ul class="mg-dlg-bloques" role="list">${l.map(b => `<li><span class="mg-av mg-av-mini" style="--av:${teinte(b.id)}" aria-hidden="true">${e(initiales(b.nom))}</span>
+          <b>${e(b.nom)}</b><button type="button" class="btn contour petit" data-mg-debloquer="${+b.id}" data-nom="${e(b.nom)}" aria-label="Débloquer ${e(b.nom)}">Débloquer</button></li>`).join("")}</ul>`;
+    return `<div class="mg-dlg-tete"><b id="mg-dlg-titre" tabindex="-1"><span aria-hidden="true">⛔</span> Personnes bloquées</b>
+        <p>Tu ne vois pas leurs messages et elles ne peuvent pas t'écrire en privé. Elles ne reçoivent aucune notification du blocage, mais si l'une d'elles essaie de t'écrire en privé, l'appli lui répond : « Cette personne t'a bloqué ».</p></div>
+      ${corps}<p class="mg-dlg-info" role="status" aria-live="polite"></p>${ERREUR_DLG}${btsDlg(annuler("Fermer"))}`;
+  }
+  async function ouvrirBloques(){
+    ouvrirDlg("bloques", htmlBloques());
+    try { const d = await api({ bloques: 1 }); bloques = Array.isArray(d.bloques) ? d.bloques : []; majDlg("bloques", htmlBloques()); }
+    catch(err){ majDlg("bloques", htmlBloques(err.message)); }
+  }
+  async function debloquer(id, nom, bt){
+    if (bt) bt.disabled = true;
+    try {
+      await api({ bloquer: 1 }, { compte: id, bloque: false });
+      apresDeblocage(id);
+      majDlg("bloques", htmlBloques());
+      infoDlg(`Tu as débloqué ${prenomDe(nom)} : tu vois de nouveau ses messages.`);
+    } catch(err){ erreurDlg(err.message); if (bt) bt.disabled = false; }
+  }
+  /* bureau : les messages signalés (même dans une conversation privée qu'il ne peut pas ouvrir), avec « Supprimer » */
+  function htmlSignalements(etat){
+    const l = signalements || [];
+    const ligne = s => {
+      const d = date(s.date), sup = !!(s.message && s.message.supprime), tx = (s.message && s.message.texte) || "";
+      return `<li class="mg-sig"><div class="mg-sig-l1"><b>${e(s.auteur && s.auteur.nom)}</b>${s.auteur && s.auteur.libelle ? `<small>${e(s.auteur.libelle)}</small>` : ""}</div>
+        ${sup ? `<span class="mg-sig-etat"><span aria-hidden="true">🚫</span> ${tx ? "Supprimé de la conversation : seul le bureau le relit ici." : "Message supprimé"}</span>` : ""}
+        ${tx ? `<div class="mg-sig-t ${sup ? "mg-t-suppr" : ""}">${texteHtml(tx)}</div>` : ""}
+        <small class="mg-sig-par">Signalé par ${e(s.par && s.par.nom)}${d ? `, ${e(dateListe(s.date))}` : ""} · ${e(s.conv && s.conv.titre)}${s.motif ? `<br>Motif : « ${e(s.motif)} »` : ""}</small>
+        ${s.message && !sup ? `<button type="button" class="btn danger petit" data-mg-sig-suppr="${+s.message.id}">Supprimer ce message</button>` : ""}</li>`;
+    };
+    const corps = !signalements ? (etat ? `<p class="mg-dlg-vide">${e(etat)}</p>` : `<p class="mg-dlg-vide mg-charge"><span class="mg-roue" aria-hidden="true"></span> Chargement…</p>`)
+      : !l.length ? `<p class="mg-dlg-vide">Aucun message signalé.</p>` : `<ul class="mg-dlg-sigs" role="list">${l.map(ligne).join("")}</ul>`;
+    return `<div class="mg-dlg-tete"><b id="mg-dlg-titre" tabindex="-1"><span aria-hidden="true">🚩</span> Messages signalés</b>
+        <p>Les messages que des membres ont signalés, du plus récent au plus ancien. Relis-les rapidement : tu peux supprimer un message, ou désactiver un compte dans « Accès et rôles ».</p></div>
+      ${corps}<p class="mg-dlg-info" role="status" aria-live="polite"></p>${ERREUR_DLG}${btsDlg(annuler("Fermer"))}`;
+  }
+  async function ouvrirSignalements(){
+    if (!estBureau()) return;
+    ouvrirDlg("signalements", htmlSignalements());
+    try { const d = await api({ signalements: 1 }); signalements = Array.isArray(d.signalements) ? d.signalements : []; majDlg("signalements", htmlSignalements()); }
+    catch(err){ majDlg("signalements", htmlSignalements(err.message)); }
+  }
+  async function supprimerSignale(idMsg, bt){
+    if (!confirm("Supprimer ce message pour tout le monde ?")) return;
+    if (bt) bt.disabled = true;
+    try {
+      await api({ supprimer: 1 }, { message: idMsg });
+      (signalements || []).forEach(s => { if (s.message && s.message.id === idMsg) s.message.supprime = true; });   // le bureau garde le texte sous les yeux
+      fils.forEach(f => f.messages.forEach(m => { if (m.id === idMsg){ m.supprime = true; m.texte = ""; } }));
+      majDlg("signalements", htmlSignalements());
+      infoDlg("Message supprimé.");
+      if (racine && racine.isConnected && U().conv) rendreFil();
+      chargerListe();
+    } catch(err){ erreurDlg("Suppression impossible : " + err.message); if (bt) bt.disabled = false; }
+  }
+
   /* ================= NAVIGATION ================= */
   function convVisible(){
     const u = U();
@@ -761,7 +1024,8 @@
   /* ================= LES ÉVÉNEMENTS (les nôtres, jamais data-a) ================= */
   document.addEventListener("click", ev => {
     const t = ev.target; if (!t || !t.closest) return;
-    const b = t.closest("[data-mg-ouvrir],[data-mg-onglet-joueur],[data-mg-conv],[data-mg-retour],[data-mg-nouveau],[data-mg-groupe],[data-mg-contact],[data-mg-plus],[data-mg-suppr],[data-mg-muet],[data-mg-effacer],[data-mg-membres],[data-mg-bas],[data-mg-recharger],[data-mg-recharger-conv],[data-mg-contacts],[data-mg-notif-x],[data-mg-notif]");
+    const b = t.closest("[data-mg-ouvrir],[data-mg-onglet-joueur],[data-mg-conv],[data-mg-retour],[data-mg-nouveau],[data-mg-groupe],[data-mg-contact],[data-mg-plus],[data-mg-suppr],[data-mg-muet],[data-mg-effacer],[data-mg-membres],[data-mg-bas],[data-mg-recharger],[data-mg-recharger-conv],[data-mg-contacts],[data-mg-notif-x],[data-mg-notif],"
+      + "[data-mg-act],[data-mg-signaler],[data-mg-bloquer],[data-mg-bloquer-ok],[data-mg-debloquer],[data-mg-bloques],[data-mg-signalements],[data-mg-sig-suppr],[data-mg-dlg-fermer]");
     if (!b){
       const bu = t.closest("[data-mg-bulle]");
       if (bu && !t.closest("a") && racine && racine.contains(bu) && !(getSelection() && String(getSelection()).length)){
@@ -784,7 +1048,17 @@
     if ("mgGroupe" in d){ ouvrirAvec({ equipe: d.mgGroupe }); return; }
     if ("mgContact" in d){ ouvrirAvec({ avec: +d.mgContact }); return; }
     if ("mgPlus" in d){ chargerAvant(); return; }
-    if ("mgSuppr" in d){ supprimer(+d.mgSuppr); return; }
+    if ("mgSuppr" in d){ if (dlg && dlg.contains(b)) fermerDlg(); supprimer(+d.mgSuppr); return; }
+    // signaler, bloquer
+    if ("mgAct" in d){ menuMessage(+d.mgAct); return; }
+    if ("mgSignaler" in d){ formSignaler(+d.mgSignaler); return; }
+    if ("mgBloquerOk" in d){ bloquer(+d.mgBloquerOk, d.nom || "", b); return; }
+    if ("mgBloquer" in d){ confirmerBlocage(+d.mgBloquer, d.nom || "", +d.msg || 0); return; }
+    if ("mgDebloquer" in d){ debloquer(+d.mgDebloquer, d.nom || "", b); return; }
+    if ("mgBloques" in d){ ouvrirBloques(); return; }
+    if ("mgSignalements" in d){ ouvrirSignalements(); return; }
+    if ("mgSigSuppr" in d){ supprimerSignale(+d.mgSigSuppr, b); return; }
+    if ("mgDlgFermer" in d){ fermerDlg(); return; }
     if ("mgMuet" in d){ basculerMuet(); return; }
     if ("mgEffacer" in d){ effacerConv(); return; }
     if ("mgMembres" in d){ const u = U(); u.membres = !u.membres; rendreConv(); return; }
@@ -796,7 +1070,9 @@
     if ("mgNotif" in d){ [900, 2500, 6000, 12000].forEach(ms => setTimeout(majNotif, ms)); return; }   // data-a="notif-on" : l'application s'en charge
   });
   document.addEventListener("submit", ev => {
-    const f = ev.target; if (!f || !f.matches || !f.matches("[data-mg-form]")) return;
+    const f = ev.target; if (!f || !f.matches) return;
+    if (f.matches("[data-mg-sig-form]")){ ev.preventDefault(); envoyerSignalement(f); return; }
+    if (!f.matches("[data-mg-form]")) return;
     ev.preventDefault(); envoyer();
   });
   document.addEventListener("keydown", ev => {
@@ -1030,10 +1306,10 @@ body.sur-connexion .top .mg-haut{display:none}
 #tabbar-joueur .mg-tab .mg-badge{position:absolute;top:2px;right:18%}
 
 /* ----- l'écran de la messagerie ----- */
-.mg-app{--mg-fond:#0E1A3D;--mg-carte:#132046;--mg-ligne:rgba(143,168,240,.2);--mg-texte:#EEF2FC;--mg-doux:#AFC0EA;--mg-pale:#8193C4;
+.mg-app,.mg-dlg{--mg-fond:#0E1A3D;--mg-carte:#132046;--mg-ligne:rgba(143,168,240,.2);--mg-texte:#EEF2FC;--mg-doux:#AFC0EA;--mg-pale:#8193C4;
   --mg-lui:#1D2E62;--mg-lui-t:#EEF2FC;--mg-fil:#0A1431;--mg-on:rgba(47,107,255,.22);--mg-survol:rgba(143,168,240,.08);
   color:var(--mg-texte);font-family:var(--corps)}
-${L} .mg-app{--mg-fond:#fff;--mg-carte:#fff;--mg-ligne:#D5DBEA;--mg-texte:#16213F;--mg-doux:#56617E;--mg-pale:#6B7896;
+${L} .mg-app,${L} .mg-dlg{--mg-fond:#fff;--mg-carte:#fff;--mg-ligne:#D5DBEA;--mg-texte:#16213F;--mg-doux:#56617E;--mg-pale:#6B7896;
   --mg-lui:#fff;--mg-lui-t:#16213F;--mg-fil:#EAF0FB;--mg-on:rgba(28,79,214,.1);--mg-survol:rgba(28,79,214,.05)}
 .mg-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .mg-app [hidden]{display:none!important}
@@ -1163,6 +1439,76 @@ ${L} .mg-suppr{color:#B91C1C}
 @media (hover:hover){ .mg-l:hover .mg-suppr{opacity:1;pointer-events:auto} }
 .mg-l.mg-choisi .mg-suppr,.mg-suppr:focus-visible{opacity:1;pointer-events:auto}
 .mg-l.mg-choisi .mg-b{outline:2px solid rgba(127,166,255,.6);outline-offset:1px}
+/* « ⋯ » sur les messages des autres : au survol sur ordinateur, discret mais toujours là sur téléphone */
+.mg-act{flex:none;align-self:center;display:grid;place-items:center;width:34px;height:34px;padding:0;border-radius:50%;border:0;background:none;color:var(--mg-pale);
+  font:800 20px/1 var(--corps);cursor:pointer;opacity:0;transition:opacity .15s,background .15s}
+.mg-act:hover{background:var(--mg-survol);color:var(--mg-texte)}
+.mg-act:focus-visible{opacity:1;outline:3px solid #7FA6FF;outline-offset:1px}
+@media (hover:hover){ .mg-l:hover .mg-act{opacity:1} }
+@media (hover:none){ .mg-act{opacity:.5} }
+.mg-l.mg-choisi .mg-act{opacity:1}
+/* « Bloquer » dans l'en-tête d'une conversation privée */
+.mg-bloquer{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--mg-ligne);background:none;
+  color:var(--mg-doux);font:700 13.5px var(--corps);cursor:pointer}
+.mg-bloquer:hover{color:var(--mg-texte);border-color:rgba(248,113,113,.5);background:rgba(220,38,38,.1)}
+/* sous la liste des conversations */
+.mg-pied{flex:none;display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center;padding:8px 10px 10px;border-top:1px solid var(--mg-ligne)}
+.mg-pied-bt{min-height:40px;padding:6px 12px;border-radius:10px;border:0;background:none;color:var(--mg-doux);font:600 13.5px var(--corps);cursor:pointer}
+.mg-pied-bt:hover{color:var(--mg-texte);background:var(--mg-survol)}
+.mg-pied-bt:focus-visible{outline:3px solid #7FA6FF;outline-offset:-2px}
+/* la fenêtre : menu d'un message, signaler, bloquer, personnes bloquées, messages signalés */
+.mg-dlg{width:min(460px,calc(100vw - 32px));max-width:none;max-height:min(86vh,760px);margin:auto;padding:0;border:1px solid var(--mg-ligne);border-radius:20px;
+  background:var(--mg-carte);color:var(--mg-texte);font-family:var(--corps);box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden}
+.mg-dlg::backdrop{background:rgba(3,8,23,.62)}
+.mg-dlg.sans-modal{position:fixed;inset:0;z-index:2000;height:fit-content}
+.mg-dlg-c{display:grid;gap:12px;padding:18px 18px 16px;max-height:min(86vh,760px);overflow:auto;overscroll-behavior:contain}
+.mg-dlg-tete{display:grid;gap:6px}
+.mg-dlg-tete b{font:800 21px/1.2 var(--display);outline:none}
+.mg-dlg-tete p{margin:0;color:var(--mg-doux);font-size:15px;line-height:1.45}
+.mg-dlg-extrait{padding:9px 12px;border-radius:12px;background:var(--mg-fil);color:var(--mg-texte)!important;font-style:italic;overflow-wrap:anywhere}
+.mg-dlg-actions{display:grid;gap:6px}
+.mg-dlg-bt{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 14px;border-radius:14px;border:1px solid var(--mg-ligne);background:var(--mg-fond);
+  color:var(--mg-texte);font:700 16px var(--corps);text-align:left;cursor:pointer}
+.mg-dlg-bt:hover:not(:disabled){border-color:#7FA6FF;background:var(--mg-survol)}
+.mg-dlg-bt:focus-visible{outline:3px solid #7FA6FF;outline-offset:1px}
+.mg-dlg-bt:disabled{opacity:.7;cursor:default}
+.mg-dlg-bt.rouge{color:#FCA5A5}
+.mg-dlg-bt.doux{justify-content:center;border-color:transparent;background:none;color:var(--mg-doux)}
+${L} .mg-dlg-bt.rouge{color:#B91C1C}
+.mg-dlg-form{display:grid;gap:10px}
+.mg-dlg-label{display:block;margin:0;font-weight:700;font-size:15px}
+.mg-dlg-label small{display:inline;font-weight:400;font-size:14px;color:var(--mg-doux)}
+.mg-dlg-motif{width:100%;min-height:76px;resize:vertical;padding:10px 14px;border-radius:14px;border:1px solid var(--mg-ligne);background:var(--mg-fil);color:var(--mg-texte);font:16px/1.35 var(--corps)}
+.mg-dlg-motif:focus{outline:none;border-color:#5B8CFF;box-shadow:0 0 0 3px rgba(91,140,255,.25)}
+.mg-dlg-effets{margin:0;padding:0 0 0 20px;display:grid;gap:7px;font-size:15px;line-height:1.45}
+.mg-dlg-note{margin:0;font-size:14px;color:var(--mg-doux)}
+.mg-dlg-case{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid var(--mg-ligne);background:var(--mg-fond);cursor:pointer}
+.mg-dlg-case[hidden]{display:none}
+.mg-dlg-case:has(input:checked){border-color:#7FA6FF}
+.mg-dlg-case input{flex:none;width:22px;height:22px;margin:1px 0 0;accent-color:#2F6BFF;cursor:pointer}
+.mg-dlg-case span{display:grid;gap:3px;min-width:0}
+.mg-dlg-case b{font-size:15px}
+.mg-dlg-case small{color:var(--mg-doux);font-size:13px;font-style:italic;overflow-wrap:anywhere}
+.mg-dlg-btns{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:4px}
+.mg-dlg .btn{font-family:var(--display);min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.mg-dlg .btn.petit{min-height:38px}
+.mg-dlg-erreur{margin:0;padding:8px 12px;border-radius:12px;background:rgba(225,29,46,.14);border:1px solid rgba(225,29,46,.45);color:#FECACA;font-size:14px}
+${L} .mg-dlg-erreur{color:#991B1B;background:#FEE2E2}
+.mg-dlg-info{margin:0;font-size:14px;color:#4ADE80}
+.mg-dlg-info:empty{display:none}
+${L} .mg-dlg-info{color:#15803D}
+.mg-dlg-vide{margin:0;padding:16px 4px;text-align:center;color:var(--mg-doux)}
+.mg-dlg-vide.mg-charge{display:flex;align-items:center;justify-content:center;gap:10px}
+.mg-dlg-bloques,.mg-dlg-sigs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.mg-dlg-bloques li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:var(--mg-fond)}
+.mg-dlg-bloques li b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-sig{display:grid;gap:6px;justify-items:start;padding:10px 12px;border-radius:14px;background:var(--mg-fond);border:1px solid var(--mg-ligne)}
+.mg-sig-l1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.mg-sig-l1 small,.mg-sig-par{font-size:13px;color:var(--mg-doux);line-height:1.4}
+.mg-sig-t{font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.mg-sig-t a{color:inherit;text-decoration:underline}
+.mg-sig-etat{font-size:13px;font-weight:700;color:#FCA5A5}
+${L} .mg-sig-etat{color:#B91C1C}
 .mg-nouveaux{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);min-height:38px;padding:8px 16px;border-radius:999px;border:0;
   background:#2F6BFF;color:#fff;font:700 14px var(--corps);box-shadow:0 8px 20px rgba(0,0,0,.35);cursor:pointer}
 /* zone de saisie */
@@ -1224,6 +1570,12 @@ ${L} .mg-erreur{color:#991B1B;background:#FEE2E2}
   .mg-muet{padding:6px 10px;min-width:44px;min-height:44px;justify-content:center}
   .mg-effacer{padding:6px 10px;min-width:44px;min-height:44px;justify-content:center}
   .mg-effacer .mg-muet-t{display:none}
+  .mg-bloquer{padding:6px 10px;min-width:44px;min-height:44px;justify-content:center}
+  .mg-bloquer .mg-muet-t{display:none}
+  .mg-act{width:40px;height:40px}
+  .mg-dlg{width:100%;max-width:100%;margin:auto 0 0;border-radius:22px 22px 0 0;border-width:1px 0 0}
+  .mg-dlg-c{padding:18px 16px calc(14px + env(safe-area-inset-bottom,0px))}
+  .mg-dlg-btns .btn{flex:1 1 140px}
   .mg-muet-t{display:none}
   .mg-membres{margin:6px -12px -8px;padding:8px 12px}
   .mg-fil{padding:10px 10px 8px}
