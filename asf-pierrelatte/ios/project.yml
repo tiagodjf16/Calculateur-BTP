@@ -1,0 +1,35 @@
+# Appli iPhone du club (Atom'Sports Football Pierrelatte) : le projet Xcode est fabriqué à partir de ce fichier par XcodeGen
+# (sur les Mac de GitHub Actions, voir .github/workflows/ios.yml ; sur un Mac : brew install xcodegen && xcodegen generate).
+name: ASFPierrelatte
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: fr
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ASFPierrelatte:
+    type: application
+    platform: iOS
+    sources:
+      - path: ASFPierrelatte
+        excludes:
+          - "Info.plist"
+          - "ASFPierrelatte.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: ASFPierrelatte
+        PRODUCT_BUNDLE_IDENTIFIER: fr.asfpierrelatte.app
+        INFOPLIST_FILE: ASFPierrelatte/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: ASFPierrelatte/ASFPierrelatte.entitlements
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: Or
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: NO
