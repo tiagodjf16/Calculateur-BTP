@@ -56,6 +56,7 @@ jobs:
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build -quiet
       - name: iPhone virtuel
+        timeout-minutes: 12
         run: |
           xcrun simctl list devices available | grep -E "iPhone 1[6-9] Pro Max" || true
           UDID=$(xcrun simctl list devices available -j | python3 -c "
@@ -72,16 +73,18 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/ASFPierrelatte.app
       - name: Captures
+        timeout-minutes: 12
         run: |
           mkdir -p captures
           for p in accueil calendrier resultats classement compos club; do
-            xcrun simctl terminate "$UDID" fr.asfpierrelatte.app 2>/dev/null || true
-            xcrun simctl launch "$UDID" fr.asfpierrelatte.app -page "/#$p"
+            echo "::group::$p"
+            xcrun simctl launch --terminate-running-process "$UDID" fr.asfpierrelatte.app -page "/#$p" || echo "lancement impossible"
             sleep 14
-            xcrun simctl io "$UDID" screenshot "captures/$p.png"
+            # l'appli doit tourner encore (pas de plantage au démarrage)
+            xcrun simctl spawn "$UDID" launchctl list | grep -i "fr.asfpierrelatte" || echo "::warning::l'appli ne tourne plus après l'ouverture de $p"
+            xcrun simctl io "$UDID" screenshot --type=png "captures/$p.png" || echo "capture impossible"
+            echo "::endgroup::"
           done
-          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "ASFPierrelatte"' --style compact > captures/journal.txt 2>&1 || true
-          grep -iE "crash|fatal|exception" captures/journal.txt | head -20 || true
           ls -la captures
       - uses: actions/upload-artifact@v4
         with:
