@@ -35,65 +35,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee compilation.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
           grep -q "BUILD SUCCEEDED" compilation.log
 
-  # 2. « captures » : l'appli lancée dans deux iPhone virtuels : 17 Pro (6,3 pouces, 1206 x 2622, la taille exigée par
-  #    l'App Store) et 17 Pro Max (6,9 pouces, 1320 x 2868, facultative). Elle doit démarrer et afficher le site ;
-  #    les captures servent aussi pour la fiche App Store.
-  captures:
-    needs: compiler
-    runs-on: macos-26
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: asf-pierrelatte/ios
-    steps:
-      - uses: actions/checkout@v5
-      - name: Xcode 26.6 et projet
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.6.app
-          brew install xcodegen
-          xcodegen generate
-      - name: Compiler pour le simulateur
-        run: |
-          xcodebuild -project ASFPierrelatte.xcodeproj -scheme ASFPierrelatte -configuration Debug \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO build -quiet
-      - name: Captures dans deux iPhone virtuels
-        timeout-minutes: 30
-        run: |
-          prendre() {   # $1 : modèle, $2 : dossier
-            UDID=$(xcrun simctl list devices available -j | python3 -c "
-          import json,sys
-          d=json.load(sys.stdin)['devices']
-          for rt,l in sorted(d.items(), reverse=True):
-              for x in l:
-                  if x['name']=='$1' and x.get('isAvailable'): print(x['udid']); sys.exit()
-          ")
-            if [ -z "$UDID" ]; then echo "::warning::$1 introuvable"; return; fi
-            echo "::group::$1 ($UDID)"
-            xcrun simctl boot "$UDID" || true
-            xcrun simctl bootstatus "$UDID" -b
-            xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-            xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/ASFPierrelatte.app
-            mkdir -p "captures/$2"
-            for p in accueil calendrier resultats classement compos club; do
-              xcrun simctl launch --terminate-running-process "$UDID" fr.asfpierrelatte.app -page "/#$p" || echo "lancement impossible"
-              sleep 14
-              xcrun simctl spawn "$UDID" launchctl list | grep -qi "fr.asfpierrelatte" || echo "::warning::l'appli ne tourne plus après l'ouverture de $p ($1)"
-              xcrun simctl io "$UDID" screenshot --type=png "captures/$2/$p.png" || echo "capture impossible"
-            done
-            xcrun simctl shutdown "$UDID" || true
-            echo "::endgroup::"
-          }
-          prendre "iPhone 17 Pro" "6.3-pouces"
-          prendre "iPhone 17 Pro Max" "6.9-pouces"
-          ls -laR captures
-      - uses: actions/upload-artifact@v4
-        with:
-          name: captures-iphone
-          path: asf-pierrelatte/ios/captures
-          retention-days: 30
+  # (Les captures d'écran dans un iPhone virtuel de GitHub ont été retirées : le stade 3D du site, en WebGL, fige ces Mac
+  #  sans vraie carte graphique. Les captures pour l'App Store se prennent sur un iPhone avec TestFlight.)
 
-  # 3. « testflight » : l'appli signée et envoyée sur TestFlight (App Store Connect), sans Mac au club.
+  # 2. « testflight » : l'appli signée et envoyée sur TestFlight (App Store Connect), sans Mac au club.
   #    Seulement quand le message du commit contient [testflight], et quand les clés Apple sont dans les secrets du dépôt :
   #    APPLE_TEAM_ID, ASC_ISSUER_ID, ASC_KEY_ID, ASC_KEY_P8 (clé API App Store Connect, rôle Admin),
   #    CERTIFICATE_PRIVATE_KEY (clé RSA du certificat « Apple Distribution », créée une fois avec ssh-keygen).
