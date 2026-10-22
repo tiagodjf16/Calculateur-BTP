@@ -68,6 +68,56 @@
 	<string>Tes photos servent à choisir une image à envoyer au club (actualité, document de licence…).</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Pour enregistrer dans tes photos les affiches et les images du club.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Le micro sert à filmer une vidéo avec le son pour l'envoyer au club (actualités, réseaux sociaux du club).</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>fr.asfpierrelatte.matchs</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Matchs</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Le calendrier du club</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>calendar</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>/#calendrier</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>fr.asfpierrelatte.joueur</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Espace joueur</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Convocations et compos</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>person.crop.circle</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>/#joueur</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>fr.asfpierrelatte.club</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Espace club</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Coachs et bureau</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>shield.lefthalf.filled</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>/#espace</string>
+			</dict>
+		</dict>
+	</array>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Pour ajouter les matchs et les rendez-vous du club à ton calendrier.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>

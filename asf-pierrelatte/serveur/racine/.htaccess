@@ -23,6 +23,18 @@ RewriteRule ^api/upload/?$ api/upload.php [L]
 <Files "vapid.pem">
   Require all denied
 </Files>
+# clé des notifications iPhone (APNs) et ses réglages : jamais servis
+<FilesMatch "\.(p8|pem)$">
+  Require all denied
+</FilesMatch>
+<Files "apns-reglages.php">
+  Require all denied
+</Files>
+
+# Liens universels de l'appli iPhone : le fichier d'association est du JSON (sans extension)
+<Files "apple-app-site-association">
+  ForceType application/json
+</Files>
 
 # Les photos envoyées ne peuvent jamais être exécutées comme du code
 <IfModule mod_php.c>

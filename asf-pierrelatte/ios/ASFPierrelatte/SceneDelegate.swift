@@ -11,6 +11,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
            let url = activite.webpageURL {
             Navigation.shared.ouvrir(url: url)
         }
+        // appli lancée par un raccourci de l'icône (appui long) : Matchs, Espace joueur, Espace club
+        if let raccourci = connectionOptions.shortcutItem { ouvrir(raccourci) }
         let fenetre = UIWindow(windowScene: scene)
         fenetre.backgroundColor = Couleurs.fond
         fenetre.tintColor = Couleurs.or
@@ -23,6 +25,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if userActivity.activityType == NSUserActivityTypeBrowsingWeb, let url = userActivity.webpageURL {
             Navigation.shared.ouvrir(url: url)
         }
+    }
+
+    func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem,
+                     completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(ouvrir(shortcutItem))
+    }
+
+    @discardableResult
+    private func ouvrir(_ raccourci: UIApplicationShortcutItem) -> Bool {
+        guard let chemin = raccourci.userInfo?["url"] as? String else { return false }
+        Navigation.shared.ouvrir(chemin: chemin)
+        return true
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {

@@ -5,6 +5,7 @@
 //   POST /api/auth?action=deconnexion
 //   POST /api/auth?action=inscription    { nom, email, mdp, equipe, role, cle? }
 //   POST /api/auth?action=motdepasse     { ancien, nouveau }
+//   POST /api/auth?action=supprimer_moi  { mdp }                    (son propre compte)
 //   GET  /api/auth?action=comptes                                   (bureau)
 //   POST /api/auth?action=maj            { id, role, equipe, joueurNom, actif, licence? }   (bureau autorisé)
 //   L'espace joueur est réservé aux licenciés (numéro de licence du compte, ou de sa fiche dans les effectifs).
@@ -125,6 +126,35 @@ try {
         $longue = session_longue();
         $pdo->prepare('DELETE FROM sessions WHERE compte_id = ?')->execute([$c['id']]);
         ouvrir_session((int) $c['id'], $longue);
+        sortir(200, ['ok' => true]);
+    }
+
+    // supprimer son propre compte (exigé par Apple pour l'appli iPhone) : mot de passe demandé ;
+    // le dernier compte du bureau ne peut pas se supprimer (le club perdrait la main sur le site)
+    if ($action === 'supprimer_moi' && $m === 'POST') {
+        $c = compte_actuel();
+        if (!$c) sortir(401, ['erreur' => 'Connecte-toi d\'abord.']);
+        if (!password_verify((string) ($corps['mdp'] ?? ''), (string) $c['hash'])) {
+            $pdo->prepare('INSERT INTO tentatives (ip, moment) VALUES (?, NOW())')->execute([$_SERVER['REMOTE_ADDR'] ?? '']);
+            usleep(400000);
+            sortir(400, ['erreur' => 'Mot de passe incorrect.']);
+        }
+        $id = (int) $c['id'];
+        if (($c['role'] ?? '') === 'bureau') {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM comptes WHERE role = 'bureau' AND actif = 1 AND id <> ?");
+            $st->execute([$id]);
+            if ((int) $st->fetchColumn() === 0) sortir(400, ['erreur' => "Tu es le seul compte du bureau : donne d'abord l'accès bureau à quelqu'un d'autre."]);
+        }
+        // téléphones reliés à ce compte (notifications) et messages personnels en attente
+        if (is_file(__DIR__ . '/push-lib.php')) {
+            require_once __DIR__ . '/push-lib.php';
+            $abos = push_lire($pdo, 'site/abonnes') ?: [];
+            push_ecrire($pdo, 'site/abonnes', array_values(array_filter($abos, fn($a) => (string) ($a['compte'] ?? '') !== (string) $id)));
+        }
+        $pdo->prepare('DELETE FROM documents WHERE path IN (?, ?)')->execute(["notifs/c$id", "acces/c$id"]);
+        $pdo->prepare('DELETE FROM sessions WHERE compte_id = ?')->execute([$id]);
+        $pdo->prepare('DELETE FROM comptes WHERE id = ?')->execute([$id]);
+        fermer_session();
         sortir(200, ['ok' => true]);
     }
 
