@@ -88,7 +88,10 @@ final class WebViewController: UIViewController {
             guard let self else { return }
             self.majPont(etat: etat, jeton: jeton)
             self.estPret = true
-            self.webView.load(URLRequest(url: Navigation.shared.prendreEnAttente() ?? Appli.site))
+            // page de départ : lien en attente (notification, lien universel, raccourci), sinon l'accueil
+            // (« -page /#calendrier » au lancement : captures d'écran automatiques sur le simulateur)
+            let demandee = UserDefaults.standard.string(forKey: "page").flatMap { URL(string: $0, relativeTo: Appli.site)?.absoluteURL }
+            self.webView.load(URLRequest(url: Navigation.shared.prendreEnAttente() ?? demandee ?? Appli.site))
         }
     }
 

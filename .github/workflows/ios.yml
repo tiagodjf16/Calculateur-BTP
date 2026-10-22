@@ -33,3 +33,58 @@ jobs:
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee compilation.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
           grep -q "BUILD SUCCEEDED" compilation.log
+
+  # 2. « captures » : l'appli lancée dans un iPhone virtuel (17 Pro Max, écran 6,9 pouces, celui demandé par l'App Store) :
+  #    elle doit démarrer et afficher le site ; les captures servent aussi pour la fiche App Store.
+  captures:
+    needs: compiler
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: asf-pierrelatte/ios
+    steps:
+      - uses: actions/checkout@v5
+      - name: Xcode 26.6 et projet
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          brew install xcodegen
+          xcodegen generate
+      - name: Compiler pour le simulateur
+        run: |
+          xcodebuild -project ASFPierrelatte.xcodeproj -scheme ASFPierrelatte -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build -quiet
+      - name: iPhone virtuel
+        run: |
+          xcrun simctl list devices available | grep -E "iPhone 1[6-9] Pro Max" || true
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          for nom in ['iPhone 17 Pro Max','iPhone 16 Pro Max','iPhone 17 Pro','iPhone 16 Pro']:
+              for rt,l in sorted(d.items(), reverse=True):
+                  for x in l:
+                      if x['name']==nom and x.get('isAvailable'): print(x['udid']); sys.exit()
+          ")
+          echo "UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/ASFPierrelatte.app
+      - name: Captures
+        run: |
+          mkdir -p captures
+          for p in accueil calendrier resultats classement compos club; do
+            xcrun simctl terminate "$UDID" fr.asfpierrelatte.app 2>/dev/null || true
+            xcrun simctl launch "$UDID" fr.asfpierrelatte.app -page "/#$p"
+            sleep 14
+            xcrun simctl io "$UDID" screenshot "captures/$p.png"
+          done
+          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "ASFPierrelatte"' --style compact > captures/journal.txt 2>&1 || true
+          grep -iE "crash|fatal|exception" captures/journal.txt | head -20 || true
+          ls -la captures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captures-iphone
+          path: asf-pierrelatte/ios/captures
+          retention-days: 30
