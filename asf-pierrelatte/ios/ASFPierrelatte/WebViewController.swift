@@ -15,6 +15,10 @@ final class WebViewController: UIViewController {
     private var telechargements: [WKDownload: URL] = [:]
     private var derniereActivite = Date()
     private(set) var estPret = false
+    private let barre = Onglet.barre()
+    private var basSurBarre: NSLayoutConstraint!
+    private var basSurVue: NSLayoutConstraint!
+    private var pageActuelle = ""
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
@@ -49,15 +53,23 @@ final class WebViewController: UIViewController {
 
         horsLigne.isHidden = true
         horsLigne.surReessayer = { [weak self] in self?.recharger() }
+        barre.delegate = self
 
-        for v in [webView!, progression, horsLigne] as [UIView] {
+        for v in [webView!, barre, progression, horsLigne] as [UIView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(v)
         }
+        // la page s'arrête au-dessus de la barre d'onglets ; sans barre (espaces joueur et club), elle descend jusqu'en bas
+        basSurBarre = webView.bottomAnchor.constraint(equalTo: barre.topAnchor)
+        basSurVue = webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            basSurBarre,
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            barre.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            barre.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            barre.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            barre.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -49),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             progression.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             progression.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -69,6 +81,10 @@ final class WebViewController: UIViewController {
             horsLigne.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
 
+        // page du site (ancre) → onglet sélectionné, barre affichée ou non
+        observations.append(webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
+            self?.syncBarre(wv.url)
+        })
         observations.append(webView.observe(\.estimatedProgress, options: [.new]) { [weak self] wv, _ in
             guard let self else { return }
             let p = Float(wv.estimatedProgress)
@@ -117,6 +133,33 @@ final class WebViewController: UIViewController {
         } else {
             webView.load(URLRequest(url: url))
         }
+    }
+
+    /// une page publique du site (#calendrier, #club…)
+    func allerPage(_ page: String) {
+        guard var c = URLComponents(url: Appli.site, resolvingAgainstBaseURL: false) else { return }
+        c.fragment = page
+        if let u = c.url { aller(u) }
+    }
+
+    /// la page affichée a changé : onglet sélectionné, barre affichée sur les pages publiques
+    private func syncBarre(_ url: URL?) {
+        guard let url, Appli.estInterne(url) else { return }
+        let page = url.fragment ?? ""
+        pageActuelle = page
+        let cacher = Onglet.sansBarre(page)
+        if let o = Onglet.depuis(page: page) { barre.selectedItem = barre.items?[o.rawValue] }
+        else { barre.selectedItem = nil }
+        guard cacher != barre.isHidden else { return }
+        barre.isHidden = cacher
+        basSurBarre.isActive = !cacher
+        basSurVue.isActive = cacher
+        view.layoutIfNeeded()
+    }
+
+    /// réglage des notifications changé depuis le panneau « Plus » : la page le sait tout de suite
+    func notificationsChangees() {
+        Notifications.shared.etat { [weak self] e, j in self?.majPont(etat: e, jeton: j) }
     }
 
     private func memeDocument(_ a: URL, _ b: URL) -> Bool {
@@ -279,6 +322,10 @@ final class WebViewController: UIViewController {
             Calendrier.shared.ajouter(titre: titre, debut: debut.date, fin: fin?.date, journee: debut.journee,
                                       lieu: d["lieu"] as? String, notes: d["notes"] as? String, url: lien, depuis: self)
             return (true, nil)
+        case "cache-matchs":
+            // les prochains matchs, gardés sur le téléphone pour l'écran hors connexion
+            if let l = d["matchs"] as? [[String: Any]] { HorsLigneVue.garder(l) }
+            return (true, nil)
         case "vibrer":
             Vibreur.jouer(d["type"] as? String ?? "")
             return (true, nil)
@@ -435,5 +482,34 @@ extension WebViewController: WKDownloadDelegate {
         let a = UIAlertController(title: "Téléchargement impossible", message: error.localizedDescription, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         presenter(a)
+    }
+}
+
+// MARK: - barre d'onglets
+
+extension WebViewController: UITabBarDelegate {
+    func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+        guard let o = Onglet(rawValue: item.tag) else { return }
+        Vibreur.jouer("leger")
+        switch o {
+        case .accueil: allerPage("accueil")
+        case .matchs: allerPage("calendrier")
+        case .resultats: allerPage("resultats")
+        case .espace:
+            // comme le bouton du site : « Se connecter », ou l'espace joueur / dirigeant quand on est connecté
+            webView.evaluateJavaScript("(function(){ var a = document.getElementById('tab-espace'); return a && a.hash ? a.hash.slice(1) : 'connexion'; })()") { [weak self] r, _ in
+                self?.allerPage((r as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "connexion")
+            }
+        case .plus:
+            // « Plus » ouvre un panneau : l'onglet de la page reste sélectionné
+            syncBarre(webView.url)
+            let nav = UINavigationController(rootViewController: PlusVC(web: self))
+            nav.overrideUserInterfaceStyle = .dark
+            if let feuille = nav.sheetPresentationController {
+                feuille.detents = [.medium(), .large()]
+                feuille.prefersGrabberVisible = true
+            }
+            presenter(nav)
+        }
     }
 }

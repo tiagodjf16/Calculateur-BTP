@@ -88,3 +88,80 @@ jobs:
           name: captures-iphone
           path: asf-pierrelatte/ios/captures
           retention-days: 30
+
+  # 3. « testflight » : l'appli signée et envoyée sur TestFlight (App Store Connect), sans Mac au club.
+  #    Seulement quand le message du commit contient [testflight], et quand les clés Apple sont dans les secrets du dépôt :
+  #    APPLE_TEAM_ID, ASC_ISSUER_ID, ASC_KEY_ID, ASC_KEY_P8 (clé API App Store Connect, rôle Admin),
+  #    CERTIFICATE_PRIVATE_KEY (clé RSA du certificat « Apple Distribution », créée une fois avec ssh-keygen).
+  #    Le certificat et le profil App Store sont créés la première fois, puis réutilisés (codemagic-cli-tools, libre).
+  testflight:
+    needs: compiler
+    if: contains(github.event.head_commit.message, '[testflight]') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: fr.asfpierrelatte.app
+    defaults:
+      run:
+        working-directory: asf-pierrelatte/ios
+    steps:
+      - name: Clés Apple présentes ?
+        id: cles
+        working-directory: .
+        run: |
+          manque=""
+          for v in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY TEAM_ID; do
+            [ -n "${!v}" ] || manque="$manque $v"
+          done
+          if [ -z "$manque" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"
+          else echo "::warning title=TestFlight::Secrets GitHub manquants :$manque — envoi sauté."; fi
+      - if: steps.cles.outputs.ok == '1'
+        uses: actions/checkout@v5
+      - name: Outils (Xcode 26.6, XcodeGen, codemagic-cli-tools)
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          brew install xcodegen
+          python3 -m venv "$RUNNER_TEMP/cm"
+          "$RUNNER_TEMP/cm/bin/pip" install --quiet codemagic-cli-tools
+          echo "$RUNNER_TEMP/cm/bin" >> "$GITHUB_PATH"
+      - name: Projet Xcode, numéro de build qui augmente à chaque envoi
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          BUILD=$(date -u +%y%j%H%M)
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD\"/" project.yml
+          xcodegen generate
+          echo "Build $BUILD"
+      - name: Signature (certificat Apple Distribution et profil App Store)
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --platform IOS --type IOS_APP_STORE --create --strict-match-identifier
+          keychain add-certificates
+          xcode-project use-profiles --project ASFPierrelatte.xcodeproj
+      - name: Fabriquer l'appli (.ipa)
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          xcode-project build-ipa --project ASFPierrelatte.xcodeproj --scheme ASFPierrelatte --config Release
+          ls -la build/ios/ipa
+      - name: Vérifier les droits (notifications en production, liens universels)
+        if: steps.cles.outputs.ok == '1'
+        run: |
+          rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa"
+          unzip -q build/ios/ipa/*.ipa -d "$RUNNER_TEMP/ipa"
+          codesign -d --entitlements - --xml "$RUNNER_TEMP"/ipa/Payload/*.app > "$RUNNER_TEMP/droits.plist" 2>/dev/null || codesign -d --entitlements :- "$RUNNER_TEMP"/ipa/Payload/*.app > "$RUNNER_TEMP/droits.plist"
+          plutil -p "$RUNNER_TEMP/droits.plist"
+          grep -q "production" "$RUNNER_TEMP/droits.plist"
+          grep -q "applinks:asf-pierrelatte.fr" "$RUNNER_TEMP/droits.plist"
+      - name: Envoyer sur App Store Connect (TestFlight)
+        if: steps.cles.outputs.ok == '1'
+        run: app-store-connect publish --path "$(ls build/ios/ipa/*.ipa | head -1)"
+      - name: Nettoyer le trousseau
+        if: always() && steps.cles.outputs.ok == '1'
+        run: keychain use-login || true

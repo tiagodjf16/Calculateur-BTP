@@ -80,6 +80,26 @@
     cocher();
   }
 
+  /* ---------- appli iPhone : les prochains matchs gardés sur le téléphone (écran « pas de connexion ») ---------- */
+  if (window.ASFApp && typeof window.ASFApp.appeler === "function"){
+    let envoye = "";
+    const garder = () => {
+      try {
+        if (!Array.isArray(S.matchs) || !S.matchs.length) return;
+        const auj = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });         // AAAA-MM-JJ, heure de Paris
+        const l = S.matchs.filter(m => m && typeof m.date === "string" && m.date >= auj && m.adv)
+          .sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || ""))).slice(0, 30)
+          .map(m => ({ date: m.date, heure: m.heure || "", equipe: m.equipe || "", adv: m.adv || "", dom: m.dom !== false, comp: m.comp || "", lieu: m.adresse || "" }));
+        const j = JSON.stringify(l);
+        if (j === envoye) return;
+        envoye = j;
+        window.ASFApp.appeler("cache-matchs", { matchs: l }).catch(() => {});
+      } catch(e){}
+    };
+    setTimeout(garder, 4000);
+    setInterval(garder, 30000);
+  }
+
   const css = document.createElement("style");
   css.id = "compte-appli-css";
   css.textContent = `.cx-suppr summary{color:#F2A3A3}.cx-suppr .cx-note a{color:inherit}`;

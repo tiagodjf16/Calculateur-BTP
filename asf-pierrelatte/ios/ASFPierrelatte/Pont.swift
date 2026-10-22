@@ -77,7 +77,11 @@ enum Pont {
           /* impression : la fenêtre d'impression d'iOS */
           window.print = function(){ appeler("imprimer").then(rien, rien); };
 
-          var marquer = function(){ if (document.documentElement) document.documentElement.classList.add("app-ios"); };
+          /* la barre d'onglets de l'appli remplace celle des pages publiques du site (l'espace joueur garde la sienne) */
+          var css = ".tabbar:not(.tabbar-joueur),#plus{display:none!important}body:not(.sur-joueur){padding-bottom:12px!important}";
+          var poser = function(){ if (!document.head || document.getElementById("asf-app-css")) return; var st = document.createElement("style"); st.id = "asf-app-css"; st.textContent = css; document.head.appendChild(st); };
+
+          var marquer = function(){ if (document.documentElement) document.documentElement.classList.add("app-ios"); poser(); };
           marquer(); document.addEventListener("DOMContentLoaded", marquer);
         })();
         """
