@@ -10,6 +10,9 @@
    - Corrige le petit carré « + » perdu en bas à gauche de l'écran : l'icône des blocs dépliants (span.plus) prenait la
      position fixe du menu « Plus » du site (et disparaissait au téléphone).
    Stages : on range ce que rend l'application (avec le bouton « Créer l'affiche » ajouté par evenements.js).
+   Paiement des inscrits : un bouton « À payer » / « ✓ Payé » par enfant (paye, payeLe, payePar sur sa fiche
+   inscrits-stage), « 💶 N à payer » en tête du stage, et l'export Excel avec le moyen de paiement, payé ou à payer, la date
+   et qui l'a noté.
    Inscriptions, Réunions, Bénévoles : refaits à partir des données (S.licences, S.reunions, S.benevoles, S.engagements),
    avec les mêmes data-a, data-c, data-form, name, data-l / data-u / data-statut / data-re / data-b2.
    Ajouté sans modifier le script de l'application. */
@@ -124,7 +127,8 @@
   const AIDE_STAGES = `<ol>
       <li>Touche <b>« + Nouveau stage »</b> : mets le titre, les dates et l'affiche déjà faite (une image).</li>
       <li>Laisse <b>« Publier sur le site »</b> coché : le stage apparaît sur le site et les familles inscrivent leurs enfants en ligne.</li>
-      <li>Les inscrits arrivent ici tout seuls. <b>« Exporter la liste »</b> donne un fichier à ouvrir avec Excel.</li>
+      <li>Les inscrits arrivent ici tout seuls. Une famille a réglé ? Touche <b>« À payer »</b> à côté de l'enfant : il passe à <b>« ✓ Payé »</b>.</li>
+      <li><b>« Exporter la liste »</b> donne un fichier à ouvrir avec Excel, avec qui a payé et qui reste à payer.</li>
       <li>C'est complet ? Touche <b>« Fermer les inscriptions »</b>.</li></ol>`;
 
   /* ---------- les catégories d'un stage : toutes les catégories jeunes, on coche celles qui peuvent s'inscrire ----------
@@ -259,6 +263,7 @@
     const img = q("img.st-mini"), lien = img ? (img.closest("a") || img) : null;
     const table = q(".st-table-zone"), fiches = q(".st-ins-liste");
     const n = l.length, places = +x.places || 0, pct = places ? Math.min(100, Math.round(n / places * 100)) : 0;
+    const nAPayer = l.filter(i => i.paye !== true).length;
     const liste = ORDRE_CATS;
     const parCat = [...liste, ...[...new Set(l.map(i => i.categorie))].filter(k => k && !liste.includes(k))]
       .map(k => [k, l.filter(i => i.categorie === k).length]).filter(p => p[1]);
@@ -268,6 +273,7 @@
       passe ? chip("Terminé", "gris") : "",
       x.publie ? chip("✓ Publié sur le site", "vert") : chip("Brouillon · pas sur le site", "gris"),
       ouvert ? chip("Inscriptions ouvertes", passe ? "gris" : "vert") : chip("Inscriptions fermées", "rouge"),
+      n ? (nAPayer ? chip(`💶 ${nAPayer} à payer`, "jaune") : chip("✓ Tout est payé", "vert")) : "",
     ].join("");
     const infos = [cats, x.tarif, x.lieu && x.lieu !== (typeof ADRESSE_STADE === "string" ? ADRESSE_STADE : "") ? x.lieu : ""].filter(Boolean).map(e).join(" · ");
     const cleIns = "vie-st-ins-" + id;
@@ -304,11 +310,99 @@
       const nom = (b.closest("tr") && b.closest("tr").querySelector("td")) ? b.closest("tr").querySelector("td").textContent.trim() : "";
       b.textContent = "✕"; b.title = "Retirer l'inscription"; b.setAttribute("aria-label", `Retirer l'inscription${nom ? " de " + nom : ""}`);
     });
+    decorerPaiements(table, fiches, l);
     place("inscrits", [table, fiches]);
     c.textContent = "";
     c.classList.add("ong-vie-stage", "ovc");
     c.classList.toggle("passe", !!passe);
     c.appendChild(z);
+  }
+
+  /* ---------- paiement des inscrits : « À payer » / « ✓ Payé », un appui ----------
+     Sur la fiche inscrits-stage : paye (true quand la famille a réglé), payeLe (date ISO), payePar (qui l'a noté).
+     Le moyen choisi par la famille à l'inscription (Chèque, Espèces, Carte bancaire) reste écrit dessous. */
+  const nomEnfant = i => `${i.prenom || ""} ${i.nom || ""}`.trim() || "cet enfant";
+  const jourPaie = s => { try { const d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); } catch(err){ return ""; } };
+  const quiNote = () => { try { return String((S.compte && S.compte.nom) || (S.moi && S.moi.name) || "").trim(); } catch(err){ return ""; } };
+  function boutonPaie(i){
+    const nom = nomEnfant(i);
+    if (i.paye === true){
+      const quand = jourPaie(i.payeLe), infos = [quand ? "payé le " + quand : "", i.payePar ? "noté par " + i.payePar : ""].filter(Boolean).join(", ");
+      return `<button type="button" class="ovs-paie-bt paye" data-vie-paye="${e(i.id)}" aria-pressed="true"
+        title="${e(infos ? infos.charAt(0).toUpperCase() + infos.slice(1) + ". " : "")}Touche pour remettre à payer."
+        aria-label="${e(nom)} : payé${infos ? ", " + e(infos) : ""}. Touche pour remettre à payer.">✓ Payé</button>`;
+    }
+    return `<button type="button" class="ovs-paie-bt a-payer" data-vie-paye="${e(i.id)}" aria-pressed="false"
+      title="Touche quand la famille a réglé." aria-label="${e(nom)} : à payer. Touche quand la famille a réglé.">À payer</button>`;
+  }
+  function decorerPaiements(table, fiches, l){
+    const parId = {}; l.forEach(i => { parId[i.id] = i; });
+    const detail = i => [i.paiement || "", i.paye === true && jourPaie(i.payeLe) ? "le " + jourPaie(i.payeLe) : ""].filter(Boolean).map(e).join(" · ");
+    if (table){
+      const k = [...table.querySelectorAll("thead th")].findIndex(th => /paiement/i.test(th.textContent));
+      table.querySelectorAll("tr[data-ins]").forEach(tr => {
+        const i = parId[tr.dataset.ins], td = k >= 0 ? tr.children[k] : null; if (!i || !td) return;
+        const d = detail(i);
+        td.innerHTML = `<div class="ovs-paie">${boutonPaie(i)}${d ? `<small class="ovs-paie-mode">${d}</small>` : ""}</div>`;
+        tr.classList.add(i.paye === true ? "ovs-paye" : "ovs-a-payer");
+      });
+    }
+    if (fiches) fiches.querySelectorAll(".st-ins[data-ins]").forEach(f => {
+      const i = parId[f.dataset.ins]; if (!i) return;
+      f.classList.add(i.paye === true ? "ovs-paye" : "ovs-a-payer");
+      const ligne = [...f.querySelectorAll(".st-ins-ligne")].find(x => x.firstElementChild && x.firstElementChild.textContent.trim() === "💶");
+      if (ligne){
+        const t = ligne.children[1];
+        if (t && i.paye === true && jourPaie(i.payeLe)) t.textContent = `${i.paiement || "Payé"} · payé le ${jourPaie(i.payeLe)}`;
+        ligne.classList.add("ovs-paie-ligne");
+        ligne.insertAdjacentHTML("beforeend", boutonPaie(i));
+      } else {
+        const tete = f.querySelector(".st-ins-tete"); if (tete) tete.insertAdjacentHTML("afterend", `<div class="st-ins-ligne ovs-paie-ligne"><span>💶</span><span>${e(i.paiement || "—")}</span>${boutonPaie(i)}</div>`);
+      }
+    });
+  }
+  document.addEventListener("click", async ev => {
+    const b = ev.target && ev.target.closest && ev.target.closest("#panneau [data-vie-paye]");
+    if (!b || b.disabled) return;
+    ev.preventDefault();
+    const id = b.dataset.viePaye, i = (S.inscritsStage || []).find(x => x.id === id); if (!i) return;
+    const nom = nomEnfant(i), paye = i.paye !== true;
+    // remettre « à payer » se demande (un appui de trop sur le téléphone) ; noter « payé » part tout de suite
+    if (!paye && !confirm(`Remettre ${nom} à payer ?`)) return;
+    b.disabled = true; b.classList.add("encours");
+    const champs = paye ? { paye: true, payeLe: new Date().toISOString(), payePar: quiNote() } : { paye: false, payeLe: null, payePar: null };
+    const ok = await ecrire(() => S.db.doc("inscrits-stage/" + id).update(champs), paye ? `💶 ${nom} : payé.` : `${nom} : remis à payer.`);
+    if (ok && typeof rendrePanneau === "function") rendrePanneau();
+    else { b.disabled = false; b.classList.remove("encours"); }
+  });
+
+  /* ---------- l'export Excel : tout ce que la famille a rempli, et le paiement ----------
+     Mêmes colonnes qu'avant, plus : payé ou à payer, la date, qui l'a noté. Téléphones écrits « 06 12 34 56 78 » :
+     Excel les garde en texte (sinon il enlève le 0 du début). */
+  if (typeof window.exporterStage === "function"){
+    const exportAvant = window.exporterStage;
+    const telTexte = t => {
+      const brut = String(t == null ? "" : t).trim(), c = brut.replace(/[^\d+]/g, "");
+      if (/^0\d{9}$/.test(c)) return c.replace(/(\d{2})(?=\d)/g, "$1 ");
+      if (/^\+33\d{9}$/.test(c)) return "+33 " + c.slice(3, 4) + " " + c.slice(4).replace(/(\d{2})(?=\d)/g, "$1 ");
+      return /^\+?\d+$/.test(brut) ? `="${brut}"` : brut;               // que des chiffres : texte pour Excel
+    };
+    const dateFr = (s, heure) => { try { const d = new Date(s); return isNaN(d) ? "" : heure ? d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : d.toLocaleDateString("fr-FR"); } catch(err){ return ""; } };
+    window.exporterStage = function(st){
+      try {
+        const ins = (S.inscritsStage || []).filter(i => i.stageId === st.id)
+          .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr") || (a.prenom || "").localeCompare(b.prenom || "", "fr"));
+        const cel = v => { const s = String(v == null ? "" : v); return /^="/.test(s) ? s : `"${s.replace(/"/g, '""')}"`; };
+        const lignes = [["Nom", "Prénom", "Catégorie", "Date de naissance", "Téléphone", "E-mail", "Moyen de paiement", "Paiement", "Payé le", "Noté par", "Inscrit le"].map(cel).join(";"),
+          ...ins.map(i => [i.nom, i.prenom, i.categorie, i.naissance ? jd(i.naissance).toLocaleDateString("fr-FR") : "", telTexte(i.telephone), i.mail, i.paiement,
+            i.paye === true ? "Payé" : "À payer", i.paye === true && i.payeLe ? dateFr(i.payeLe) : "", i.paye === true ? (i.payePar || "") : "",
+            i.recu ? dateFr(i.recu, true) : ""].map(cel).join(";"))];
+        const blob = new Blob(["﻿" + lignes.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `inscrits-${slug(st.titre || "stage")}.csv`; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+      } catch(err){ if (window.console) console.warn("onglets-vie export", err); return exportAvant.apply(this, arguments); }
+    };
   }
 
   emballer("panStages", function(original){
@@ -692,6 +786,22 @@ ${R} .ovs-ins .st-table-zone{margin-top:0}
 ${R} .ovs-ins .st-table th,${R} .ovs-ins .st-table td{text-align:left;padding:9px 12px;vertical-align:middle}
 ${R} .ovs-ins .st-table td:last-child{text-align:right;width:56px}
 ${R} .ovs-ins .st-table .btn.petit{min-height:36px;min-width:40px;padding:4px 10px}
+/* paiement d'un inscrit : « À payer » (orange, case vide) ou « ✓ Payé » (vert), un appui */
+${R} .ovs-paie{display:grid;justify-items:start;gap:4px}
+${R} .ovs-paie-mode{font-size:12.5px;line-height:1.3;color:#AFC0EA}
+${R} .ovs-paie-bt{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:6px 14px;border-radius:999px;border:1.5px solid;font:800 14px var(--corps);white-space:nowrap;cursor:pointer;transition:background .15s,transform .1s}
+${R} .ovs-paie-bt.a-payer{background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.65);color:#F7C566}
+${R} .ovs-paie-bt.a-payer::before{content:"";width:13px;height:13px;border-radius:4px;border:2px solid currentColor;flex:none}
+${R} .ovs-paie-bt.a-payer:hover{background:rgba(245,166,35,.22)}
+${R} .ovs-paie-bt.paye{background:#16A34A;border-color:#16A34A;color:#fff}
+${R} .ovs-paie-bt.paye:hover{background:#15803D}
+${R} .ovs-paie-bt:active{transform:scale(.97)}
+${R} .ovs-paie-bt:focus-visible{outline:3px solid #7FA6FF;outline-offset:2px}
+${R} .ovs-paie-bt.encours{opacity:.6;cursor:progress}
+${R} .st-ins.ovs-a-payer{border-left:4px solid #F5A623}
+${R} .st-ins.ovs-paye{border-left:4px solid #22C55E}
+${R} .st-ins .ovs-paie-ligne{flex-wrap:wrap}
+${R} .st-ins .ovs-paie-bt{margin-left:auto;min-height:42px;padding:8px 16px}
 /* --- inscriptions --- */
 ${R} .ovl-reglage>summary{font:800 19px var(--display);flex-wrap:wrap;row-gap:4px}
 ${R} .ovl-reglage>summary .plus{font-size:16px;background:rgba(143,168,240,.22)}
@@ -746,6 +856,8 @@ ${R} .ovb-fl{color:#F3D48A}
 :root[data-theme="light"] ${R} .ovc-chip.jaune{background:rgba(217,119,6,.14);color:#92400E}
 :root[data-theme="light"] ${R} .ovc-chip.rouge,:root[data-theme="light"] ${R} .ovl-resume.rouge{background:rgba(220,38,38,.1);color:#B91C1C}
 :root[data-theme="light"] ${R} .ovc-chip.bleu{background:rgba(28,79,214,.1);color:#1C4FD6}
+:root[data-theme="light"] ${R} .ovs-paie-bt.a-payer{background:rgba(217,119,6,.1);border-color:#D97706;color:#92400E}
+:root[data-theme="light"] ${R} .ovs-paie-mode{color:var(--texte-doux)}
 :root[data-theme="light"] ${R} .ovs-compte,:root[data-theme="light"] ${R} .ovs-ins,:root[data-theme="light"] ${R} .ovr-bloc,:root[data-theme="light"] ${R} .ong-vie-grp{background:rgba(28,79,214,.04);border-color:#D5DEF5}
 :root[data-theme="light"] ${R} .ovr-cr{background:rgba(22,163,74,.06);border-color:rgba(22,163,74,.3)}
 :root[data-theme="light"] ${R} .ovb-nom{background:rgba(28,79,214,.07);border-color:#D5DEF5}
