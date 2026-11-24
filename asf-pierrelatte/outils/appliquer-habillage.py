@@ -1,6 +1,6 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build3.py <original.html> <tete.css> <tard.css> <appli.js> <output.html> [--test]
+Usage: python3 build4.py <original.html> <tete.css> <tard.css> <appli.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
   appli.js : <script> added at the end of <body> (intro, club tabs, foot d'animation page, match events)
@@ -158,10 +158,13 @@ CLUB_PAGE = f"""<div class="page" id="p-club">
     <h2>Les <span class="t-or">installations</span></h2>
     <div class="install">
       {inst("siege", "Siège social", "Complexe sportif Gustave Jaume<br>Avenue Pierre de Coubertin<br>26700 Pierrelatte", "Complexe sportif Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
-      {inst("terrain", "Stade Gustave Jaume", "Terrain d'honneur et annexe<br>Avenue Pierre de Coubertin, 26700 Pierrelatte", "Stade Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
       {inst("terrain", "Stade Michel Hidalgo", "205 allée Fernand Pellegrin<br>26290 Donzère", "205 Allée Fernand Pellegrin, 26290 Donzère")}
+      {inst("terrain", "Stade Gustave Jaume 2", "Annexe<br>Avenue Pierre de Coubertin<br>26700 Pierrelatte", "Stade Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
+      {inst("terrain", "Stade Gustave Jaume 1", "Terrain d'honneur<br>Avenue Pierre de Coubertin<br>26700 Pierrelatte", "Stade Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
       {inst("terrain", "Terrains sud et du Rocher", "Entraînements des jeunes<br>Pierrelatte")}
     </div>
+    <h2 id="club-staff-t" hidden>Le <span class="t-or">staff</span></h2>
+    <div class="staff" id="club-staff" hidden></div>
     <div class="club-deux">
       <div><h2>Notre <span class="t-or">histoire</span></h2>
         <div class="frise">
@@ -189,11 +192,17 @@ for pid in ("p-calendrier", "p-resultats", "p-classement"):
 html = sub_once('<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n',
                 '<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n  ' + SEG + "\n", html, "seg-tournois")
 
+# 9b) ÉQUIPES: the app's list (filled by appli.js); one page per team (#equipe/<name>)
+html = sub_once('<div class="diapo" id="diapo-equipes"></div>', '<div class="eqa" id="eq-appli"></div>\n    <div class="diapo" id="diapo-equipes"></div>', html, "eq-appli")
+html = sub_once('<div class="page" id="p-photos">', '<div class="page" id="p-equipe"><div id="eqp"></div></div>\n\n<div class="page" id="p-photos">', html, "p-equipe")
+html = sub_once('const p = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil";',
+                'const p = PAGES.includes(location.hash.slice(1).split("/")[0]) ? location.hash.slice(1).split("/")[0] : "accueil";', html, "route")
+
 # 10) FOOT D'ANIMATION: a page of its own (filled by appli.js), known by the router and the menu
 html = sub_once('<div class="page" id="p-photos">',
                 '<div class="page" id="p-animation">\n  <section class="bloc"><div class="wrap" id="fa-zone"></div></section>\n</div>\n\n<div class="page" id="p-photos">',
                 html, "p-animation")
-html = sub_once('const PAGES = ["portail",', 'const PAGES = ["animation","portail",', html, "pages")
+html = sub_once('const PAGES = ["portail",', 'const PAGES = ["animation","equipe","portail",', html, "pages")
 html = sub_once('["Compos", "#compos"], ["Tournois", "#tournois"]]]',
                 '["Compos", "#compos"], ["Tournois", "#tournois"], ["Foot d\'animation", "#animation"]]]', html, "nav-public")
 

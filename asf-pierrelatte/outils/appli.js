@@ -48,9 +48,9 @@
   }
 
   /* ---------- onglets du club : l'onglet de la page ouverte, bien en vue ---------- */
-  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", legal: "", confidentialite: "", espaces: "" };
+  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", equipe: "equipes", legal: "", confidentialite: "", espaces: "" };
   function majOnglets(){
-    const h = (location.hash.slice(1) || "accueil").split("?")[0];
+    const h = (location.hash.slice(1) || "accueil").split(/[?/]/)[0];
     const o = h in ONGLET_DE ? ONGLET_DE[h] : h;
     const nav = document.getElementById("club-onglets");
     if (nav){
@@ -75,6 +75,33 @@
   const PIN2 = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
   const logoClub = () => (typeof LOGO_SRC !== "undefined" ? `<span class="cl-blason"><img src="${LOGO_SRC}" alt=""></span>` : "");
   const nomClub = "Atom'Sports Football Pierrelatte";
+  function faCarte(g){
+    const m = g[0], jour = new Date(m.date + "T12:00:00");
+    const date = jour.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    const heure = m.heure ? " - " + String(m.heure).replace(":", "h") : "";
+    const org = m.dom ? `${logoClub()}<div><b>${escA(nomClub)}</b><span>(Club organisateur)</span></div>`
+      : `${typeof blasonPetit === "function" ? blasonPetit(m.adv || "") : ""}<div><b>${escA(m.adv || "Club organisateur")}</b><span>(Club organisateur)</span></div>`;
+    const adr = String(m.adresse || (m.dom && typeof ADRESSE_STADE !== "undefined" ? ADRESSE_STADE : "") || "");
+    const i = adr.indexOf(","), terrain = i > 0 ? adr.slice(0, i) : adr, rue = i > 0 ? adr.slice(i + 1).trim() : "";
+    const nos = [...new Set(g.map(x => x.equipe).filter(Boolean))];
+    const adv = [...new Set(g.flatMap(x => Array.isArray(x.adversaires) ? x.adversaires : []))].filter(n => !/pierrelatte/i.test(n));
+    const q = encodeURIComponent(adr || m.adv || "");
+    return `<article class="fa-carte" data-fa="${escA(m.id)}" role="button" tabindex="0">
+      <h3 class="fa-date">${escA(date)}${escA(heure)}</h3>
+      <div class="fa-org">${org}</div>
+      ${adr ? `<div class="fa-lieu"><div><b>${TERR}${escA(terrain)}</b>${rue ? `<span>${escA(rue)}</span>` : ""}</div>
+        <a class="pin" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener" aria-label="Voir le lieu sur le plan" data-fa-pin>${PIN2}</a></div>` : ""}
+      <div class="fa-eqs">${GENS}${adv.length ? `${adv.length + 1} clubs` : `${nos.length} équipe${nos.length > 1 ? "s" : ""}`}</div>
+      <div class="fa-dont">Dont :<ul>${nos.map(n => `<li>${logoClub()}${escA(nomClub)} · ${escA(n)}</li>`).join("")}</ul></div>
+      ${adv.length ? `<p class="fa-avec">Avec : ${adv.map(escA).join(", ")}</p>` : ""}</article>`;
+  }
+  /* plateaux d'une liste : un seul bloc par lieu et par horaire (nos équipes réunies) */
+  function faGroupes(l){
+    const groupes = new Map();
+    l.forEach(m => { const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
+      if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(m); });
+    return [...groupes.values()].map(faCarte).join("");
+  }
   function rendreAnimation(force){
     const z = document.getElementById("fa-zone"); if (!z || typeof S === "undefined") return;
     const l0 = Array.isArray(S.matchsAnimation) ? S.matchsAnimation : [];
@@ -90,26 +117,7 @@
       groupes.get(k).push(m);
     });
     const liste = [...groupes.values()].sort((a, b) => (a[0].date + (a[0].heure || "")).localeCompare(b[0].date + (b[0].heure || "")));
-    const carte = g => {
-      const m = g[0], jour = new Date(m.date + "T12:00:00");
-      const date = jour.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-      const heure = m.heure ? " - " + String(m.heure).replace(":", "h") : "";
-      const org = m.dom ? `${logoClub()}<div><b>${escA(nomClub)}</b><span>(Club organisateur)</span></div>`
-        : `${typeof blasonPetit === "function" ? blasonPetit(m.adv || "") : ""}<div><b>${escA(m.adv || "Club organisateur")}</b><span>(Club organisateur)</span></div>`;
-      const adr = String(m.adresse || (m.dom && typeof ADRESSE_STADE !== "undefined" ? ADRESSE_STADE : "") || "");
-      const i = adr.indexOf(","), terrain = i > 0 ? adr.slice(0, i) : adr, rue = i > 0 ? adr.slice(i + 1).trim() : "";
-      const nos = [...new Set(g.map(x => x.equipe).filter(Boolean))];
-      const adv = [...new Set(g.flatMap(x => Array.isArray(x.adversaires) ? x.adversaires : []))].filter(n => !/pierrelatte/i.test(n));
-      const q = encodeURIComponent(adr || m.adv || "");
-      return `<article class="fa-carte" data-fa="${escA(m.id)}" role="button" tabindex="0">
-        <h3 class="fa-date">${escA(date)}${escA(heure)}</h3>
-        <div class="fa-org">${org}</div>
-        ${adr ? `<div class="fa-lieu"><div><b>${TERR}${escA(terrain)}</b>${rue ? `<span>${escA(rue)}</span>` : ""}</div>
-          <a class="pin" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener" aria-label="Voir le lieu sur le plan" data-fa-pin>${PIN2}</a></div>` : ""}
-        <div class="fa-eqs">${GENS}${adv.length ? `${adv.length + 1} clubs` : `${nos.length} équipe${nos.length > 1 ? "s" : ""}`}</div>
-        <div class="fa-dont">Dont :<ul>${nos.map(n => `<li>${logoClub()}${escA(nomClub)} · ${escA(n)}</li>`).join("")}</ul></div>
-        ${adv.length ? `<p class="fa-avec">Avec : ${adv.map(escA).join(", ")}</p>` : ""}</article>`;
-    };
+    const carte = faCarte;
     z.innerHTML = `<h2 class="fa-mois">${MOIS_L2[d.getMonth()]} ${d.getFullYear()}</h2>
       <div class="fa-nav"><button type="button" data-fa-mois="-1">${FL_G}Mois précédent</button><button type="button" data-fa-mois="1">Mois suivant${FL_D}</button></div>
       ${liste.length ? `<div class="fa-liste">${liste.map(carte).join("")}</div>`
@@ -136,31 +144,241 @@
   window.addEventListener("hashchange", suivreAnimation);
   suivreAnimation();
 
-  /* ---------- fiche d'un match ---------- */
+
+  /* =====================================================================
+     MATCHS, ÉQUIPES, PAGE D'UNE ÉQUIPE, PAGE D'UN MATCH, STAFF
+     ===================================================================== */
   if (typeof S === "undefined" || typeof window.ouvrirFiche !== "function") return;
-  const esc2 = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const H = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const esc2 = H;
   const nous = () => { try { return C().nomCourt || "Pierrelatte"; } catch(e){ return "Pierrelatte"; } };
+  const eqDe2 = m => { try { return eqDe(m); } catch(e){ return String(m.equipe || ""); } };
+  const nomNous = m => { const k = String(eqDe2(m)).match(/(\d+)\s*$/); return nous() + (k && k[1] !== "1" ? " " + k[1] : ""); };
   const advNom = m => String(m.adv || "Adversaire").replace(/\s+\d+$/, "");
   const trouve = id => (S.matchs || []).find(x => x.id === id) || (S.matchsAnimation || []).find(x => x.id === id);
+  const estCoupe = m => { try { return COUPE(m); } catch(e){ return /coupe/i.test(String(m.comp || "")); } };
+  const LOGO = () => (typeof LOGO_SRC !== "undefined" ? LOGO_SRC : "");
+  const blasonNous = () => `<span class="cl-blason"><img src="${LOGO()}" alt=""></span>`;
+  const blasonDe = nom => { try { return blasonPetit(nom || ""); } catch(e){ return `<span class="cl-blason"></span>`; } };
+  const CHEV = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
+  const RETOUR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`;
+  const ETOILE = plein => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.4l-5.1 2.7 1-5.7-4.1-4 5.7-.8z" fill="${plein ? "currentColor" : "none"}"/></svg>`;
+  const ENVELOPPE = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 7l9 6 9-6"/></svg>`;
+  /* noms des joueurs affichés au public : « Prénom N. », comme dans l'appli */
+  const court = n => {
+    const s = String(n || "").trim(); if (!s) return "";
+    if (!/\s/.test(s)) return s;                                         // un seul mot : on le garde tel quel
+    let p = "", f = "";
+    try { [p, f] = decoupeNom(s); } catch(e){ const x = s.split(/\s+/); p = x[0]; f = x.slice(1).join(" "); }
+    p = p || s; return f ? `${p} ${f.trim().charAt(0).toUpperCase()}.` : p;
+  };
+  const initiales = n => { let p = "", f = ""; try { [p, f] = decoupeNom(String(n || "")); } catch(e){ [p, f] = String(n || "").split(/\s+/); }
+    return ((p || "").charAt(0) + (f || "").trim().charAt(0)).toUpperCase() || "?"; };
+
+  /* ---------- carte d'un match, comme dans l'appli : étiquette, date, écussons, score ---------- */
+  function journeeDe(m){
+    if (estCoupe(m)) return 0;
+    const eq = eqDe2(m), comp = String(m.comp || "");
+    const l = (S.matchs || []).filter(x => eqDe2(x) === eq && !estCoupe(x) && String(x.comp || "") === comp)
+      .sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
+    const i = l.findIndex(x => x.id === m.id);
+    return i >= 0 ? i + 1 : 0;
+  }
+  const etiquette = m => { const j = /^pl-/.test(String(m.id)) ? 0 : journeeDe(m); return (m.comp || "Match") + (j ? " - Journée " + j : ""); };
+  const dateCourte = m => {
+    if (!m.date) return "";
+    const d = jd(m.date);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}${m.heure ? " | " + m.heure : ""}`;
+  };
+  const scoreDe = m => joue(m) ? `${m.dom ? m.bp : m.bc} - ${m.dom ? m.bc : m.bp}` : "-";
+  const cotes = m => {
+    const n = `<div class="mc-eq">${blasonNous()}<b>${H(nomNous(m))}</b></div>`;
+    const a = `<div class="mc-eq">${blasonDe(m.adv)}<b>${H(String(m.adv || "Adversaire").trim())}</b></div>`;
+    return m.dom ? [n, a] : [a, n];
+  };
+  function carteMatch(m){
+    if (!m) return "";
+    const [g, d] = cotes(m);
+    return `<button type="button" class="mc" data-fiche="${H(m.id)}"><span class="mc-label">${H(etiquette(m))}</span>${g}
+      <div class="mc-centre"><small>${H(dateCourte(m))}</small><b>${scoreDe(m)}</b></div>${d}</button>`;
+  }
+  window.carteResultat = carteMatch;      // résultats, accueil, espace joueur : la même carte partout
+
+  /* ---------- classement ---------- */
+  function classementPour(nom){
+    try {
+      const k = slug(nom), l = Object.values(S.classements || {});
+      return l.find(c => slug(joliEquipe(c.equipe || "")) === k)
+        || (/·/.test(nom) ? null : (classementDe(nom) || l.find(c => slug(c.equipe || "").startsWith(k)))) || null;
+    } catch(e){ return null; }
+  }
+  const compChamp = nom => ((S.matchs || []).find(m => eqDe2(m) === nom && !estCoupe(m) && m.comp) || {}).comp || "";
+  function tableClassement2(c, adv){
+    const l = trieCl(c.equipes || []);
+    const estAdv = n => !!adv && slug(String(n || "")).replace(/-\d+$/, "") === slug(String(adv)).replace(/-\d+$/, "");
+    return `<div class="cls"><div class="cls-tete"><span></span><span></span><span class="cls-or">Pts. ˅</span><span>J.</span><span>Diff.</span></div>
+      ${l.map((e, i) => `<div class="cls-l${e.nous ? " nous" : ""}${estAdv(e.nom) ? " adv" : ""}"><span class="cls-rg">${e.rang || i + 1}</span>
+        <span class="cls-eq">${e.nous ? blasonNous() : blasonDe(e.nom)}<b>${H(e.nom)}</b></span><span class="cls-pts">${points(e)}</span><span>${e.j || 0}</span><span>${diffDe(e)}</span></div>`).join("")}</div>`;
+  }
+
+  /* ---------- ÉQUIPES : la liste par catégorie, étoile pour les favoris ---------- */
+  const FAV = "asf-favoris";
+  const favoris = () => { try { const v = JSON.parse(localStorage.getItem(FAV) || "[]"); return Array.isArray(v) ? v : []; } catch(e){ return []; } };
+  const basculerFavori = n => { const f = new Set(favoris()); f.has(n) ? f.delete(n) : f.add(n); try { localStorage.setItem(FAV, JSON.stringify([...f])); } catch(e){} };
+  function equipesDuClub(){
+    let l = []; try { l = equipesReelles(); } catch(e){}
+    if (!l.length) try { l = (C().equipes || []).map(e => ({ nom: e.nom, niveau: e.niveau || "" })); } catch(e){}
+    return l;
+  }
+  const groupeDe = n => { try { return groupeEquipe(n); } catch(e){ return n; } };
+  function rendreListeEquipes(){
+    const z = document.getElementById("eq-appli"); if (!z) return;
+    const l = equipesDuClub(), f = new Set(favoris());
+    const ligne = e => `<div class="eqa-l"><button type="button" class="hexa-b${f.has(e.nom) ? " on" : ""}" data-fav="${H(e.nom)}" aria-pressed="${f.has(e.nom)}" aria-label="${f.has(e.nom) ? "Retirer des favoris" : "Ajouter aux favoris"}">${ETOILE(f.has(e.nom))}</button>
+      <a class="eqa-row" href="#equipe/${encodeURIComponent(e.nom)}"><span><b>${H(e.nom)}</b>${e.niveau ? `<small>${H(e.niveau)}</small>` : ""}</span>${CHEV}</a></div>`;
+    const groupes = new Map();
+    l.forEach(e => { const g = groupeDe(e.nom); if (!groupes.has(g)) groupes.set(g, []); groupes.get(g).push(e); });
+    const favs = l.filter(e => f.has(e.nom));
+    z.innerHTML = l.length
+      ? (favs.length ? `<h3 class="eqa-g">Mes favoris</h3>${favs.map(ligne).join("")}` : "") + [...groupes].map(([g, eqs]) => `<h3 class="eqa-g">${H(g)}</h3>${eqs.map(ligne).join("")}`).join("")
+      : `<p class="fa-vide">Les équipes s'afficheront ici dès que le calendrier sera chargé.</p>`;
+  }
+
+  /* ---------- PAGE D'UNE ÉQUIPE : résultats et calendrier, effectif, statistiques, classement ---------- */
+  let eq = { nom: "", onglet: "resultats", mois: null };
+  const equipeDuHash = () => { const r = location.hash.match(/^#equipe\/([^/?]*)/); try { return r ? decodeURIComponent(r[1]) : ""; } catch(e){ return ""; } };
+  const matchsEquipe = nom => [...(S.matchs || []), ...(S.matchsAnimation || [])].filter(m => eqDe2(m) === nom)
+    .sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
+  const auj = () => { try { return aujourdhui(); } catch(e){ return new Date().toISOString().slice(0, 10); } };
+  function moisDefaut(ms){
+    const a = auj(), ce = a.slice(0, 7);
+    if (ms.some(m => String(m.date || "").startsWith(ce))) return ce;
+    const futur = ms.find(m => String(m.date || "") >= a);
+    if (futur) return futur.date.slice(0, 7);
+    return ms.length ? String(ms[ms.length - 1].date || ce).slice(0, 7) : ce;
+  }
+  const moisPlus = (ym, n) => { const [y, mo] = ym.split("-").map(Number); const d = new Date(y, mo - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+  function ongletResultats(nom){
+    const ms = matchsEquipe(nom);
+    if (!eq.mois) eq.mois = moisDefaut(ms);
+    const duMois = ms.filter(m => String(m.date || "").startsWith(eq.mois));
+    const normaux = duMois.filter(m => !/^pl-/.test(String(m.id))), plateaux = duMois.filter(m => /^pl-/.test(String(m.id)));
+    const annee = eq.mois.slice(0, 4) !== auj().slice(0, 4) ? " " + eq.mois.slice(0, 4) : "";
+    return `<h2 class="fa-mois">${MOIS_L2[+eq.mois.slice(5, 7) - 1]}${annee}</h2>
+      <div class="fa-nav"><button type="button" data-eqm="-1">${FL_G}Mois précédent</button><button type="button" data-eqm="1">Mois suivant${FL_D}</button></div>
+      ${normaux.length || plateaux.length ? `<div class="mc-liste">${normaux.map(carteMatch).join("")}${faGroupes(plateaux)}</div>`
+        : `<p class="fa-vide">Aucun match ce mois-ci.</p>`}`;
+  }
+  function ongletEffectif(nom){
+    let l = []; try { l = effectifDe(nom) || []; } catch(e){}
+    if (!l.length) return `<p class="fa-vide">L'effectif de cette équipe n'est pas encore publié.</p>`;
+    l = [...l].sort((a, b) => court(a.nom).localeCompare(court(b.nom), "fr"));
+    return `<div class="eff">${l.map(j => `<div class="eff-l"><span class="eff-av">${H(initiales(j.nom))}</span>
+      <b>${H(court(j.nom))}${j.num ? ` (n°${H(j.num)})` : ""}</b></div>`).join("")}</div>`;
+  }
+  const barres = o => { const t = Math.max(1, o.V + o.N + o.D);
+    return ["V", "N", "D"].map(k => `<div class="st-b sb-${k}"><span>${k}</span><i><em style="width:${Math.round(o[k] / t * 100)}%"></em></i><b>${o[k]}</b></div>`).join(""); };
+  function ongletStats(nom){
+    const ms = matchsEquipe(nom).filter(m => !/^pl-/.test(String(m.id)) && joue(m));
+    if (!ms.length) return `<p class="fa-vide">Les statistiques apparaîtront après les premiers matchs.</p>`;
+    const serie = ms.slice(-5).map(m => issue(m));
+    const bp = ms.reduce((s, m) => s + (+m.bp || 0), 0), bc = ms.reduce((s, m) => s + (+m.bc || 0), 0);
+    const vnd = l => ({ V: l.filter(m => issue(m) === "V").length, N: l.filter(m => issue(m) === "N").length, D: l.filter(m => issue(m) === "D").length });
+    let top = []; try { top = statsEquipe(nom) || []; } catch(e){}
+    const buteurs = [...top].filter(x => +x.buts).sort((x, y) => y.buts - x.buts).slice(0, 5);
+    const passeurs = [...top].filter(x => +x.passes).sort((x, y) => y.passes - x.passes).slice(0, 5);
+    const liste = (titre, l, k) => l.length ? `<section class="st-bloc"><h3>${titre}</h3>${l.map((x, i) => `<div class="st-l"><span class="st-n">${i + 1}</span><span>${H(court(x.nom))}</span><b>${x[k]}</b></div>`).join("")}</section>` : "";
+    return `<section class="st-bloc"><h3>Série en cours</h3><div class="st-serie">${blasonNous()}${serie.map(r => `<span class="hexa-r ${r}">${r}</span>`).join("")}</div></section>
+      <section class="st-bloc st-deux"><div><h3>Buts marqués</h3><b class="st-gros">${bp}</b><small>${(bp / ms.length).toFixed(2)} / match</small></div>
+        <div><h3>Buts encaissés</h3><b class="st-gros">${bc}</b><small>${(bc / ms.length).toFixed(2)} / match</small></div></section>
+      <section class="st-bloc st-deux"><div><h3>À domicile</h3>${barres(vnd(ms.filter(m => m.dom)))}</div><div><h3>À l'extérieur</h3>${barres(vnd(ms.filter(m => !m.dom)))}</div></section>
+      ${liste("Buteurs", buteurs, "buts")}${liste("Passeurs", passeurs, "passes")}`;
+  }
+  function ongletClassement(nom){
+    const c = classementPour(nom);
+    if (!c || !(c.equipes || []).length)
+      return `<p class="fa-vide">${/·|U6|U7|U8|U9|U10|U11/.test(nom) ? "Pas de classement en foot d'animation." : "Le classement n'est pas encore publié."}</p>`;
+    return `<h2 class="cls-titre">${H(compChamp(nom) || c.comp || c.titre || nom)}</h2>${tableClassement2(c)}`;
+  }
+  const ONG_EQ = [["resultats", "Résultats & calendrier"], ["effectif", "Effectif"], ["stats", "Statistiques"], ["classement", "Classement"]];
+  function rendreEquipePage(){
+    const z = document.getElementById("eqp"); if (!z) return;
+    const nom = equipeDuHash(); if (!nom) return;
+    if (eq.nom !== nom) eq = { nom, onglet: "resultats", mois: null };
+    const fav = favoris().includes(nom);
+    const corps = eq.onglet === "effectif" ? ongletEffectif(nom) : eq.onglet === "stats" ? ongletStats(nom)
+      : eq.onglet === "classement" ? ongletClassement(nom) : ongletResultats(nom);
+    z.innerHTML = `<div class="eqp-tete">
+        <a class="hexa-b" href="#equipes" aria-label="Retour aux équipes">${RETOUR}</a>
+        <h1 class="eqp-titre">${H(nom)}</h1>
+        <button type="button" class="hexa-b${fav ? " on" : ""}" data-fav="${H(nom)}" aria-pressed="${fav}" aria-label="${fav ? "Retirer des favoris" : "Ajouter aux favoris"}">${ETOILE(fav)}</button>
+        <a class="eqp-club" href="#club">${blasonNous()}<b>Atom'Sports Football Pierrelatte</b>${CHEV}</a></div>
+      <nav class="club-onglets eqp-onglets" aria-label="${H(nom)}">${ONG_EQ.map(([k, l]) => `<button type="button" class="${eq.onglet === k ? "actif" : ""}" data-eqo="${k}">${l}</button>`).join("")}</nav>
+      <div class="wrap eqp-corps">${corps}</div>`;
+    const a = z.querySelector(".eqp-onglets .actif"), n = z.querySelector(".eqp-onglets");
+    if (a && n && n.scrollWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - (n.clientWidth - a.clientWidth) / 2;
+  }
+
+  /* ---------- LE CLUB : le staff (bureau et référents), avec « Lui écrire » ---------- */
+  function rendreStaff(){
+    const z = document.getElementById("club-staff"); if (!z) return;
+    let l = []; try { l = [...(C().bureau || []), ...(C().referents || [])].filter(p => p && p.nom && !/compl[ée]ter/i.test(p.nom)); } catch(e){}
+    const t = document.getElementById("club-staff-t");
+    z.hidden = !l.length; if (t) t.hidden = !l.length;
+    z.innerHTML = l.map((p, i) => `<div class="stf"><small>${H(p.role || "")}</small><b>${H(p.nom)}</b>
+      <button type="button" class="stf-ecrire" data-staff="${i}">${ENVELOPPE}<span>Lui écrire</span></button></div>`).join("");
+    z.onclick = ev => { const b = ev.target.closest("[data-staff]"); if (b && typeof ouvrirMessage === "function") ouvrirMessage(l[+b.dataset.staff]); };
+  }
+
+  /* ---------- suivi des pages : on redessine quand les données arrivent ---------- */
+  let suiviSig = "", suiviTimer = null;
+  const signature = () => [location.hash, (S.matchs || []).length, (S.matchsAnimation || []).length, Object.keys(S.classements || {}).length,
+    Object.values(S.effectifs || {}).reduce((n, e) => n + ((e && e.joueurs) || []).length, 0), favoris().length,
+    JSON.stringify((S.club && [S.club.bureau, S.club.referents]) || "").length, (S.matchs || []).reduce((n, m) => n + ((m.faits || []).length), 0)].join("|");
+  function dessiner(){
+    const h = location.hash;
+    if (/^#equipe\//.test(h)) rendreEquipePage();
+    else if (h === "#equipes") rendreListeEquipes();
+    else if (h === "#club") rendreStaff();
+  }
+  function suivre(){
+    clearInterval(suiviTimer);
+    suiviSig = signature(); dessiner();
+    if (/^#(equipes|equipe\/|club)/.test(location.hash)) suiviTimer = setInterval(() => { const s = signature(); if (s !== suiviSig){ suiviSig = s; dessiner(); } }, 2000);
+  }
+  window.addEventListener("hashchange", () => { if (!/^#equipe\//.test(location.hash)) eq.nom = ""; suivre(); });
+  suivre();
+  document.addEventListener("click", ev => {
+    const t = ev.target.closest ? ev.target : null; if (!t) return;
+    const f = t.closest("[data-fav]");
+    if (f){ ev.preventDefault(); basculerFavori(f.dataset.fav); suiviSig = signature(); dessiner(); return; }
+    const o = t.closest("[data-eqo]");
+    if (o){ eq.onglet = o.dataset.eqo; rendreEquipePage(); return; }
+    const mo = t.closest("[data-eqm]");
+    if (mo){ eq.mois = moisPlus(eq.mois || moisDefaut(matchsEquipe(eq.nom)), +mo.dataset.eqm); rendreEquipePage(); return; }
+    const c = t.closest("#eqp [data-fiche]");
+    if (c) window.ouvrirFiche(c.dataset.fiche);
+  });
+
+  /* ---------- PAGE D'UN MATCH : résumé, classement, infos ---------- */
   const cle = min => { const p = String(min || "").match(/(\d+)(?:\s*\+\s*(\d+))?/); return p ? +p[1] + (p[2] ? +p[2] / 100 : 0) : 999; };
-  const minTxt = min => { const p = String(min || "").match(/(\d+)(?:\s*\+\s*(\d+))?/); return p ? p[1] + (p[2] ? "+" + p[2] : "") + "'" : ""; };
+  const minTxt = min => { const p = String(min || "").match(/(\d+)(?:\s*\+\s*(\d+))?/); return p ? p[1] + (p[2] ? "+" + p[2] : "") : ""; };
   const ICO = {
     but: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5l3.8 2.8-1.4 4.5H9.6L8.2 10.3z"/><path d="M12 3v4.5M15.8 10.3l4.6-1.5M14.4 14.8l2.8 3.9M9.6 14.8l-2.8 3.9M8.2 10.3L3.6 8.8"/></svg>`,
-    rempl: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h14l-3.5-3.5" stroke="#05DAC7"/><path d="M20 16H6l3.5 3.5" stroke="#E30613"/></svg>`,
+    rempl: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h14l-3.5-3.5" stroke="#D02E26"/><path d="M20 16H6l3.5 3.5" stroke="#3374B0"/></svg>`,
     jaune: `<span class="fr-carton jaune" aria-hidden="true"></span>`,
     rouge: `<span class="fr-carton rouge" aria-hidden="true"></span>`,
   };
   const LIB = { but: "But", jaune: "Carton jaune", rouge: "Carton rouge", rempl: "Remplacement" };
   const PIN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
   const TERRAIN = `<svg class="terrain-ico" viewBox="0 0 40 28" aria-hidden="true"><rect x="1" y="1" width="38" height="26"/><path d="M20 1v26"/><circle cx="20" cy="14" r="4.5"/><rect x="1" y="8" width="6" height="12"/><rect x="33" y="8" width="6" height="12"/></svg>`;
-
   /* un fait de match, côté gauche (équipe qui reçoit) ou droit */
   function evenement(f, m){
     const gauche = (f.c === "nous") === !!m.dom;
-    const qui = f.j ? esc2(f.j) : (f.c === "nous" ? esc2(nous()) : esc2(advNom(m)));
-    let txt = "";
-    if (f.t === "but") txt = `<span><b>${qui}</b>${f.j2 ? `<small>passe : ${esc2(f.j2)}</small>` : ""}</span>`;
-    else if (f.t === "rempl") txt = `<span><b>${f.j2 ? esc2(f.j2) : "Entrée"}</b><small>sort : ${qui}</small></span>`;
+    const qui = f.j ? H(court(f.j)) : (f.c === "nous" ? H(nous()) : H(advNom(m)));
+    let txt;
+    if (f.t === "rempl") txt = `<span><b>${f.j2 ? H(court(f.j2)) : "Entrée"}</b><b>${qui}</b></span>`;
+    else if (f.t === "but") txt = `<span><b>${qui}</b>${f.j2 ? `<small>passe : ${H(court(f.j2))}</small>` : ""}</span>`;
     else txt = `<span><b>${qui}</b></span>`;
     return `<div class="fr-ligne"><div class="fr-ev ${gauche ? "g" : "d"}"><span class="fr-ico" title="${LIB[f.t] || ""}">${ICO[f.t] || ""}</span>${txt}</div>
       <span class="fr-min">${minTxt(f.min) || "–"}</span></div>`;
@@ -170,21 +388,20 @@
     if (faits.length){
       const l = [...faits].sort((a, b) => cle(a.min) - cle(b.min));
       const avant = l.filter(f => cle(f.min) <= 45.99), apres = l.filter(f => cle(f.min) > 45.99);
-      const fin = typeof joue === "function" && joue(m)
-        ? `<div class="fr-ligne"><span class="fr-repere mt">Fin du match · ${m.dom ? m.bp : m.bc} - ${m.dom ? m.bc : m.bp}</span></div>` : "";
-      return `<section class="fm-resume" aria-label="Résumé du match"><h4>Résumé</h4>
-        <div class="fr-ligne"><span class="fr-repere">Coup d'envoi</span></div>
+      const fin = joue(m) ? `<div class="fr-ligne"><span class="fr-repere">Fin du match</span></div>` : "";
+      return `<section class="fm-resume" aria-label="Résumé du match">
+        <div class="fr-ligne"><span class="fr-repere">Début du match</span></div>
         ${avant.map(f => evenement(f, m)).join("")}
         ${avant.length && apres.length ? `<div class="fr-ligne"><span class="fr-repere mt">Mi-temps</span></div>` : ""}
         ${apres.map(f => evenement(f, m)).join("")}${fin}</section>`;
     }
     const st = (Array.isArray(m.stats) ? m.stats : []).filter(s => s && (+s.buts || +s.passes));
     if (!st.length) return "";
-    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${esc2(s.nom)}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
-    const passeurs = st.filter(s => +s.passes).map(s => `<span>${esc2(s.nom)}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
-    return `<section class="fm-resume" aria-label="Buteurs et passeurs"><h4>Buteurs ${esc2(nous())}</h4>
+    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${H(court(s.nom))}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
+    const passeurs = st.filter(s => +s.passes).map(s => `<span>${H(court(s.nom))}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
+    return `<section class="fm-resume" aria-label="Buteurs et passeurs"><p class="fr-titre">Buteurs ${H(nous())}</p>
       ${buteurs ? `<div class="fr-sans-min">${buteurs}</div>` : ""}
-      ${passeurs ? `<div class="fr-sans-min" style="color:var(--f-txt-2)"><small style="width:100%;text-align:center;color:var(--f-txt-3)">Passes décisives</small>${passeurs}</div>` : ""}</section>`;
+      ${passeurs ? `<p class="fr-titre">Passes décisives</p><div class="fr-sans-min">${passeurs}</div>` : ""}</section>`;
   }
   const peutSaisir = m => {
     try {
@@ -193,61 +410,86 @@
       return !autor.length || autor.includes(m.equipe) || autor.includes(eqDe(m));
     } catch(e){ return false; }
   };
-
-  function enrichir(id){
-    const m = trouve(id), d = $1("#fiche-match"); if (!m || !d) return;
-    const corps = d.querySelector(".fm-corps"); if (!corps) return;
-    // lieu de la rencontre : stade, adresse et épingle rouge vers le plan
+  function lieuHtml(m){
     let adresse = "";
     try { adresse = m.adresse || (m.dom ? (typeof ADRESSE_STADE !== "undefined" ? ADRESSE_STADE : "") : lieuMatch(m)); } catch(e){}
-    if (adresse){
-      const stade = m.dom ? (() => { try { return C().stade; } catch(e){ return ""; } })() : "";
-      const q = encodeURIComponent(adresse);
-      corps.querySelectorAll(".fm-ligne").forEach(l => { const b = l.querySelector("b"); if (b && /^adresse$/i.test(b.textContent.trim())) l.remove(); });
-      corps.insertAdjacentHTML("afterbegin", `<div class="fm-lieu"><h4>Lieu de la rencontre</h4>${TERRAIN}
-        <div>${stade ? `<b>${esc2(stade)}</b>` : `<b>${m.dom ? "À domicile" : "Chez " + esc2(advNom(m))}</b>`}<span>${esc2(adresse)}</span></div>
-        <a class="pin" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener" aria-label="Voir sur le plan">${PIN}</a></div>`);
-    }
-    if (/^pl-/.test(m.id)) return;
-    const r = resumeHtml(m);
-    if (r) corps.insertAdjacentHTML("afterbegin", r);
-    if (peutSaisir(m)){
-      const n = (m.faits || []).length;
-      const btns = corps.querySelector(".btns");
-      const html = `<button type="button" class="btn bleu petit" data-fm="editer">⚽ Faits de match${n ? ` (${n})` : ""}</button>`;
-      if (btns) btns.insertAdjacentHTML("afterbegin", html); else corps.insertAdjacentHTML("beforeend", `<div class="btns">${html}</div>`);
-    }
+    if (!adresse) return "";
+    const stade = m.dom ? (() => { try { return C().stade; } catch(e){ return ""; } })() : "";
+    return `<div class="fm-lieu"><h4>Lieu de la rencontre</h4>${TERRAIN}
+      <div>${stade ? `<b>${H(stade)}</b>` : `<b>${m.dom ? "À domicile" : "Chez " + H(advNom(m))}</b>`}<span>${H(adresse)}</span></div>
+      <a class="pin" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}" target="_blank" rel="noopener" aria-label="Voir sur le plan">${PIN}</a></div>`;
   }
-  const avantFiche = window.ouvrirFiche;
-  window.ouvrirFiche = function(id){
-    const r = avantFiche.apply(this, arguments);
-    try { enrichir(id); } catch(e){ console.warn("fiche", e); }
-    return r;
-  };
+  /* la page s'ouvre en haut, le focus sur « retour » (et non sur un lien du bas de la fiche) */
+  function enHaut(d){ const b = d.querySelector(".mx-retour"); if (b) try { b.focus({ preventScroll: true }); } catch(e){} d.scrollTop = 0; }
+  function montrer(d, k){
+    d.querySelectorAll("[data-mxo]").forEach(b => b.classList.toggle("actif", b.dataset.mxo === k));
+    d.querySelectorAll(".mx-p").forEach(p => { p.hidden = p.dataset.p !== k; });
+  }
+  function pageMatch(id){
+    const m = trouve(id), d = $1("#fiche-match"); if (!m || !d) return;
+    const corps = d.querySelector(".fm-corps"); if (!corps) return;
+    // infos : le lieu en tête, sans répéter l'adresse
+    const lieu = lieuHtml(m);
+    if (lieu){
+      corps.querySelectorAll(".fm-ligne").forEach(l => { const b = l.querySelector("b"); if (b && /^adresse$/i.test(b.textContent.trim())) l.remove(); });
+      corps.insertAdjacentHTML("afterbegin", lieu);
+    }
+    if (/^pl-/.test(String(m.id))){                                        // plateau : la fiche du foot d'animation, avec un retour en haut
+      const tp = d.querySelector(".fm-tete");
+      if (tp && !tp.querySelector(".mx-retour")) tp.insertAdjacentHTML("afterbegin", `<button type="button" class="hexa-b mx-retour" data-a="fermer-fiche" aria-label="Fermer">${RETOUR}</button>`);
+      enHaut(d);
+      return;
+    }
+    const tete = d.querySelector(".fm-tete");
+    const [g, dr] = cotes(m);
+    const j = joue(m), actif = j ? "resume" : "infos";
+    const ong = [...(j ? [["resume", "Résumé"]] : []), ["classement", "Classement"], ["infos", "Infos du match"]];
+    const c = classementPour(eqDe2(m));
+    const saisir = peutSaisir(m) && j ? `<div class="btns" style="justify-content:center;margin-top:14px"><button type="button" class="btn bleu" data-fm="editer">⚽ ${(m.faits || []).length ? "Modifier" : "Saisir"} les faits de match</button></div>` : "";
+    const mx = document.createElement("div");
+    mx.className = "mx";
+    mx.innerHTML = `<div class="mx-tete"><button type="button" class="hexa-b mx-retour" data-a="fermer-fiche" aria-label="Fermer">${RETOUR}</button>
+        <span class="mc-label">${H(etiquette(m))}</span>
+        <div class="mx-duel">${g}<div class="mc-centre"><small>${H(dateCourte(m))}</small><b>${scoreDe(m)}</b></div>${dr}</div></div>
+      <nav class="club-onglets mx-onglets">${ong.map(([k, l]) => `<button type="button" data-mxo="${k}" class="${k === actif ? "actif" : ""}">${l}</button>`).join("")}</nav>
+      <div class="mx-p" data-p="resume" ${actif === "resume" ? "" : "hidden"}><h2 class="mx-h">Résumé</h2>
+        ${resumeHtml(m) || `<p class="fa-vide">Le résumé de ce match n'est pas encore disponible.</p>`}${saisir}</div>
+      <div class="mx-p" data-p="classement" ${actif === "classement" ? "" : "hidden"}>${c && (c.equipes || []).length
+        ? `<h2 class="mx-h">${H(compChamp(eqDe2(m)) || c.comp || "Classement")}</h2>${tableClassement2(c, m.adv)}` : `<p class="fa-vide">Classement pas encore publié.</p>`}</div>
+      <div class="mx-p" data-p="infos" ${actif === "infos" ? "" : "hidden"}></div>`;
+    mx.querySelector('[data-p="infos"]').appendChild(corps);
+    if (tete) tete.remove();
+    d.appendChild(mx);
+    enHaut(d);
+  }
+  document.addEventListener("click", ev => {
+    const b = ev.target.closest && ev.target.closest("#fiche-match [data-mxo]"); if (!b) return;
+    montrer($1("#fiche-match"), b.dataset.mxo);
+  });
 
-  /* ---------- saisie des faits de match (coachs et bureau) ---------- */
+  /* ---------- saisie des faits de match (coachs et bureau), dans l'onglet Résumé ---------- */
   let ed = null;   // { id, faits }
   function editeurHtml(m){
     const eff = (() => { try { return effectifDe(m.equipe) || []; } catch(e){ return []; } })();
     const liste = [...ed.faits].map((f, i) => ({ f, i })).sort((a, b) => cle(a.f.min) - cle(b.f.min));
-    const ligne = ({ f, i }) => `<li class="fe-l"><span class="fe-min">${minTxt(f.min) || "–"}</span><span class="fr-ico">${ICO[f.t] || ""}</span>
-      <span class="fe-t"><b>${esc2(LIB[f.t])}</b> · ${f.c === "nous" ? esc2(nous()) : esc2(advNom(m))}${f.j ? " · " + esc2(f.j) : ""}${f.j2 ? (f.t === "rempl" ? " → " : " (passe : ") + esc2(f.j2) + (f.t === "rempl" ? "" : ")") : ""}</span>
+    const ligne = ({ f, i }) => `<li class="fe-l"><span class="fe-min">${minTxt(f.min) || "–"}'</span><span class="fr-ico">${ICO[f.t] || ""}</span>
+      <span class="fe-t"><b>${H(LIB[f.t])}</b> · ${f.c === "nous" ? H(nous()) : H(advNom(m))}${f.j ? " · " + H(f.j) : ""}${f.j2 ? (f.t === "rempl" ? " → " : " (passe : ") + H(f.j2) + (f.t === "rempl" ? "" : ")") : ""}</span>
       <button type="button" class="fe-x" data-fm="retirer" data-i="${i}" aria-label="Retirer">×</button></li>`;
     return `<div class="fe">
-      <h4 class="fe-titre">Faits de match</h4>
-      <p class="fe-aide">Buts, cartons et remplacements : ils s'affichent dans le résumé du match. Les buts et passes de ${esc2(nous())} comptent aussi dans « Buteurs et passeurs ».</p>
+      <h2 class="mx-h">Faits de match</h2>
+      <p class="fe-aide">Buts, cartons et remplacements : ils s'affichent dans le résumé du match. Les buts et passes de ${H(nous())} comptent aussi dans « Buteurs et passeurs ».</p>
       <ul class="fe-liste">${liste.map(ligne).join("") || `<li class="fe-vide">Aucun fait de match pour l'instant.</li>`}</ul>
       <div class="fe-form">
         <label>Quoi<select data-fe="t"><option value="but">⚽ But</option><option value="jaune">🟨 Carton jaune</option><option value="rouge">🟥 Carton rouge</option><option value="rempl">🔁 Remplacement</option></select></label>
         <label>Minute<input data-fe="min" inputmode="numeric" placeholder="ex. 52 ou 45+2" maxlength="6"></label>
-        <label>Équipe<select data-fe="c"><option value="nous">${esc2(nous())}</option><option value="eux">${esc2(advNom(m))}</option></select></label>
+        <label>Équipe<select data-fe="c"><option value="nous">${H(nous())}</option><option value="eux">${H(advNom(m))}</option></select></label>
         <label><span data-fe-l1>Buteur</span><input data-fe="j" list="fe-joueurs" placeholder="Nom (facultatif pour l'adversaire)"></label>
         <label data-fe-z2><span data-fe-l2>Passeur (facultatif)</span><input data-fe="j2" list="fe-joueurs" placeholder="Nom"></label>
-        <datalist id="fe-joueurs">${eff.map(j => `<option value="${esc2(j.nom)}">`).join("")}</datalist>
+        <datalist id="fe-joueurs">${eff.map(j => `<option value="${H(j.nom)}">`).join("")}</datalist>
         <div class="fe-ajout"><button type="button" class="btn contour petit" data-fm="ajouter">+ Ajouter</button></div>
       </div>
       <div class="btns" style="justify-content:center"><button type="button" class="btn bleu" data-fm="enregistrer">Enregistrer</button>
-        <button type="button" class="btn contour" data-fm="annuler">Retour à la fiche</button></div></div>`;
+        <button type="button" class="btn contour" data-fm="annuler">Annuler</button></div></div>`;
   }
   function libelles(z){
     const t = z.querySelector('[data-fe="t"]').value;
@@ -258,9 +500,10 @@
   function ouvrirEditeur(id){
     const m = trouve(id), d = $1("#fiche-match"); if (!m || !d) return;
     if (!ed || ed.id !== id) ed = { id, faits: JSON.parse(JSON.stringify(Array.isArray(m.faits) ? m.faits : [])) };
-    const corps = d.querySelector(".fm-corps"); if (!corps) return;
-    corps.innerHTML = editeurHtml(m);
-    libelles(corps);
+    const zone = d.querySelector('.mx-p[data-p="resume"]') || d.querySelector(".fm-corps"); if (!zone) return;
+    zone.innerHTML = editeurHtml(m);
+    montrer(d, "resume");
+    libelles(zone);
   }
   /* buteurs et passeurs de l'espace joueur : recalculés pour les joueurs cités dans les faits */
   function statsDepuis(m, faits){
@@ -282,9 +525,7 @@
     const b = ev.target.closest && ev.target.closest("#fiche-match [data-fm]"); if (!b) return;
     ev.preventDefault(); ev.stopPropagation();
     const a = b.dataset.fm, d = $1("#fiche-match");
-    if (a === "editer"){
-      const id = d && d.dataset.match; if (id) ouvrirEditeur(id); return;
-    }
+    if (a === "editer"){ const id = d && d.dataset.match; if (id) ouvrirEditeur(id); return; }
     if (!ed) return;
     const m = trouve(ed.id); if (!m) return;
     const z = b.closest(".fe");
@@ -311,34 +552,16 @@
       const id = ed.id; ed = null; window.ouvrirFiche(id);
     }
   }, true);
-  // la fiche ouverte garde l'identifiant du match (pour le bouton « Faits de match »)
-  const avantFiche2 = window.ouvrirFiche;
+
+  /* la fiche s'ouvre en page de match ; rouverte après une saisie, on la referme d'abord */
+  const avantFiche = window.ouvrirFiche;
   window.ouvrirFiche = function(id){
     const d = $1("#fiche-match");
-    if (d){ d.dataset.match = id; if (d.open && d.close) d.close(); }   // rouverte après une saisie : on la referme d'abord
+    if (d){ d.dataset.match = id; if (d.open && d.close) d.close(); }
     if (ed && ed.id !== id) ed = null;
-    return avantFiche2.apply(this, arguments);
+    const r = avantFiche.apply(this, arguments);
+    try { pageMatch(id); } catch(e){ console.warn("fiche", e); }
+    return r;
   };
-
-  const css = document.createElement("style");
-  css.id = "appli-faits-css";
-  css.textContent = `
-#fiche-match .fe{padding:2px 2px 4px}
-#fiche-match .fe-titre{font:700 24px var(--f-titre);letter-spacing:.02em;text-transform:uppercase;color:var(--f-txt);margin:4px 0 4px}
-#fiche-match .fe-aide{font:400 14px var(--f-ui);color:var(--f-txt-3);margin-bottom:12px}
-#fiche-match .fe-liste{list-style:none;margin:0 0 14px;padding:0;background:var(--f-panel);border-radius:var(--f-rayon)}
-#fiche-match .fe-l{display:grid;grid-template-columns:44px 22px minmax(0,1fr) 36px;gap:8px;align-items:center;padding:9px 8px;border-bottom:1px solid var(--f-line);font:400 14px/1.25 var(--f-ui);color:var(--f-txt)}
-#fiche-match .fe-l:last-child{border-bottom:0}
-#fiche-match .fe-min{font:700 16px var(--f-ui);text-align:center}
-#fiche-match .fe-t b{font-weight:700}
-#fiche-match .fe-x{width:34px;height:34px;border-radius:2px;border:1px solid var(--f-line-2);background:none;color:#FF6B74;font-size:20px;cursor:pointer}
-#fiche-match .fe-vide{padding:14px;color:var(--f-txt-3);font:400 14px var(--f-ui);text-align:center}
-#fiche-match .fe-form{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--f-panel);border-radius:var(--f-rayon);padding:12px;margin-bottom:14px}
-#fiche-match .fe-form label{display:grid;gap:5px;font:600 13px var(--f-titre);letter-spacing:.05em;text-transform:uppercase;color:var(--f-txt-3)}
-#fiche-match .fe-form label[hidden]{display:none}
-#fiche-match .fe-form input,#fiche-match .fe-form select{font:400 16px var(--f-ui);text-transform:none;letter-spacing:0;padding:9px 10px;width:100%}
-#fiche-match .fe-ajout{grid-column:1/-1;display:flex;justify-content:flex-end}
-@media (max-width:420px){ #fiche-match .fe-form{grid-template-columns:1fr} }`;
-  document.head.appendChild(css);
 })();
 </script>
