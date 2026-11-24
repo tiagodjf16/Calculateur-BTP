@@ -62,9 +62,9 @@
 
 /* ---------- ESPACE DIRIGEANTS ---------- */
 /* en-tête : fond bleu nuit, titre d'écran en or */
-#p-espace .titre-page.esp-hero{background:radial-gradient(520px 340px at 0 0,rgba(227,6,19,.24),transparent 70%),var(--f-bg);min-height:0;padding:28px 0 20px;border-bottom:1px solid var(--f-line);align-items:center}
+#p-espace .titre-page.esp-hero{background:radial-gradient(520px 340px at 0 0,rgba(208,46,38,.24),transparent 70%),var(--f-bg);min-height:0;padding:28px 0 20px;border-bottom:1px solid var(--f-line);align-items:center}
 #p-espace .esp-3d{opacity:.28}
-#p-espace .esp-hero-voile{background:linear-gradient(90deg,rgba(0,14,29,.92) 0%,rgba(0,14,29,.7) 45%,rgba(0,14,29,.35) 100%)}
+#p-espace .esp-hero-voile{background:linear-gradient(90deg,rgba(3,14,28,.92) 0%,rgba(3,14,28,.7) 45%,rgba(3,14,28,.35) 100%)}
 #p-espace .titre-page.esp-hero .wrap{text-align:left}
 #p-espace .titre-page.esp-hero .wrap::before{color:var(--f-blue-300)}
 #p-espace .titre-page.esp-hero h1{color:var(--f-gold);text-shadow:none;font-size:clamp(38px,5vw,54px)}
@@ -76,7 +76,7 @@
 .esp-moi-bt{background:transparent!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;color:#fff!important;font:600 15px var(--f-titre)!important;letter-spacing:.04em;text-transform:uppercase;box-shadow:none!important}
 .esp-moi-bt:hover{background:rgba(255,255,255,.08)!important}
 .esp-moi-bt.joueur{background:var(--f-red)!important;border-color:var(--f-red)!important}
-.esp-moi-bt.sortir{color:#FF6B74!important;border-color:rgba(227,6,19,.6)!important}
+.esp-moi-bt.sortir{color:#FF6B74!important;border-color:rgba(208,46,38,.6)!important}
 body.sur-espace .app.esp-app{background:transparent}
 /* « Où veux-tu aller ? » */
 .esp-lanceur h2{font:700 30px var(--f-titre);font-style:normal;letter-spacing:.02em;text-transform:uppercase;color:#fff}
@@ -130,7 +130,7 @@ body.sur-espace #panneau .btn.bleu{background:var(--f-red)!important;border-colo
 body.sur-espace #panneau .btn.bleu:hover{background:var(--f-red-h)!important}
 body.sur-espace #panneau .btn.contour{background:transparent!important;border:1.5px solid var(--f-line-2)!important;color:#fff!important}
 body.sur-espace #panneau .btn.contour:hover{border-color:#fff!important}
-body.sur-espace #panneau .btn.danger{background:transparent!important;border:1.5px solid rgba(227,6,19,.7)!important;color:#FF6B74!important}
+body.sur-espace #panneau .btn.danger{background:transparent!important;border:1.5px solid rgba(208,46,38,.7)!important;color:#FF6B74!important}
 body.sur-espace #panneau .rangee{background:transparent!important;border:0!important;border-bottom:1px solid var(--f-line)!important;border-radius:0!important;box-shadow:none!important}
 body.sur-espace #panneau .rangee:hover{background:var(--f-panel-3)!important}
 body.sur-espace .ong-aide{border:1px solid var(--f-line)!important;border-radius:2px!important;background:transparent!important}

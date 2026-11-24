@@ -36,6 +36,106 @@
     try { localStorage.setItem("theme", r.dataset.theme); } catch(e){}
   });
 
+  /* ---------- intro : un toucher la passe, puis elle quitte la page ---------- */
+  const intro = document.getElementById("intro");
+  if (intro){
+    if (document.documentElement.classList.contains("intro-vue")) intro.remove();
+    else {
+      intro.addEventListener("click", () => intro.classList.add("fin"));
+      intro.addEventListener("animationend", ev => { if (ev.target === intro && /introSort/.test(ev.animationName)) intro.remove(); });
+      setTimeout(() => intro.isConnected && intro.remove(), 4000);
+    }
+  }
+
+  /* ---------- onglets du club : l'onglet de la page ouverte, bien en vue ---------- */
+  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", legal: "", confidentialite: "", espaces: "" };
+  function majOnglets(){
+    const h = (location.hash.slice(1) || "accueil").split("?")[0];
+    const o = h in ONGLET_DE ? ONGLET_DE[h] : h;
+    const nav = document.getElementById("club-onglets");
+    if (nav){
+      let actif = null;
+      nav.querySelectorAll("a").forEach(a => { const on = a.dataset.o === o; a.classList.toggle("actif", on); if (on) actif = a; a.setAttribute("aria-current", on ? "page" : "false"); });
+      if (actif && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.clientWidth) / 2, behavior: "smooth" });
+    }
+    // barre du bas : « Matchs » reste allumé sur résultats, classement, tournois et foot d'animation
+    const m = document.querySelector('.tabbar a[data-p="calendrier"]');
+    if (m && ["resultats", "classement", "tournois", "animation"].includes(h)) m.classList.add("actif");
+  }
+  window.addEventListener("hashchange", () => setTimeout(majOnglets, 0));
+  majOnglets();
+
+  /* ---------- FOOT D'ANIMATION : les plateaux du mois, comme dans l'appli ---------- */
+  let faDecal = 0, faSig = "", faTimer = null;
+  const MOIS_L2 = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  const escA = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const FL_G = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`, FL_D = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
+  const TERR = `<svg viewBox="0 0 34 24" aria-hidden="true"><rect x="1" y="1" width="32" height="22"/><path d="M17 1v22"/><circle cx="17" cy="12" r="4"/><path d="M1 7h5v10H1M33 7h-5v10h5"/></svg>`;
+  const GENS = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><circle cx="4.5" cy="9.5" r="2"/><path d="M3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5M14.6 14.4c.7-.4 1.5-.6 2.4-.6 2.2 0 3.8 1.3 4.3 3.8M1.5 17c.3-1.6 1.2-2.6 2.6-2.9"/></svg>`;
+  const PIN2 = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
+  const logoClub = () => (typeof LOGO_SRC !== "undefined" ? `<span class="cl-blason"><img src="${LOGO_SRC}" alt=""></span>` : "");
+  const nomClub = "Atom'Sports Football Pierrelatte";
+  function rendreAnimation(force){
+    const z = document.getElementById("fa-zone"); if (!z || typeof S === "undefined") return;
+    const l0 = Array.isArray(S.matchsAnimation) ? S.matchsAnimation : [];
+    const sig = faDecal + "|" + l0.length + "|" + l0.map(m => m.id + (m.date || "") + (m.heure || "")).join(",").length;
+    if (!force && sig === faSig) return;
+    faSig = sig;
+    const auj = new Date(), d = new Date(auj.getFullYear(), auj.getMonth() + faDecal, 1);
+    const pref = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const groupes = new Map();
+    l0.filter(m => m && String(m.date || "").startsWith(pref)).forEach(m => {
+      const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
+      if (!groupes.has(k)) groupes.set(k, []);
+      groupes.get(k).push(m);
+    });
+    const liste = [...groupes.values()].sort((a, b) => (a[0].date + (a[0].heure || "")).localeCompare(b[0].date + (b[0].heure || "")));
+    const carte = g => {
+      const m = g[0], jour = new Date(m.date + "T12:00:00");
+      const date = jour.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      const heure = m.heure ? " - " + String(m.heure).replace(":", "h") : "";
+      const org = m.dom ? `${logoClub()}<div><b>${escA(nomClub)}</b><span>(Club organisateur)</span></div>`
+        : `${typeof blasonPetit === "function" ? blasonPetit(m.adv || "") : ""}<div><b>${escA(m.adv || "Club organisateur")}</b><span>(Club organisateur)</span></div>`;
+      const adr = String(m.adresse || (m.dom && typeof ADRESSE_STADE !== "undefined" ? ADRESSE_STADE : "") || "");
+      const i = adr.indexOf(","), terrain = i > 0 ? adr.slice(0, i) : adr, rue = i > 0 ? adr.slice(i + 1).trim() : "";
+      const nos = [...new Set(g.map(x => x.equipe).filter(Boolean))];
+      const adv = [...new Set(g.flatMap(x => Array.isArray(x.adversaires) ? x.adversaires : []))].filter(n => !/pierrelatte/i.test(n));
+      const q = encodeURIComponent(adr || m.adv || "");
+      return `<article class="fa-carte" data-fa="${escA(m.id)}" role="button" tabindex="0">
+        <h3 class="fa-date">${escA(date)}${escA(heure)}</h3>
+        <div class="fa-org">${org}</div>
+        ${adr ? `<div class="fa-lieu"><div><b>${TERR}${escA(terrain)}</b>${rue ? `<span>${escA(rue)}</span>` : ""}</div>
+          <a class="pin" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener" aria-label="Voir le lieu sur le plan" data-fa-pin>${PIN2}</a></div>` : ""}
+        <div class="fa-eqs">${GENS}${adv.length ? `${adv.length + 1} clubs` : `${nos.length} équipe${nos.length > 1 ? "s" : ""}`}</div>
+        <div class="fa-dont">Dont :<ul>${nos.map(n => `<li>${logoClub()}${escA(nomClub)} · ${escA(n)}</li>`).join("")}</ul></div>
+        ${adv.length ? `<p class="fa-avec">Avec : ${adv.map(escA).join(", ")}</p>` : ""}</article>`;
+    };
+    z.innerHTML = `<h2 class="fa-mois">${MOIS_L2[d.getMonth()]} ${d.getFullYear()}</h2>
+      <div class="fa-nav"><button type="button" data-fa-mois="-1">${FL_G}Mois précédent</button><button type="button" data-fa-mois="1">Mois suivant${FL_D}</button></div>
+      ${liste.length ? `<div class="fa-liste">${liste.map(carte).join("")}</div>`
+        : `<p class="fa-vide">Aucun plateau ni brassage ce mois-ci.<br>Les dates sont ajoutées par le club dans l'espace dirigeants, onglet Foot animation.</p>`}`;
+  }
+  document.addEventListener("click", ev => {
+    const n = ev.target.closest && ev.target.closest("[data-fa-mois]");
+    if (n){ faDecal += +n.dataset.faMois; rendreAnimation(true); return; }
+    if (ev.target.closest && ev.target.closest("[data-fa-pin]")) return;          // l'épingle ouvre le plan, pas la fiche
+    const c = ev.target.closest && ev.target.closest("[data-fa]");
+    if (c && typeof window.ouvrirFiche === "function") window.ouvrirFiche(c.dataset.fa);
+  });
+  document.addEventListener("keydown", ev => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const c = ev.target.closest && ev.target.closest("article[data-fa]");
+    if (c && typeof window.ouvrirFiche === "function"){ ev.preventDefault(); window.ouvrirFiche(c.dataset.fa); }
+  });
+  function suivreAnimation(){
+    clearInterval(faTimer);
+    if (location.hash !== "#animation") return;
+    rendreAnimation(true);
+    faTimer = setInterval(() => rendreAnimation(false), 2500);                      // les plateaux arrivent après l'ouverture
+  }
+  window.addEventListener("hashchange", suivreAnimation);
+  suivreAnimation();
+
   /* ---------- fiche d'un match ---------- */
   if (typeof S === "undefined" || typeof window.ouvrirFiche !== "function") return;
   const esc2 = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

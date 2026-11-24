@@ -1,11 +1,13 @@
-"""Assemble the app-style (myFFF-like) version of the ASF Pierrelatte site from the original upload.
+"""Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build2.py <original.html> <tete.css> <tard.css> <appli.js> <output.html> [--test]
+Usage: python3 build3.py <original.html> <tete.css> <tard.css> <appli.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
-  appli.js : <script> added at the end of <body> (Plus tab, theme button, match events)
---test : points the API to "" so the page runs offline with its built-in data (screenshots only).
+  appli.js : <script> added at the end of <body> (intro, club tabs, foot d'animation page, match events)
+--test : runs offline with the built-in data (API set to "") and skips the intro unless the URL has ?intro.
 """
+import datetime
+import hashlib
 import re
 import sys
 
@@ -25,8 +27,8 @@ def sub_once(old, new, text, label):
 
 
 GOLD = [
-    (r"#E3B64C", "#CFAE78"), (r"#C9A227", "#B8955A"), (r"#F3D48A", "#E3CDA4"), (r"#F7DC92", "#E3CDA4"),
-    (r"#F7D774", "#E3CDA4"), (r"#F2C230", "#CFAE78"), (r"rgba\(227,\s*182,\s*76,", "rgba(207,174,120,"),
+    (r"#E3B64C", "#C9B07F"), (r"#C9A227", "#B39A68"), (r"#F3D48A", "#E3D3B0"), (r"#F7DC92", "#E3D3B0"),
+    (r"#F7D774", "#E3D3B0"), (r"#F2C230", "#C9B07F"), (r"rgba\(227,\s*182,\s*76,", "rgba(201,176,127,"),
 ]
 
 
@@ -77,14 +79,125 @@ while True:
     i = p
 html = "".join(out_parts)
 
-# 4) fonts: Barlow (interface) next to the fonts already loaded
+# 4) fonts: Barlow (interface) and Bebas Neue (big titles) next to the fonts already loaded
 html = sub_once("family=Barlow+Condensed:ital,wght@",
-                "family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@", html, "fonts")
+                "family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@", html, "fonts")
 
 # 5) browser bar colour = app background
-html = sub_once('<meta name="theme-color" content="#0F2257">', '<meta name="theme-color" content="#000E1D">', html, "theme-color")
+html = sub_once('<meta name="theme-color" content="#0F2257">', '<meta name="theme-color" content="#030E1C">', html, "theme-color")
 
-# 6) bottom tab bar with app-style outline icons (same links, ids and labels)
+# 6) intro: shown once per visit (the flag is read before the first paint)
+INTRO_HEAD = ('<script>try{if(sessionStorage.getItem("asf-intro"))document.documentElement.classList.add("intro-vue");'
+              'else sessionStorage.setItem("asf-intro","1")}catch(e){}</script>')
+if test:
+    INTRO_HEAD = '<script>if(location.search.indexOf("intro")<0)document.documentElement.classList.add("intro-vue")</script>'
+html = sub_once('<meta charset="UTF-8">', '<meta charset="UTF-8">\n' + INTRO_HEAD, html, "intro-head")
+INTRO = """<div id="intro" aria-hidden="true">
+  <div class="intro-centre">
+    <div class="intro-blason"><img src="/img/blason.png" alt="" onerror="this.remove()"><span data-blason></span></div>
+    <div class="intro-club">Atom'Sports Football</div>
+    <div class="intro-nom">Pierrelatte</div>
+    <div class="intro-trait"></div>
+    <div class="intro-depuis">DEPUIS 1923</div>
+  </div>
+</div>"""
+html = sub_once("<body>\n<header class=\"top\">", "<body>\n" + INTRO + "\n<header class=\"top\">", html, "intro")
+
+# 7) the club header with its tabs, on every page of the public site
+CLUB = """<section class="club-tete" id="club-tete" aria-label="ASF Pierrelatte">
+  <a class="club-blason" href="#accueil" aria-label="Accueil du club"><span data-blason></span></a>
+  <p class="club-nom">Atom'Sports Football Pierrelatte</p>
+  <nav class="club-onglets" id="club-onglets" aria-label="Rubriques du club">
+    <a href="#accueil" data-o="accueil">Accueil</a><a href="#club" data-o="club">Le club</a><a href="#equipes" data-o="equipes">Équipes</a><a href="#calendrier" data-o="matchs">Matchs</a><a href="#animation" data-o="animation">Foot d'animation</a><a href="#compos" data-o="compos">Compos</a><a href="#photos" data-o="photos">Photos</a><a href="#inscriptions" data-o="inscriptions">Inscriptions</a><a href="#partenaires" data-o="partenaires">Partenaires</a><a href="#contact" data-o="contact">Contact</a>
+  </nav>
+</section>"""
+html = sub_once("</header>\n\n<main>", "</header>\n" + CLUB + "\n\n<main>", html, "club-tete")
+
+# 8) LE CLUB page: general information and facilities, as in the app
+ICO = {
+    "equipes": '<path d="M12 3l7 2.5v6c0 4.5-3 7.6-7 9.5-4-1.9-7-5-7-9.5v-6z"/><path d="M9 11.5l2 2 4-4"/>',
+    "ligue": '<path d="M9.5 3.5l3 1.4 2.8-.6 1 2.6 3 1.3-.9 3.1 1.4 2.9-2.4 2-.8 3.4-3.4-.8-3 1.5-2-2.4-3.2-.9.9-3.1-1.6-2.6 2.2-2.1.6-3.1z"/>',
+    "district": '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><circle cx="12" cy="11.5" r="3.4"/><path d="M12 8.1v1.6M9 12.6l1.5-.5M15 12.6l-1.5-.5"/>',
+    "affil": '<rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9.5 3h5v4h-5z"/><circle cx="12" cy="12" r="2.4"/><path d="M8 18.2c.8-1.8 2.2-2.6 4-2.6s3.2.8 4 2.6"/>',
+    "maillot": '<path d="M8.4 3.6L3.8 6.2l1.7 4.3 2.1-.9V20.4h8.8V9.6l2.1.9 1.7-4.3-4.6-2.6c-.5 1.5-1.9 2.5-3.6 2.5s-3.1-1-3.6-2.5z"/><path d="M7.6 13h8.8"/>',
+    "date": '<rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    "siege": '<rect x="5" y="3" width="10" height="18"/><path d="M15 9h4v12h-4M8 7h1M11 7h1M8 11h1M11 11h1M8 15h1M11 15h1M3 21h18"/>',
+    "terrain": '<rect x="2" y="5" width="20" height="14"/><path d="M12 5v14"/><circle cx="12" cy="12" r="2.6"/><path d="M2 9h3v6H2M22 9h-3v6h3"/>',
+}
+PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>'
+
+
+def svg(k):
+    return f'<svg viewBox="0 0 24 24" aria-hidden="true">{ICO[k]}</svg>'
+
+
+def carte(q):
+    return "https://www.google.com/maps/search/?api=1&amp;query=" + q.replace(" ", "+")
+
+
+def info(k, label, value):
+    return f'<div class="ic">{svg(k)}<small>{label}</small><b>{value}</b></div>'
+
+
+def inst(k, nom, adr, q=None):
+    pin = f'<a class="pin" href="{carte(q)}" target="_blank" rel="noopener" aria-label="Voir {nom} sur le plan">{PIN}</a>' if q else ""
+    return f'<div class="inst">{svg(k)}<div><b>{nom}</b><span>{adr}</span></div>{pin}</div>'
+
+
+CLUB_PAGE = f"""<div class="page" id="p-club">
+  <section class="bloc"><div class="wrap">
+    <h2>Informations <span class="t-or">générales</span></h2>
+    <div class="infos-club">
+      {info("equipes", "Équipes", "16")}
+      {info("ligue", "Ligue", "Auvergne-Rhône-Alpes")}
+      {info("district", "District", "Drôme-Ardèche")}
+      {info("affil", "N° d'affiliation", "504261")}
+      {info("maillot", "Couleurs des maillots", "Blanc et bleu")}
+      {info("date", "Création", "1923")}
+    </div>
+    <h2>Les <span class="t-or">installations</span></h2>
+    <div class="install">
+      {inst("siege", "Siège social", "Complexe sportif Gustave Jaume<br>Avenue Pierre de Coubertin<br>26700 Pierrelatte", "Complexe sportif Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
+      {inst("terrain", "Stade Gustave Jaume", "Terrain d'honneur et annexe<br>Avenue Pierre de Coubertin, 26700 Pierrelatte", "Stade Gustave Jaume, Avenue Pierre de Coubertin, 26700 Pierrelatte")}
+      {inst("terrain", "Stade Michel Hidalgo", "205 allée Fernand Pellegrin<br>26290 Donzère", "205 Allée Fernand Pellegrin, 26290 Donzère")}
+      {inst("terrain", "Terrains sud et du Rocher", "Entraînements des jeunes<br>Pierrelatte")}
+    </div>
+    <div class="club-deux">
+      <div><h2>Notre <span class="t-or">histoire</span></h2>
+        <div class="frise">
+          <div><b>1923</b>Création du club de football à Pierrelatte.</div>
+          <div><b>Atom'Sports</b>Le football rejoint l'association omnisports Atom'Sports de Pierrelatte.</div>
+          <div><b>Aujourd'hui</b>Plus de 450 licenciés, une équipe fanion en D1 du district Drôme-Ardèche et une section féminine engagée en Régional 2.</div>
+        </div></div>
+      <div><h2>Nos <span class="t-or">valeurs</span></h2>
+        <div class="valeurs"><p>Respect, plaisir de jouer et esprit d'équipe. Nos éducateurs sont diplômés et le club suit le Programme éducatif fédéral de la FFF pour les plus jeunes.</p><p>Les filles ont toute leur place : équipes mixtes de U6 à U11, puis équipes féminines en U13, U15, U18 et seniors.</p></div>
+        <figure class="photo" style="margin-top:18px"><figcaption>Le stade Gustave Jaume</figcaption></figure></div>
+    </div>
+  </div></section>
+</div>
+
+"""
+cs = html.index('<div class="page" id="p-club">')
+ce = html.index('<div class="page" id="p-equipes">')
+html = html[:cs] + CLUB_PAGE + html[ce:]
+
+# 9) MATCHS: one selector for calendar, results, standings and tournaments
+SEG = ('<nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a>'
+       '<a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>')
+for pid in ("p-calendrier", "p-resultats", "p-classement"):
+    html = sub_once(f'<div class="page" id="{pid}">\n', f'<div class="page" id="{pid}">\n  {SEG}\n', html, pid)
+html = sub_once('<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n',
+                '<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n  ' + SEG + "\n", html, "seg-tournois")
+
+# 10) FOOT D'ANIMATION: a page of its own (filled by appli.js), known by the router and the menu
+html = sub_once('<div class="page" id="p-photos">',
+                '<div class="page" id="p-animation">\n  <section class="bloc"><div class="wrap" id="fa-zone"></div></section>\n</div>\n\n<div class="page" id="p-photos">',
+                html, "p-animation")
+html = sub_once('const PAGES = ["portail",', 'const PAGES = ["animation","portail",', html, "pages")
+html = sub_once('["Compos", "#compos"], ["Tournois", "#tournois"]]]',
+                '["Compos", "#compos"], ["Tournois", "#tournois"], ["Foot d\'animation", "#animation"]]]', html, "nav-public")
+
+# 11) floating bottom bar with app-style outline icons (same links, ids and labels)
 ts = html.index('<nav class="tabbar" aria-label="Navigation mobile">')
 te = html.index("</nav>", ts) + len("</nav>")
 old_tab = html[ts:te]
@@ -99,28 +212,24 @@ TABBAR = """<nav class="tabbar" aria-label="Navigation mobile">
 </nav>"""
 html = html[:ts] + TABBAR + html[te:]
 
-# 7) a few section titles get the app's gold second word
+# 12) a few section titles get the app's gold second word
 for old, new in [
     ("<h2>Derniers résultats</h2>", '<h2>Derniers <span class="t-or">résultats</span></h2>'),
-    ("<h2>Notre histoire</h2>", '<h2>Notre <span class="t-or">histoire</span></h2>'),
-    ("<h2>Nos valeurs</h2>", '<h2>Nos <span class="t-or">valeurs</span></h2>'),
-    ("<h2>Nos installations</h2>", '<h2>Nos <span class="t-or">installations</span></h2>'),
     ("<h2>Comment s'inscrire</h2>", '<h2>Comment <span class="t-or">s\'inscrire</span></h2>'),
     ("<h2>Cotisations</h2>", '<h2>Les <span class="t-or">cotisations</span></h2>'),
 ]:
     html = sub_once(old, new, html, "titre " + old)
 
-# 8) Samsung Internet fallback colours follow the app's gold
+# 13) Samsung Internet fallback colours follow the app's gold
 ss = html.index('<script id="samsung-js">')
 se = html.index("</script>", ss)
-html = html[:ss] + html[ss:se].replace("#7FB0FF", "#CFAE78") + html[se:]
+html = html[:ss] + html[ss:se].replace("#7FB0FF", "#C9B07F").replace("#CFAE78", "#C9B07F") + html[se:]
 
-# 9) late stylesheet + small script, after every module
+# 14) late stylesheet + small script, after every module
 last_body = html.rindex("</body>")  # the page's own closing tag (others live inside JS templates)
 html = html[:last_body] + '<style id="appli-tard">\n' + tard + "\n</style>\n" + appli + "\n" + html[last_body:]
 
-# 10) new version stamp, so open pages and installed apps show the "mise à jour" banner
-import hashlib, datetime
+# 15) new version stamp, so open pages and installed apps show the "mise à jour" banner
 stamp = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]
 html = re.sub(r'<meta name="asf-version" content="[^"]*">', f'<meta name="asf-version" content="{stamp}">', html, count=1)
 html = re.sub(r'<meta name="asf-version-date" content="[^"]*">', f'<meta name="asf-version-date" content="{datetime.date.today().isoformat()}">', html, count=1)
