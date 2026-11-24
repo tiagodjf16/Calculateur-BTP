@@ -1,0 +1,434 @@
+/*HABILLAGE-CSS*/
+/* Le site choisit lui-même ses couleurs (sombre par défaut, clair au choix) : on le dit au navigateur, pour que le mode
+   sombre forcé de Samsung Internet ou de Chrome Android ne le « fonce » pas une deuxième fois. */
+:root{color-scheme:light dark}
+:root[data-theme="dark"]{color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light only}
+/* =====================================================================
+   HABILLAGE « APPLI » : le site de l'ASF Pierrelatte présenté comme une
+   application de foot (inspiration appli officielle des compétitions),
+   en bleu et blanc. Tout ce qui suit se superpose au style d'origine,
+   sans rien retirer : mêmes pages, mêmes boutons, mêmes fonctions.
+   ===================================================================== */
+:root{
+  --m-nuit:#060D22; --m-fond:#0A1430; --m-carte:#111D40; --m-carte-2:#172752; --m-ligne:#1F2F5E;
+  --m-accent:#2F6BFF; --m-accent-h:#4C82FF; --m-ciel:#7FB0FF; --m-ciel-pale:#BFD6FF;
+  --m-rouge:#E5243B; --m-vert:#22C27A; --m-doux:#9AA8CC;
+  --titre:"Barlow","Segoe UI",Roboto,Arial,sans-serif;
+  --rayon:16px; --rayon-p:12px;
+  --ombre:0 10px 30px rgba(2,8,28,.28);
+  --ressort:cubic-bezier(.2,.9,.25,1.1);
+  /* anciens noms (« or ») repris par certains modules : ils suivent le nouvel accent */
+  --or:#7FB0FF; --or-clair:#BFD6FF; --or-fonce:#4C82FF; --electrique:#2F6BFF; --ciel:#7FB0FF;
+  --nuit-0:#060D22; --nuit-1:#0A1430; --nuit-2:#111D40;
+}
+:root[data-theme="dark"]{
+  --fond:#0A1430; --carte:#111D40; --ligne:#1F2F5E; --texte:#F2F5FC; --texte-doux:#9AA8CC;
+  --bleu-clair:#1A2C5C; --bleu-texte:#7FB0FF; --bleu:#2F6BFF; --bleu-nuit:#060D22;
+}
+:root[data-theme="light"]{
+  --fond:#EEF2F8; --carte:#FFFFFF; --ligne:#DCE3F0; --texte:#0D1B3E; --texte-doux:#5B6785;
+  --bleu-clair:#E3ECFF; --bleu-texte:#1C4FD6; --bleu:#2F6BFF; --bleu-nuit:#0A1430;
+  --m-carte:#FFFFFF; --m-carte-2:#F4F7FD; --m-ligne:#DCE3F0; --m-doux:#5B6785; --m-ciel:#1C4FD6;
+}
+
+/* ---------- fond général : uni, comme une appli ---------- */
+body{background:var(--fond)}
+::selection{background:rgba(47,107,255,.45);color:#fff}
+:focus-visible{outline-color:var(--m-ciel)}
+.page.visible{animation:pageEntre .3s ease-out both}
+@keyframes pageEntre{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* plus de cartes qui s'inclinent ni de reflets : tout reste à plat */
+.relief{transform:none!important}
+.relief > .reflet,.reflet{display:none!important}
+
+/* ---------- barre du haut ---------- */
+.top{background:var(--m-nuit);box-shadow:none;border-bottom:1px solid rgba(255,255,255,.07)}
+.marque b{font-family:var(--titre);font-weight:800;letter-spacing:-.005em}
+.marque small{opacity:.65}
+.nav{gap:2px}
+.nav a,.nav-tete{font-family:var(--titre)!important;font-weight:600!important;font-size:15.5px!important;color:#B9C5E6;border-radius:999px;padding:8px 13px!important;transition:background .15s,color .15s}
+.nav a:hover,.nav-tete:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav a.actif,.nav-groupe:has(a.actif) .nav-tete{color:#fff!important;background:rgba(127,176,255,.16);box-shadow:none!important}
+.nav-menu{background:var(--m-carte);border:1px solid var(--m-ligne);border-radius:var(--rayon);box-shadow:0 22px 50px rgba(0,0,0,.45);top:calc(100% + 4px)}
+.nav-menu a{border-radius:10px!important;background:none!important}
+.nav-menu a:hover{background:rgba(127,176,255,.12)!important}
+.nav-menu a.actif{background:rgba(127,176,255,.18)!important}
+.nav-admin button,.nav-joueur button{font-family:var(--titre);font-size:15.5px;border-radius:999px;padding:8px 12px}
+.nav-admin button[aria-selected="true"],.nav-joueur button[aria-selected="true"]{box-shadow:none;background:rgba(127,176,255,.16);color:#fff}
+.retour-espace,.retour-site{background:var(--m-accent);color:#fff!important;border-radius:999px;font-family:var(--titre);font-weight:700;box-shadow:none;transition:background .15s}
+.retour-espace:hover,.retour-site:hover{background:var(--m-accent-h)}
+.bt-installer{border:1px solid rgba(255,255,255,.22);background:transparent;color:#DCE5FA;font-family:var(--titre)}
+.bt-installer:hover{background:rgba(255,255,255,.08);color:#fff}
+.bt-burger:hover{background:rgba(255,255,255,.08)}
+
+/* ---------- boutons ---------- */
+.btn{border-radius:999px;font-family:var(--titre);font-weight:700;letter-spacing:.005em;transition:background .15s,border-color .15s,color .15s,transform .15s}
+.btn:active{transform:scale(.98)}
+.btn.plein,.btn.bleu{background:var(--m-accent);border-color:var(--m-accent);color:#fff}
+.btn.plein:hover,.btn.bleu:hover{background:var(--m-accent-h);border-color:var(--m-accent-h)}
+.btn:not(.plein):not(.bleu):not(.contour):not(.danger){border-width:1.5px}
+.btn.contour{border-width:1.5px}
+.btn.stage-bt,.btn.ha-bt{background:#fff;color:var(--m-nuit);border-color:#fff}
+.lien{color:var(--m-ciel);text-decoration:none;font-weight:700}
+.lien:hover{text-decoration:underline;text-underline-offset:3px}
+#p-accueil a.lien[href^="#"]::after{content:" ›";font-weight:800}
+
+/* ---------- ACCUEIL : en-tête du club, façon page d'équipe d'une appli ---------- */
+.hero.hero-stade{background:linear-gradient(180deg,#0B1A45 0%,#081434 60%,var(--fond) 100%);display:flex;flex-direction:column;
+  min-height:clamp(560px,calc(100svh - 68px),760px);isolation:isolate;overflow:hidden}
+.stade3d{position:absolute;left:0;top:0;width:100%;height:100%;display:block;z-index:0;opacity:0;transition:opacity 1.2s ease;touch-action:pan-y}
+.stade3d.pret{opacity:1}
+.hero-voile{position:absolute;inset:0;z-index:1;pointer-events:none;background:
+  linear-gradient(90deg,rgba(6,13,34,.92) 0%,rgba(6,13,34,.7) 32%,rgba(6,13,34,.12) 56%,transparent 66%),
+  linear-gradient(180deg,rgba(6,13,34,.25) 0%,transparent 14%,transparent 58%,rgba(10,20,48,.85) 86%,var(--fond) 100%)}
+.hero.hero-stade > .wrap{position:relative;z-index:2;max-width:1180px;margin:0 auto;width:100%}
+.hero.hero-stade .hero-scene{flex:1;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:24px;align-items:center;padding:30px 24px 6px}
+.hero.hero-stade .hero-dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch;padding:0 24px 28px}
+.hero.hero-stade .hero-dock:has(>.hero-actus[hidden]){grid-template-columns:minmax(0,1fr)}
+.hero.hero-stade .hero-dock:has(>.hero-actus[hidden]) #prochain{grid-column:auto}
+.hero-stade .hero-tete{gap:14px}
+.hero-stade .hero-blason{width:clamp(64px,7vw,92px);height:clamp(64px,7vw,92px);filter:drop-shadow(0 8px 20px rgba(0,0,0,.45))}
+.hero-stade .annee{font-family:var(--display);font-style:normal;font-weight:800;font-size:clamp(64px,8vw,116px);letter-spacing:.01em;line-height:.85;
+  color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.55);background:none;animation:none}
+.hero-sur{display:inline-flex;align-items:center;gap:8px;margin-top:16px!important;font:700 13px var(--corps)!important;letter-spacing:.02em;text-transform:none;
+  color:#DCE6FF!important;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:6px 14px 6px 10px;white-space:nowrap;max-width:none!important}
+.hero-sur span{width:8px;height:8px;border-radius:50%;background:var(--m-vert);box-shadow:0 0 0 3px rgba(34,194,122,.25);flex:none}
+.hero.hero-stade h1{font-family:var(--titre);font-size:clamp(34px,3.4vw,52px);font-weight:800;font-style:normal;text-transform:none;line-height:1.04;letter-spacing:-.015em;
+  max-width:none;margin-top:14px;text-shadow:0 4px 24px rgba(0,0,0,.45)}
+.hero.hero-stade h1 em{display:block;font-style:normal;color:var(--m-ciel);background:none;-webkit-text-fill-color:currentColor;filter:none;animation:none}
+.hero.hero-stade .hero-texte > p:not(.hero-sur){font-size:17px;color:#C9D4F2;max-width:44ch;margin-top:12px}
+.hero.hero-stade .btns{margin-top:22px;gap:10px}
+.hero.hero-stade .btn{font-size:17px;padding:12px 22px}
+.hero.hero-stade .btn.stage-bt{background:#fff;color:var(--m-nuit);border-color:#fff}
+.hero-ballon{position:relative;justify-self:center;width:min(100%,460px,52vh);aspect-ratio:1;border-radius:50%;cursor:grab;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.hero-ballon.saisi{cursor:grabbing}
+.hero-indice{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);white-space:nowrap;font:600 12.5px var(--corps);color:#DCE5FA;
+  background:rgba(6,13,34,.7);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:6px 14px;opacity:0;pointer-events:none;transition:opacity .6s}
+.stade3d-ok .hero-indice{animation:indice 7s 3.4s ease both}
+@keyframes indice{0%{opacity:0;transform:translate(-50%,8px)}10%,80%{opacity:1;transform:translate(-50%,0)}100%{opacity:0}}
+.hero-ballon.frappe::after{content:"";position:absolute;inset:7%;border-radius:50%;border:2px solid rgba(127,176,255,.85);animation:onde .8s ease-out forwards;pointer-events:none}
+@keyframes onde{from{opacity:1;transform:scale(.9)}to{opacity:0;transform:scale(1.5)}}
+.stade3d-ko .hero-ballon{background:url(/img/blason.png) 50% 50%/64% no-repeat;filter:drop-shadow(0 24px 40px rgba(0,0,0,.5));cursor:default}
+.stade3d-ko .hero-indice{display:none}
+@media (min-width:861px){
+  .hero.hero-stade .hero-ballon{align-self:end;margin-bottom:-40px}
+  .hero-indice{bottom:auto;top:4%}
+}
+
+/* cartes du bas de l'en-tête : actualités et matchs du week-end */
+.hero-stade .hero-actus,.hero-stade .tableau-score{border-radius:var(--rayon);border:1px solid rgba(255,255,255,.1);background:rgba(17,29,64,.92);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:var(--ombre)}
+.hero-stade .hero-actus{padding:14px}
+.ha-tete{font:800 12px var(--corps);letter-spacing:.1em;text-transform:uppercase;color:var(--m-ciel)}
+.hero-stade .ha-fiche{grid-template-columns:minmax(0,170px) minmax(0,1fr);align-items:center;gap:14px}
+.ha-sans{background:url(/img/blason.png) 50% 45%/58% no-repeat,linear-gradient(135deg,#2F6BFF,#0B1A4A);color:#fff;font-style:normal;letter-spacing:.14em;font-size:22px;align-content:end;padding-bottom:10px}
+.ha-stage .ha-sans{background:url(/img/blason.png) 50% 45%/58% no-repeat,linear-gradient(135deg,#fff,#DCE6FF);color:var(--m-nuit)}
+.ha-badge{background:var(--m-accent)}
+.ha-stage .ha-badge{background:#fff;color:var(--m-nuit)}
+.ha-txt h3{font-family:var(--titre);font-size:20px;font-style:normal}
+.ha-points button.on{background:var(--m-ciel)}
+.hero-stade .ha-points{justify-content:flex-start;margin-left:184px}
+.hero-stade .tableau-score{padding:16px 18px}
+.hero-stade .tableau-score h3{font:800 12px var(--corps);letter-spacing:.1em;text-transform:uppercase;color:var(--m-ciel)}
+.hero-stade .tableau-score h3 span:last-child{min-width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:var(--m-accent);color:#fff;letter-spacing:0;font-size:12px}
+.we-duel{margin:12px auto 8px;max-width:520px}
+.we-cote img,.we-cote .ecusson{width:58px!important;height:58px!important;box-shadow:0 0 0 3px rgba(255,255,255,.08)}
+.we-cote span{font-family:var(--display);font-size:18px;font-style:normal;text-transform:uppercase;letter-spacing:.01em;color:#fff}
+.we-milieu{font-family:var(--display);font-size:30px;font-style:normal;color:#fff;background:var(--m-accent);border-radius:12px;padding:6px 12px 5px;min-width:96px;text-shadow:none;border:0}
+.we-milieu small{color:#DCE6FF;font:700 10.5px var(--corps);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.we-info{color:var(--m-doux);margin-top:10px;font-size:13.5px}
+.we-points button{background:rgba(255,255,255,.25);transition:width .3s,background .3s}
+.we-points button[aria-current="true"]{background:var(--m-ciel);width:20px;border-radius:999px}
+
+@media (max-width:1100px){
+  .hero-stade .ha-fiche{grid-template-columns:minmax(0,140px) minmax(0,1fr)}
+  .hero-stade .ha-points{margin-left:154px}
+}
+@media (max-width:860px){
+  .hero.hero-stade{min-height:0}
+  .hero.hero-stade .hero-scene{grid-template-columns:minmax(0,1fr);padding:4px 16px 4px;gap:0}
+  .hero-ballon{order:-1;width:min(62vw,260px,36svh);margin:44px auto 16px}
+  .hero-indice{bottom:-14px;font-size:11px;padding:5px 11px}
+  .stade3d{height:min(100%,calc(44px + min(62vw,260px,36svh) + 40px));-webkit-mask-image:linear-gradient(180deg,#000 72%,transparent);mask-image:linear-gradient(180deg,#000 72%,transparent)}
+  .hero-voile{background:linear-gradient(180deg,rgba(6,13,34,.15) 0,transparent 40px,transparent 58%,var(--fond) 100%)}
+  .hero.hero-stade{background:var(--fond)}
+  .hero.hero-stade .hero-dock{grid-template-columns:minmax(0,1fr);padding:16px 16px 18px;gap:14px}
+  .hero-stade .hero-tete{gap:10px}
+  .hero-stade .hero-blason{width:58px;height:58px}
+  .hero-stade .annee{font-size:clamp(54px,17vw,84px)}
+  .hero.hero-stade h1{font-size:clamp(32px,9vw,44px);max-width:none}
+  .hero.hero-stade .hero-texte > p:not(.hero-sur){font-size:16px}
+  .hero-stade .ha-fiche{grid-template-columns:minmax(0,1fr)}
+  .hero-stade .ha-points{margin-left:0;justify-content:center}
+  .we-milieu{font-size:26px;min-width:84px}
+  .hero.hero-stade .btns .btn{flex:1 1 auto;text-align:center}
+}
+
+/* chiffres clés : quatre tuiles */
+#p-accueil .chiffres{max-width:1180px;margin:0 auto;padding:6px 24px 0;gap:12px;background:none;border:0}
+#p-accueil .chiffres div{background:var(--m-carte);border:1px solid var(--m-ligne)!important;border-radius:var(--rayon);padding:16px 18px;color:var(--m-doux);font-weight:600;font-size:14px}
+#p-accueil .chiffres b{font-family:var(--display);font-size:clamp(36px,3.6vw,48px);font-weight:800;font-style:normal;line-height:1;margin-bottom:4px;color:var(--texte)}
+@media (max-width:700px){
+  #p-accueil .chiffres{padding:4px 16px 0;gap:10px}
+  #p-accueil .chiffres b{font-size:36px}
+}
+
+/* ---------- titres de section ---------- */
+.bloc h2,.clx-tete h2,.cx-cadre h1,.porte h2,.cx-porte h2,.cx-carte h2{font-family:var(--titre);font-style:normal;text-transform:none;font-weight:800;letter-spacing:-.01em}
+#p-accueil .bloc h2,#p-club .bloc h2,#p-equipes .bloc h2,#p-inscriptions .bloc h2,#p-partenaires .bloc h2,#p-contact .bloc h2,
+#p-legal .bloc h2,#p-confidentialite .bloc h2,#p-tournois .bloc h2,#p-compos .bloc h2,#p-photos .bloc h2{
+  font-size:clamp(22px,2.4vw,28px);display:flex;align-items:center;gap:10px;line-height:1.15}
+#p-accueil .bloc h2::before,#p-club .bloc h2::before,#p-equipes .bloc h2::before,#p-inscriptions .bloc h2::before,#p-partenaires .bloc h2::before,#p-contact .bloc h2::before,
+#p-legal .bloc h2::before,#p-confidentialite .bloc h2::before{content:"";width:5px;height:22px;border-radius:3px;flex:none;background:var(--m-accent)}
+section.bloc{padding:30px 0}
+#p-accueil section.bloc .wrap{max-width:1180px;padding:0 24px}
+@media (max-width:700px){ #p-accueil section.bloc .wrap{padding:0 16px} section.bloc{padding:24px 0} }
+
+/* ---------- en-tête des pages ---------- */
+.titre-page{background:linear-gradient(180deg,#0E1F50 0%,#0A1638 70%,var(--fond) 100%);padding:34px 0 26px;border:0;isolation:isolate}
+.titre-page::before{content:none}
+.titre-page::after{content:none}
+.titre-page .wrap{position:relative}
+.titre-page .wrap::before{content:"ASF Pierrelatte";display:inline-flex;align-items:center;font:700 12px var(--corps);letter-spacing:.06em;text-transform:uppercase;color:var(--m-ciel);
+  background:rgba(127,176,255,.12);border-radius:999px;padding:4px 10px;margin-bottom:12px}
+.titre-page h1{font-family:var(--titre);font-style:normal;font-weight:800;text-transform:none;font-size:clamp(30px,4.6vw,48px);line-height:1.05;letter-spacing:-.015em;color:#fff;background:none;-webkit-text-fill-color:currentColor;filter:none}
+.titre-page p{font-size:16.5px;color:#B9C5E6;opacity:1;margin-top:8px}
+:root[data-theme="light"] .titre-page{background:linear-gradient(180deg,#0E1F50 0%,#14306F 100%)}
+@media (max-width:700px){.titre-page{padding:24px 0 20px}}
+
+/* ---------- pastilles de filtre (équipes) ---------- */
+.filtres button,.onglets button{font:700 14.5px var(--corps);padding:8px 16px;border-radius:999px;transition:background .15s,border-color .15s,color .15s}
+.filtres button{background:var(--m-carte);border:1px solid var(--m-ligne);color:var(--texte)}
+.filtres button:hover{border-color:var(--m-ciel)}
+.filtres button[aria-pressed="true"],.onglets button[aria-selected="true"]{background:var(--m-accent)!important;border-color:var(--m-accent)!important;color:#fff!important;box-shadow:none}
+.cal-filtres{background:var(--fond);padding:16px 16px 10px;border-bottom:1px solid var(--m-ligne);position:sticky;top:68px;z-index:12}
+@media (max-width:620px){.cal-filtres{top:58px}}
+@media (max-width:860px){
+  .cal-filtres{justify-content:flex-start}
+  .cal-filtres .filtres,#f-compos{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin-right:-16px;padding-right:16px}
+  .cal-filtres .filtres::-webkit-scrollbar,#f-compos::-webkit-scrollbar{display:none}
+  .ong-l1,.ong-l2{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:28px}
+  .ong-l1::-webkit-scrollbar,.ong-l2::-webkit-scrollbar{display:none}
+  .hero-sur{white-space:normal}
+}
+.ong-l1 button{font:700 15px var(--corps)!important;border-radius:999px!important;padding:9px 16px!important}
+.ong-l2 button{border-radius:999px;font:700 14px var(--corps)!important}
+
+/* ---------- cartes et tableaux ---------- */
+.carte,form.carte{border-radius:var(--rayon)}
+.scroll{border-radius:var(--rayon);background:var(--m-carte);border-color:var(--m-ligne)}
+th{font-family:var(--corps);font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-doux);background:transparent}
+:root[data-theme="dark"] td{border-bottom-color:rgba(255,255,255,.06)}
+tr.nous td{background:rgba(47,107,255,.2)!important;color:var(--texte)}
+tr.nous td:first-child{box-shadow:inset 4px 0 0 var(--m-accent)}
+.cl-blason,.cm-blason{box-shadow:none}
+
+/* ---------- résultats : cartes de match ---------- */
+.res-affiche,.cal-affiche{background:var(--fond)}
+.res-affiche::before,.cal-affiche::before{content:none}
+.res-contenu,.cal-contenu{max-width:1240px;margin:0 auto;color:var(--texte)}
+.res-bilan{gap:10px}
+.res-bilan div{background:var(--m-carte);border:1px solid var(--m-ligne);border-radius:var(--rayon);padding:12px 16px}
+.res-bilan b{font-style:normal;font-size:36px}
+.res-bilan span{color:var(--m-doux)}
+.res-we h3,.cal-bloc h3{font-family:var(--titre);font-style:normal;text-transform:none;font-weight:800;letter-spacing:-.01em;color:var(--texte)}
+.res-we h3{font-size:clamp(22px,2.2vw,28px)}
+.res-we h3::after,.cal-bloc h3::after{background:var(--m-accent);width:34px;height:4px}
+.res-grille{gap:12px}
+.res-carte{border-radius:var(--rayon);border:1px solid var(--m-ligne);border-left:4px solid #7C87A6;background:var(--m-carte);box-shadow:none;color:var(--texte);transition:background .15s,border-color .15s}
+.res-carte.V{border-left-color:var(--m-vert)}.res-carte.D{border-left-color:var(--m-rouge)}
+.res-carte:hover,.res-carte:focus-visible{transform:none;background:var(--m-carte-2);box-shadow:none}
+.res-haut{color:var(--m-doux)}
+.res-chip{background:rgba(127,176,255,.16);color:var(--m-ciel);font-family:var(--corps);font-weight:800;font-size:11.5px;padding:3px 9px;border-radius:999px;box-shadow:none}
+.res-eq span{font-style:normal;color:var(--m-doux)}
+.res-eq.gagne span{color:var(--texte)}
+.res-eq b{font-style:normal;font-size:24px;background:rgba(127,176,255,.1);border-radius:8px;color:var(--texte)}
+.res-eq.gagne b{background:var(--m-accent);color:#fff;box-shadow:none}
+.res-bas{color:var(--m-doux)}
+.res-issue{border-radius:999px}
+.res-issue.V{background:var(--m-vert)}.res-issue.D{background:var(--m-rouge)}
+#dernier .res-carte{background:var(--m-carte-2)}
+
+/* ---------- calendrier ---------- */
+.cal-affiche{grid-template-columns:minmax(0,1fr);min-height:60vh}
+.cal-bande{background:none;border:0}
+.cal-bande-in{position:static;flex-direction:row;justify-content:flex-start;align-items:center;gap:14px;max-width:1240px;margin:0 auto;padding:22px clamp(16px,3vw,44px) 0}
+.cal-bande .bl{width:52px;height:52px}
+.cal-titre{writing-mode:horizontal-tb;transform:none;font-family:var(--titre);font-size:clamp(24px,3vw,34px);letter-spacing:-.01em;color:var(--texte);-webkit-text-stroke:0;order:2}
+.cal-saison{font-family:var(--display);font-size:clamp(20px,2.4vw,28px);font-style:normal;color:var(--m-ciel);background:none;-webkit-text-fill-color:currentColor;order:3;
+  margin-left:auto;border:1px solid var(--m-ligne);border-radius:999px;padding:4px 14px}
+.cal-mois{color:var(--texte);gap:14px}
+.cal-bloc{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none}
+.cal-bloc:hover{transform:none;box-shadow:none}
+.cal-bloc h3{font-size:clamp(22px,2.2vw,28px)}
+.cal-ligne{border-radius:10px}
+.cal-ligne + .cal-ligne{border-top-color:var(--m-ligne)}
+.cal-ligne:hover,.cal-ligne:focus-visible{background:rgba(127,176,255,.08);transform:none}
+.cal-jour{font-style:normal;color:var(--texte)}
+.cal-j{background:rgba(127,176,255,.16);color:var(--m-ciel);font-family:var(--corps);font-size:11.5px;font-weight:800;border-radius:999px}
+.cal-j.coupe{background:rgba(229,36,59,.16);color:#FF7A8A}
+.cal-adv{color:var(--texte)}
+.cal-lieu{border-radius:999px}
+.cal-lieu.dom{background:var(--texte);color:var(--fond)}
+.cal-lieu.ext{box-shadow:inset 0 0 0 1.5px var(--m-ligne);color:var(--m-doux)}
+.cal-heure{color:var(--texte);border-radius:8px}
+.cal-note{color:var(--m-doux)}
+
+/* ---------- classement ---------- */
+.clx-tete h2{font-size:clamp(26px,3vw,38px);color:var(--texte)}
+.clx-tete p{color:var(--m-doux)}
+.clx-nous{border-radius:var(--rayon);background:var(--m-carte);border:1px solid var(--m-accent);box-shadow:none;color:var(--texte)}
+.clx-nous small{color:var(--m-doux)}
+.clx-rang{font-style:normal;color:var(--m-ciel);background:none;-webkit-text-fill-color:currentColor}
+.clx-podium{gap:12px}
+.clx-marche{border-radius:var(--rayon);background:var(--m-carte);border:1px solid var(--m-ligne);box-shadow:none;color:var(--texte)}
+.clx-marche.p1{background:linear-gradient(180deg,rgba(47,107,255,.28),var(--m-carte) 70%);border-color:rgba(127,176,255,.5)}
+.clx-marche.nous{box-shadow:0 0 0 2px var(--m-accent) inset}
+.clx-marche.p1 .med{background:#F2C94C}
+.clx-marche .pt{color:var(--texte);font-style:normal}
+.clx-marche .pt small{color:var(--m-doux)}
+.clx-table{border-radius:var(--rayon);background:var(--m-carte);border:1px solid var(--m-ligne);box-shadow:none;color:var(--texte)}
+.clx-l{border-top-color:var(--m-ligne)}
+.clx-l.en-tete{background:transparent;font-family:var(--corps);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-doux)}
+.clx-l .pts{font-style:normal;background:rgba(127,176,255,.1)}
+.clx-l.nous{background:rgba(47,107,255,.18);box-shadow:inset 0 0 0 1px rgba(127,176,255,.45)}
+.clx-l.nous .pts{background:var(--m-accent);color:#fff}
+.clx-l:not(.en-tete):hover{background:rgba(127,176,255,.06)}
+.clx-legende{color:var(--m-doux)}
+
+/* ---------- équipes ---------- */
+.diapo{border-radius:var(--rayon);border:1px solid var(--m-ligne);box-shadow:none}
+.dp-slide figcaption b{font-family:var(--titre);font-style:normal;text-transform:none}
+.dp-points button[aria-current="true"]{background:#fff;width:22px;border-radius:999px}
+.eq-grille{gap:14px}
+.eq-carte{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none}
+.eq-carte:hover{transform:none;box-shadow:none;border-color:var(--m-ciel)}
+.eq-photo{background:linear-gradient(135deg,#2F6BFF,#0E1F50)}
+.eq-sigle{font-style:normal;color:rgba(255,255,255,.22)}
+.eq-niveau{background:#fff;color:var(--m-nuit);border-radius:999px}
+.eq-corps h3{font-family:var(--titre);font-style:normal;text-transform:none;font-size:24px}
+.eq-infos b{font-style:normal;color:var(--m-ciel)}
+
+/* ---------- compos ---------- */
+.fc{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none}
+.fc-tete{background:linear-gradient(135deg,#2F6BFF,#0E1F50)}
+.fc-club b{font-style:normal}
+.banc{border-radius:var(--rayon)}
+.banc-toit{background:linear-gradient(180deg,#2F6BFF,#0E1F50)}
+.mot-coach{border-radius:var(--rayon)}
+
+/* ---------- club ---------- */
+.frise{border-left:0;position:relative;margin-left:12px}
+.frise::before{content:"";position:absolute;left:0;top:6px;bottom:10px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--m-accent),rgba(47,107,255,.15))}
+.frise div::before{left:-6px;width:15px;height:15px;background:var(--fond);border:3px solid var(--m-accent)}
+.frise b{font-family:var(--titre);font-style:normal;text-transform:none;font-size:22px;color:var(--texte)}
+.photo{border-radius:var(--rayon);box-shadow:none;transform:none}
+.info-ligne{border-bottom-color:var(--m-ligne)}
+.info-ligne svg{stroke:var(--m-ciel)}
+
+/* ---------- contact ---------- */
+.ct-personne{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none;transition:border-color .15s}
+.ct-personne:hover{transform:none;border-color:var(--m-ciel);box-shadow:none}
+.ct-avatar{background:linear-gradient(135deg,#7FB0FF,#2F6BFF)}
+.ct-p-txt h3{font-family:var(--titre);font-style:normal}
+
+/* ---------- inscriptions ---------- */
+.porte-insc{border-radius:var(--rayon);background:var(--m-carte)!important;border:1.5px solid var(--m-ligne);box-shadow:none;transition:border-color .15s}
+.porte-insc b{font-family:var(--titre);font-style:normal;text-transform:none;font-size:24px}
+.porte-insc:hover{transform:none;border-color:var(--m-ciel)}
+.porte-insc[aria-pressed="true"]{border-color:var(--m-accent)!important;box-shadow:0 0 0 3px rgba(47,107,255,.25)}
+.info-carte{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none}
+.info-carte h3{font-family:var(--titre)}
+.info-carte .gros{font-style:normal;color:var(--m-ciel)}
+input,select,textarea{border-radius:10px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--m-accent);outline-offset:0;border-color:transparent}
+
+/* ---------- partenaires ---------- */
+.partenaires div{border-radius:var(--rayon);border:1px solid var(--m-ligne);background:var(--m-carte);font-style:normal}
+.partenaires div:hover{border-color:var(--m-ciel)}
+
+/* ---------- pied de page ---------- */
+footer{background:var(--m-nuit);margin-top:40px;border-top:1px solid rgba(255,255,255,.06)}
+.defile{background:var(--m-nuit);border-top:0;padding:16px 0;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.piste img{height:52px;border-radius:12px;background:#fff;padding:6px 10px}
+.pied-club b{font-family:var(--titre);font-style:normal;text-transform:none;font-weight:800}
+.pied-liens a{text-decoration:none}
+.pied-liens a:hover{color:#fff;text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- connexion, portail, choix d'espace ---------- */
+.cx-fond{background:radial-gradient(60% 45% at 50% 0%,rgba(47,107,255,.28),transparent 70%),linear-gradient(180deg,#0E1F50 0%,var(--m-nuit) 100%)}
+.cx-cadre h1{font-size:clamp(30px,5vw,40px)}
+.cx-porte,.cx-carte{border-radius:20px;border:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:var(--ombre);color:var(--texte)}
+.cx-porte{border-top:1px solid var(--m-ligne);transition:border-color .15s}
+.cx-porte:hover{transform:none;border-color:var(--m-ciel)}
+.cx-porte svg{stroke:var(--m-ciel)}
+.cx-onglets{border-radius:999px}
+.cx-onglets button{border-radius:999px}
+.cx-onglets button[aria-pressed="true"]{background:var(--m-accent)}
+.hero.portail{background:radial-gradient(60% 60% at 50% 0%,rgba(47,107,255,.3),transparent 70%),linear-gradient(180deg,#0E1F50,var(--fond))}
+.hero.portail .rayures{display:none}
+.hero.portail h1{font-family:var(--titre);font-weight:800;letter-spacing:-.015em}
+.porte{border-radius:20px;border:1px solid var(--m-ligne);border-top:1px solid var(--m-ligne);background:var(--m-carte);box-shadow:none}
+.porte h2{font-size:26px}
+.jr-tete{background:linear-gradient(180deg,#0E1F50 0%,var(--fond) 100%)}
+.jr-tete::before{content:none}
+
+/* ---------- fenêtres, menu du téléphone, messages ---------- */
+.fiche-match{border-radius:20px;overflow:hidden;background:var(--m-carte);border:1px solid var(--m-ligne);color:var(--texte)}
+.fiche-match[open]{animation:fenetre .25s ease-out}
+@keyframes fenetre{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.fiche-match::backdrop{background:rgba(3,8,23,.7);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.fm-tete{background:linear-gradient(135deg,#2F6BFF,#0E1F50)}
+.drawer-fond{background:rgba(3,8,23,.6)}
+.drawer-panneau{background:var(--m-carte);border-left:1px solid var(--m-ligne);border-radius:20px 0 0 20px}
+.drawer-tete b{font-family:var(--titre);font-weight:800}
+.drawer-liste .lien[aria-selected="true"],.drawer-liste .rub-on,.drawer-liste .lien.rub[aria-selected="true"],#drawer-contenu .drawer-liste.simple button[aria-selected="true"]{background:var(--m-accent)!important;color:#fff!important;box-shadow:none}
+.toast{border-radius:999px;box-shadow:0 12px 30px rgba(0,0,0,.4);border:1px solid var(--m-ligne)}
+
+/* ---------- barre d'onglets en bas, sur téléphone (pages publiques) ---------- */
+@media (max-width:1140px){
+  body:not(.sur-espace):not(.sur-joueur):not(.sur-portail):not(.sur-connexion) .tabbar:not(.tabbar-joueur){display:flex!important}
+  body:not(.sur-espace):not(.sur-joueur):not(.sur-portail):not(.sur-connexion){padding-bottom:calc(68px + env(safe-area-inset-bottom,0px))}
+  body:not(.sur-espace):not(.sur-joueur):not(.sur-portail):not(.sur-connexion) .bt-burger{display:none}
+}
+.tabbar{background:rgba(6,13,34,.96);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,.08);
+  padding-bottom:env(safe-area-inset-bottom,0)}
+.tabbar a,.tabbar button{position:relative;color:#8E9CC4;font:600 11px var(--corps);gap:4px;padding:8px 0 9px;min-height:58px;justify-content:center}
+.tabbar a > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tabbar svg{width:23px;height:23px;stroke-width:1.9}
+.tabbar .actif,.tabbar button[aria-expanded="true"]{color:#fff}
+.tabbar .actif svg,.tabbar button[aria-expanded="true"] svg{stroke:var(--m-ciel)}
+.tabbar .tab-badge{top:5px;right:auto;left:calc(50% + 5px);max-width:none}
+.tabbar .actif::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--m-ciel)}
+.plus{bottom:calc(68px + env(safe-area-inset-bottom,0px));left:10px;right:10px;background:var(--m-carte);border:1px solid var(--m-ligne);border-radius:20px;padding:10px;
+  box-shadow:0 -10px 40px rgba(0,0,0,.45)}
+.plus.ouvert{grid-template-columns:1fr 1fr;gap:6px;animation:plusOuvre .2s ease-out}
+@keyframes plusOuvre{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.plus a{color:var(--texte);background:rgba(127,176,255,.06);border-radius:12px;padding:13px 14px;font-size:15px}
+.plus a:hover{background:rgba(127,176,255,.14)}
+.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+
+/* ---------- thème clair (bouton « Changer de thème ») ---------- */
+:root[data-theme="light"] .hero.hero-stade{background:linear-gradient(180deg,#0B1A45 0%,#0E1F50 100%)}
+:root[data-theme="light"] .hero-voile{background:linear-gradient(90deg,rgba(6,13,34,.92) 0%,rgba(6,13,34,.7) 32%,rgba(6,13,34,.12) 56%,transparent 66%)}
+:root[data-theme="light"] .hero-stade .hero-actus,:root[data-theme="light"] .hero-stade .tableau-score{
+  --texte:#F2F5FC;--texte-doux:#9AA8CC;--m-ciel:#7FB0FF;--m-doux:#9AA8CC;color:#F2F5FC;background:rgba(17,29,64,.95)}
+:root[data-theme="light"] .fc,:root[data-theme="light"] .cx-fond{--texte:#0D1B3E}
+:root[data-theme="light"] .cx-cadre > p{color:#DCE5FA}
+:root[data-theme="light"] .nav-menu{--texte:#F2F5FC;background:#111D40;border-color:#1F2F5E}
+:root[data-theme="light"] .tabbar{background:rgba(255,255,255,.97);border-top-color:var(--ligne)}
+:root[data-theme="light"] .tabbar a,:root[data-theme="light"] .tabbar button{color:#6A7698}
+:root[data-theme="light"] .tabbar .actif,:root[data-theme="light"] .tabbar button[aria-expanded="true"]{color:#0D1B3E}
+:root[data-theme="light"] .tabbar .actif svg{stroke:#2F6BFF}
+:root[data-theme="light"] .tabbar .actif::before{background:#2F6BFF}
+:root[data-theme="light"] .cal-lieu.dom{background:#0D1B3E;color:#fff}
+:root[data-theme="light"] .we-cote span{color:#fff}
+
+/* téléphones : textes nets */
+@media (max-width:760px){
+  .hero-stade .annee{-webkit-text-stroke-width:1.2px}
+}
+/*/HABILLAGE-CSS*/
