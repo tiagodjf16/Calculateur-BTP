@@ -1,0 +1,171 @@
+/* =====================================================================
+   HABILLAGE « APPLI FOOT » — espaces membres (joueur et dirigeants)
+   Feuille placée après tous les modules : elle reprend leurs sélecteurs
+   pour les mettre aux couleurs de l'appli (bleu nuit, rouge, or).
+   ===================================================================== */
+
+/* ---------- ESPACE JOUEUR : la carte de licence ---------- */
+.jr-tete{background:transparent;padding:22px 0 8px;overflow:visible}
+.jr-tete::before{content:none}
+#p-joueur #jr-carte{display:flex;flex-direction:column}
+#p-joueur #jr-carte::before{content:"Profil";order:0;display:block;text-align:center;font:700 clamp(38px,5.6vw,52px)/1 var(--f-titre);letter-spacing:.02em;text-transform:uppercase;color:var(--f-gold);margin-bottom:6px}
+#p-joueur #jr-carte::after{content:"Ta licence";order:1;display:block;align-self:center;width:100%;max-width:560px;margin:14px 0 10px;font:700 26px var(--f-titre);letter-spacing:.02em;text-transform:uppercase;color:#fff}
+#p-joueur #jr-carte > .jr-carte{order:2;align-self:center;width:100%}
+.jr-carte{position:relative;isolation:isolate;overflow:hidden;max-width:560px;margin:0 auto;padding:20px 20px 16px;border-radius:12px;color:#fff;
+  background:linear-gradient(135deg,#073979 0%,#214487 52%,#152D5C 100%);box-shadow:0 18px 40px rgba(0,0,0,.45);
+  display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"photo id blason" "infos infos infos" "actions actions actions";column-gap:16px;row-gap:12px;align-items:center;text-align:left}
+.jr-carte::before{content:"";position:absolute;right:-10px;bottom:-10px;width:190px;height:150px;z-index:-1;pointer-events:none;opacity:.55;
+  background:radial-gradient(circle,rgba(255,255,255,.5) 1.1px,transparent 1.7px) 0 0/12px 12px;-webkit-mask-image:linear-gradient(315deg,#000,transparent 75%);mask-image:linear-gradient(315deg,#000,transparent 75%)}
+.jr-carte::after{content:"";position:absolute;right:-8px;top:18px;width:16px;height:72%;border-radius:4px;background:var(--f-red);z-index:-1;opacity:.9}
+.jr-photo{grid-area:photo;width:74px;height:74px;border:3px solid rgba(255,255,255,.9);background:#033879;box-shadow:none}
+.jr-photo span{font:700 30px var(--f-titre)}
+.jr-id{grid-area:id;align-self:center;min-width:0}
+.jr-eq{display:block;width:fit-content;background:none!important;color:var(--f-blue-300)!important;font:700 15px var(--f-ui)!important;letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;border-radius:0;
+  border-bottom:1px solid rgba(255,255,255,.35);margin-bottom:6px}
+.jr-eq::before{content:"Football · "}
+.jr-id h1{font:700 22px/1.15 var(--f-ui)!important;text-transform:none!important;letter-spacing:0;margin:0!important;color:#fff}
+.jr-id h1 span{font-weight:700;color:#fff}
+.jr-infos{grid-area:infos;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 12px}
+.jr-infos div{background:none!important;border:0!important;border-radius:0;padding:0!important;min-width:0!important}
+.jr-infos div:nth-child(3){display:block!important}
+.jr-infos small{display:block;font:500 11.5px var(--f-ui)!important;color:#B9CCEB!important;letter-spacing:.02em}
+.jr-infos b{display:block;font:600 15.5px var(--f-ui)!important;letter-spacing:0;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jr-actions{grid-area:actions;display:flex!important;flex-direction:row!important;flex-wrap:wrap;gap:8px;padding-top:12px;border-top:1px solid rgba(255,255,255,.2)}
+.jr-actions .btn{flex:1 1 auto;font-size:15.5px;padding:8px 12px}
+.jr-actions .btn.contour{color:#fff;border-color:rgba(255,255,255,.55);background:transparent}
+.jr-blason{grid-area:blason;display:block!important;width:52px;background:#fff;border-radius:50%;padding:4px;opacity:1}
+@media (max-width:420px){ .jr-infos{grid-template-columns:repeat(2,minmax(0,1fr))} .jr-infos div:nth-child(3){grid-column:1/-1} }
+#sous-joueur{text-align:center;color:var(--f-txt-3)}
+/* sections de l'espace joueur */
+#p-joueur section.bloc{padding-top:14px!important}
+#joueur{max-width:760px}
+#joueur > .carte,#joueur .info-carte,#joueur .creneau{background:var(--f-panel);border:0;border-radius:var(--f-rayon);box-shadow:none}
+#joueur h2,#joueur h2.sous,#joueur .sous{font:700 clamp(24px,3vw,30px) var(--f-titre)!important;font-style:normal!important;letter-spacing:.02em;text-transform:uppercase;color:#fff;border:0!important;padding-left:0!important}
+#joueur h2.sous::before,#joueur h3.sous::before{content:none!important}
+#joueur h3{font-family:var(--f-titre);text-transform:uppercase;letter-spacing:.02em}
+#joueur .qui{font:700 20px var(--f-ui)}
+#joueur .quoi,#joueur .vide,#joueur .jr-vide{color:var(--f-txt-3);font-family:var(--f-ui)}
+#joueur .creneau{padding:14px 16px;margin-bottom:10px}
+#joueur .creneau .titre{font:700 20px var(--f-titre);text-transform:uppercase;letter-spacing:.02em}
+.jr-sombre{background:transparent;border-radius:0;padding:4px 0;margin-top:6px}
+.jr-sombre .cal-bloc{background:var(--f-panel)}
+#bloc-notif{background:var(--f-panel)!important}
+#bloc-notif h2,#bloc-notif h3{font:700 22px var(--f-titre)!important;text-transform:uppercase;letter-spacing:.02em}
+/* boutons de présence (présent / absent) */
+#joueur [data-a="presence"],#joueur .pres button,#joueur .presence button{border-radius:2px!important}
+/* barre d'onglets du joueur et menu Plus */
+.tabbar.tabbar-joueur a,.tabbar.tabbar-joueur button{font:500 11.5px var(--f-ui)}
+.tabbar.tabbar-joueur svg{stroke-width:1.5}
+#plus-joueur{background:var(--f-bg);border:1px solid var(--f-line);border-radius:0}
+#plus-joueur a{color:#fff;border:1px solid var(--f-line);border-radius:2px;font:600 17px var(--f-titre);text-transform:uppercase;letter-spacing:.03em}
+.nav-sortie{background:transparent!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;font:600 16px var(--f-titre)!important;letter-spacing:.04em;text-transform:uppercase;padding:7px 12px!important}
+
+/* ---------- ESPACE DIRIGEANTS ---------- */
+/* en-tête : fond bleu nuit, titre d'écran en or */
+#p-espace .titre-page.esp-hero{background:radial-gradient(520px 340px at 0 0,rgba(227,6,19,.24),transparent 70%),var(--f-bg);min-height:0;padding:28px 0 20px;border-bottom:1px solid var(--f-line);align-items:center}
+#p-espace .esp-3d{opacity:.28}
+#p-espace .esp-hero-voile{background:linear-gradient(90deg,rgba(0,14,29,.92) 0%,rgba(0,14,29,.7) 45%,rgba(0,14,29,.35) 100%)}
+#p-espace .titre-page.esp-hero .wrap{text-align:left}
+#p-espace .titre-page.esp-hero .wrap::before{color:var(--f-blue-300)}
+#p-espace .titre-page.esp-hero h1{color:var(--f-gold);text-shadow:none;font-size:clamp(38px,5vw,54px)}
+#p-espace .titre-page.esp-hero p{color:var(--f-txt-2);text-shadow:none;font-size:16px;margin-left:0}
+.esp-moi{background:var(--f-panel);border:0;border-radius:var(--f-rayon);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;padding:10px 12px}
+.esp-moi-av{background:#fff!important;color:#001A31!important;border:0!important;box-shadow:none!important;font-family:var(--f-titre)!important}
+.esp-moi-txt b{font:700 17px var(--f-ui);color:#fff}
+.esp-moi-txt small{color:var(--f-gold);font:700 13px var(--f-titre);letter-spacing:.06em;text-transform:uppercase}
+.esp-moi-bt{background:transparent!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;color:#fff!important;font:600 15px var(--f-titre)!important;letter-spacing:.04em;text-transform:uppercase;box-shadow:none!important}
+.esp-moi-bt:hover{background:rgba(255,255,255,.08)!important}
+.esp-moi-bt.joueur{background:var(--f-red)!important;border-color:var(--f-red)!important}
+.esp-moi-bt.sortir{color:#FF6B74!important;border-color:rgba(227,6,19,.6)!important}
+body.sur-espace .app.esp-app{background:transparent}
+/* « Où veux-tu aller ? » */
+.esp-lanceur h2{font:700 30px var(--f-titre);font-style:normal;letter-spacing:.02em;text-transform:uppercase;color:#fff}
+.esp-lanceur h2::after{height:1px;background:var(--f-red)}
+.esp-rubs{gap:12px}
+.esp-rub{background:var(--f-panel)!important;border:0!important;border-radius:var(--f-rayon)!important;box-shadow:none!important;padding:16px 14px}
+.esp-rub::before,.esp-rub::after{content:none!important}
+.esp-rub:hover{transform:none!important;box-shadow:none!important}
+.esp-rub-ico{width:46px;height:46px;border-radius:50%;background:#fff!important;box-shadow:none!important;font-size:24px}
+.esp-rub-t b{font:700 24px var(--f-titre);font-style:normal;letter-spacing:.02em;text-transform:uppercase;color:#fff}
+.esp-rub-t small{font:400 13.5px var(--f-ui);color:var(--f-txt-3)}
+.esp-tuiles{gap:6px}
+.esp-tuile{background:transparent!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;box-shadow:none!important;min-height:58px;padding:9px 10px;transform:none!important}
+.esp-tuile:hover{background:var(--f-panel-3)!important;border-color:rgba(255,255,255,.45)!important}
+.esp-tuile-ico{width:36px;height:36px;border-radius:2px;background:transparent!important;border:1px solid var(--f-line);box-shadow:none!important;color:var(--f-gold)!important}
+.esp-tuile-ico svg{stroke:var(--f-gold)!important;color:var(--f-gold)}
+.esp-tuile-txt b{font:600 18px var(--f-titre);letter-spacing:.03em;text-transform:uppercase;color:#fff}
+.esp-tuile-txt small{font:400 13px var(--f-ui);color:var(--f-txt-3)}
+.esp-fl{color:var(--f-red)!important;font-size:28px!important;opacity:1!important}
+.esp-version{color:var(--f-txt-3)}
+/* bandeau de chaque onglet */
+body.sur-espace .app-tete.esp-bandeau{background:transparent!important;border:0!important;box-shadow:none!important;padding:10px 0 12px;border-bottom:1px solid var(--f-red)!important;border-radius:0!important}
+body.sur-espace .app-tete.esp-bandeau::before,body.sur-espace .app-tete.esp-bandeau::after{content:none!important}
+body.sur-espace .app-tete.esp-bandeau h1{font:700 clamp(30px,4vw,42px) var(--f-titre)!important;font-style:normal!important;letter-spacing:.02em;text-transform:uppercase;color:var(--f-gold)!important}
+body.sur-espace .app-tete.esp-bandeau .rub-ico-grand{background:#fff;border-radius:50%;box-shadow:none}
+body.sur-espace .app-tete.esp-bandeau p{color:var(--f-txt-3)}
+.esp-accueil{background:transparent!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;color:#fff!important;font:600 16px var(--f-titre)!important;letter-spacing:.04em;text-transform:uppercase;box-shadow:none!important}
+/* sous-onglets : soulignés de rouge */
+body.sur-espace .rub-onglets{background:transparent!important;border:0!important;border-bottom:1px solid var(--f-red)!important;border-radius:0!important;padding:0!important;gap:0!important;box-shadow:none!important}
+body.sur-espace .rub-onglets button{position:relative;background:none!important;border-radius:0!important;box-shadow:none!important;color:var(--f-txt-2)!important;font:500 19px var(--f-titre)!important;letter-spacing:.03em;text-transform:uppercase;padding:12px 14px!important}
+body.sur-espace .rub-onglets button[aria-selected="true"]{color:#fff!important;font-weight:700!important;background:none!important}
+body.sur-espace .rub-onglets button[aria-selected="true"]::after{content:"";position:absolute;left:14px;right:14px;bottom:0;height:3px;background:var(--f-red)}
+/* menu de gauche (ordinateur) */
+.app-nav{background:var(--f-panel)!important;border:0!important;border-radius:var(--f-rayon)!important;box-shadow:none!important}
+.app-nav .lien,.app-nav .lien.rub{border-radius:2px!important;font:600 17px var(--f-titre)!important;letter-spacing:.03em;text-transform:uppercase;color:var(--f-txt-2)!important}
+.app-nav .lien[aria-selected="true"],.app-nav .lien.rub[aria-selected="true"]{background:var(--f-panel-3)!important;color:#fff!important;box-shadow:inset 3px 0 0 var(--f-red)!important}
+/* panneaux, titres, champs et boutons de chaque onglet */
+body.sur-espace #panneau .carte,body.sur-espace #panneau .pli,body.sur-espace #panneau details.ong-pli{background:var(--f-panel)!important;border:0!important;border-radius:var(--f-rayon)!important;box-shadow:none!important}
+body.sur-espace #panneau .carte>h2:first-child,body.sur-espace #panneau .carte h2,body.sur-espace .ong-barre h2{font:700 26px var(--f-titre)!important;font-style:normal!important;letter-spacing:.02em;text-transform:uppercase;color:#fff}
+body.sur-espace #panneau .carte>h2:first-child::after{background:var(--f-red)!important;height:2px!important}
+body.sur-espace #panneau h3.sous,body.sur-espace .ong-titre,body.sur-espace .club-titre{font:700 22px var(--f-titre)!important;font-style:normal!important;letter-spacing:.02em;text-transform:uppercase;color:#fff}
+body.sur-espace #panneau h3.sous::before,body.sur-espace .ong-titre::before{background:var(--f-red)!important;width:4px!important;border-radius:0!important}
+body.sur-espace .ong-barre p,body.sur-espace .ong-groupe-l,body.sur-espace #panneau .quoi{color:var(--f-txt-3)!important}
+body.sur-espace .ong-nb{background:var(--f-red)!important;color:#fff!important;border-radius:2px!important}
+body.sur-espace #panneau label{color:var(--f-txt-2);font-family:var(--f-ui)}
+body.sur-espace #panneau input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+body.sur-espace #panneau select,body.sur-espace #panneau textarea,body.sur-espace #panneau .dp-champ{background:var(--f-bg)!important;border:1px solid var(--f-line-2)!important;border-radius:2px!important;color:#fff!important;box-shadow:none!important}
+body.sur-espace #panneau input:focus-visible,body.sur-espace #panneau select:focus-visible,body.sur-espace #panneau textarea:focus-visible{border-color:var(--f-teal)!important;box-shadow:0 0 0 1px var(--f-teal)!important;outline:none}
+body.sur-espace #panneau .btn{border-radius:2px!important;font:700 16px var(--f-titre)!important;letter-spacing:.04em;text-transform:uppercase;box-shadow:none!important}
+body.sur-espace #panneau .btn.bleu{background:var(--f-red)!important;border-color:var(--f-red)!important;color:#fff!important}
+body.sur-espace #panneau .btn.bleu:hover{background:var(--f-red-h)!important}
+body.sur-espace #panneau .btn.contour{background:transparent!important;border:1.5px solid var(--f-line-2)!important;color:#fff!important}
+body.sur-espace #panneau .btn.contour:hover{border-color:#fff!important}
+body.sur-espace #panneau .btn.danger{background:transparent!important;border:1.5px solid rgba(227,6,19,.7)!important;color:#FF6B74!important}
+body.sur-espace #panneau .rangee{background:transparent!important;border:0!important;border-bottom:1px solid var(--f-line)!important;border-radius:0!important;box-shadow:none!important}
+body.sur-espace #panneau .rangee:hover{background:var(--f-panel-3)!important}
+body.sur-espace .ong-aide{border:1px solid var(--f-line)!important;border-radius:2px!important;background:transparent!important}
+body.sur-espace .ong-aide>summary{color:var(--f-gold)!important;font-family:var(--f-ui)!important}
+body.sur-espace .ong-aide-corps{color:var(--f-txt-2)!important}
+body.sur-espace .ong-vide{border:1px dashed var(--f-line-2)!important;border-radius:2px!important;background:transparent!important}
+body.sur-espace .ong-vide b{font-family:var(--f-titre)!important;text-transform:uppercase;letter-spacing:.02em}
+/* puces d'état, numéros, cartes du tableau de bord */
+body.sur-espace #panneau [class*="-puce"]{border-radius:2px!important}
+body.sur-espace #panneau .ong-tb-score{border-radius:2px!important;font-family:var(--f-ui)!important}
+body.sur-espace #panneau .ong-tb-score.v{background:var(--f-teal)!important;color:#001A31!important}
+body.sur-espace #panneau .ong-tb-score.d{background:var(--f-red)!important;color:#fff!important}
+body.sur-espace #panneau [class*="ong-tb-carte"],body.sur-espace #panneau [class*="-carte"]:not(.btn){border-radius:var(--f-rayon)}
+body.sur-espace .menu-badge,.menu-badge{background:var(--f-red)!important;color:#fff!important;border-radius:2px!important}
+/* téléphone : bandeau de l'espace */
+@media (max-width:700px){
+  #p-espace .titre-page.esp-hero{padding:20px 0 16px}
+  #p-espace .titre-page.esp-hero .wrap{text-align:center}
+  .esp-moi{justify-content:center}
+}
+/* parties d'un onglet (réglages, etc.) : cartes plates, choisie = liseré rouge */
+body.sur-espace #panneau .ong-reg-sections .ong-reg-section{border-radius:2px!important;border:1px solid var(--f-line-2)!important;background:transparent!important;box-shadow:none!important}
+body.sur-espace #panneau .ong-reg-sections .ong-reg-section:hover{background:var(--f-panel)!important}
+body.sur-espace #panneau .ong-reg-sections .ong-reg-section[aria-selected="true"]{border-color:var(--f-red)!important;background:var(--f-panel)!important;box-shadow:inset 0 0 0 1px var(--f-red)!important}
+body.sur-espace #panneau .ong-reg-section-ico{border-radius:50%!important;background:#fff!important}
+body.sur-espace #panneau .ong-reg-section-txt b{font:600 18px var(--f-titre)!important;letter-spacing:.03em;text-transform:uppercase}
+body.sur-espace #panneau .ong-reg-section-txt small{color:var(--f-txt-3)!important}
+/* bandeaux d'équipe et blocs arrondis des modules : angles nets */
+body.sur-espace #panneau [class*="-barre"]:not(.ong-barre),body.sur-espace #panneau [class*="eq-barre"]{border-radius:var(--f-rayon)!important;box-shadow:none!important}
+body.sur-espace #panneau [class*="-chip"],body.sur-espace #panneau [class*="-nb"]{border-radius:2px!important}
+/* téléphone : sous-onglets sur une ligne, à faire défiler du doigt */
+@media (max-width:860px){
+  body.sur-espace .rub-onglets{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;width:100%!important;
+    -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
+  body.sur-espace .rub-onglets::-webkit-scrollbar{display:none}
+  body.sur-espace .rub-onglets button{flex:0 0 auto;font-size:18px!important;padding:12px 12px!important}
+  body.sur-espace .app-tete.esp-bandeau h1{font-size:32px!important}
+}
