@@ -7,6 +7,11 @@
      horaire, sinon par tour), le classement des poules, la phase finale et le vainqueur, l'équipe choisie mise en avant ;
      la page se met à jour toute seule dès qu'un score est validé dans l'espace club (le site relit ses données toutes les
      30 secondes), les scores qui viennent d'arriver s'éclairent ;
+   - matchs en direct (« Gérer » › « ⚡ Matchs en direct ») : « Début du match », + / − pour chaque but, « Fin du match » ; le
+     chrono tourne sur le téléphone de l'organisateur ; les spectateurs voient le match « En cours », sa minute et son score,
+     « Coup d'envoi », « But ! » ; un match oublié « en cours » se termine tout seul quand le suivant commence sur son
+     terrain, et n'apparaît plus « en cours » aux spectateurs passé son temps ; avant chaque enregistrement, le tournoi est
+     relu sur le serveur (deux téléphones peuvent saisir sur deux terrains) ;
    - horaires : les matchs de poule alternent (poule A, poule B, A, B…), chaque équipe soufflant entre deux matchs si possible ;
      l'heure de chacun part de l'heure du premier match, de la durée d'un match, de la pause et du nombre de terrains
      (création du tournoi, ou carte « Horaires des matchs » dans « Gérer ») ; la phase finale suit, tour après tour ;
@@ -175,7 +180,8 @@
     if (!ch && !(+t.qualif > 0) && poulesDe(t).length === 1 && total && joues === total) ch = (clPoule(t, 0)[0] || {}).nom || null;
     const fini = !!ch || (total > 0 && joues === total && !(+t.qualif > 0 && !ko));
     const a = auj(), d = String(t.date || "");
-    const k = fini ? "fini" : d && d > a ? "avenir" : d && d < a ? (joues ? "fini" : "avenir") : (d === a || joues ? "direct" : "avenir");
+    const live = matchsDe(t).some(m => m.direct && !aScore(m));
+    const k = fini ? "fini" : live ? "direct" : d && d > a ? "avenir" : d && d < a ? (joues ? "fini" : "avenir") : (d === a || joues ? "direct" : "avenir");
     return { k, joues, total, ch, ko };
   }
   const ETAT_L = { direct: "En direct", avenir: "À venir", fini: "Terminé" };
@@ -257,15 +263,27 @@
   function carteM(t, m, tag){
     if (m.exempt) return `<div class="trn-m exempt${m.a === ST.moi ? " moi" : ""}">${tag ? `<span class="trn-m-tag">${H(tag)}</span>` : ""}
       <div class="trn-m-l g">${logo(m.a)}<span>${H(m.a)}</span><b></b></div><p class="trn-m-note">Qualifiée d'office pour le tour suivant</p></div>`;
-    const j = aScore(m), w = j ? gagnant(m) : null, cle = t.id + "|" + m.id, sc = j ? `${m.sa}-${m.sb}-${m.tab || ""}` : "";
-    const nouveau = j && ST.vus[cle] !== undefined && ST.vus[cle] !== sc;
+    const j = aScore(m), w = j ? gagnant(m) : null, cle = t.id + "|" + m.id;
+    const d = !j && m.direct ? m.direct : null, duree = t.horaire ? +t.horaire.duree || 0 : 0;
+    const minute = d ? Math.max(1, Math.floor((Date.now() - (+d.debut || Date.now())) / 60000) + 1) : 0;
+    const depasse = !!d && !!duree && minute > duree + 5;                  // « Fin du match » oublié : plus « en cours » pour les spectateurs
+    const da = d ? +d.sa || 0 : null, db = d ? +d.sb || 0 : null;
+    const sc = j ? `${m.sa}-${m.sb}-${m.tab || ""}` : d ? `d${da}-${db}` : "";
+    const avant = ST.vus[cle];
+    let neuf = "";
+    if (avant !== undefined && avant !== sc && sc){
+      if (j) neuf = String(avant).startsWith("d") ? "Terminé" : "Nouveau score";
+      else { const p = String(avant).slice(1).split("-").map(Number); neuf = !avant ? "Coup d'envoi" : da + db > (p[0] || 0) + (p[1] || 0) ? "⚽ But !" : "Score corrigé"; }
+    }
+    const nouveau = !!neuf;
     ST.vus[cle] = sc;
-    const ligne = (n, s) => `<div class="trn-m-l${w ? (w === n ? " g" : " p") : ""}${n && n === ST.moi ? " moi" : ""}">${n ? logo(n) : `<span class="t-logo">?</span>`}<span>${H(n || "À déterminer")}</span><b>${j ? s : ""}</b></div>`;
+    const ligne = (n, s) => `<div class="trn-m-l${w ? (w === n ? " g" : " p") : ""}${n && n === ST.moi ? " moi" : ""}">${n ? logo(n) : `<span class="t-logo">?</span>`}<span>${H(n || "À déterminer")}</span><b>${j || d ? s : ""}</b></div>`;
     const aMoi = !!ST.moi && (m.a === ST.moi || m.b === ST.moi), lieu = terrainTxt(t, m);
-    return `<div class="trn-m${j ? " joue" : ""}${nouveau ? " nouveau" : ""}${aMoi ? " moi" : ""}">
-      <span class="trn-m-tag"><span>${H((tag || "") + (tag ? lieu : lieu.replace(/^ · /, "")))}</span>${j ? (nouveau ? `<em class="neuf">Nouveau score</em>` : (m.heure ? `<small>${hTxt(m.heure)}</small>` : ""))
-        : `<em>${m.heure ? hTxt(m.heure) : "À jouer"}</em>`}</span>
-      ${ligne(m.a, m.sa)}${ligne(m.b, m.sb)}${j && m.tab && m.sa === m.sb ? `<p class="trn-m-note">${H(m.tab)} gagne aux tirs au but</p>` : ""}</div>`;
+    const droite = neuf ? `<em class="neuf">${neuf}</em>` : j ? (m.heure ? `<small>${hTxt(m.heure)}</small>` : "")
+      : d ? (depasse ? `<em>Fin du match</em>` : `<em class="live"><i></i>En cours · ${minute}'</em>`) : `<em>${m.heure ? hTxt(m.heure) : "À jouer"}</em>`;
+    return `<div class="trn-m${j ? " joue" : ""}${d && !depasse ? " direct" : ""}${nouveau ? " nouveau" : ""}${aMoi ? " moi" : ""}">
+      <span class="trn-m-tag"><span>${H((tag || "") + (tag ? lieu : lieu.replace(/^ · /, "")))}</span>${droite}</span>
+      ${ligne(m.a, j ? m.sa : da)}${ligne(m.b, j ? m.sb : db)}${j && m.tab && m.sa === m.sb ? `<p class="trn-m-note">${H(m.tab)} gagne aux tirs au but</p>` : ""}</div>`;
   }
 
   /* ---------- onglet Matchs : les tours de poule, puis la phase finale ---------- */
@@ -286,8 +304,9 @@
       [...new Set(ko.map(m => m.tour))].sort((a, b) => a - b).forEach(n => { const l = ko.filter(m => m.tour === n); secs.push({ titre: l[0].phase, l, tag: () => l[0].phase }); });
     }
     if (!secs.length) return `<p class="fa-vide">Les matchs s'afficheront ici après le tirage au sort.</p>`;
-    const enCours = secs.findIndex(s => s.l.some(m => !m.exempt && !aScore(m)));
-    return secs.map((s, i) => `<h3 class="trn-sec${s.heure ? " trn-sec-h" : ""}">${H(s.titre)}${i === enCours && ST.etat === "direct" ? `<em>${s.heure ? "À suivre" : "En cours"}</em>` : ""}</h3>
+    const enCours = secs.findIndex(s => s.l.some(m => !m.exempt && !aScore(m))), live = s => s.l.some(m => m.direct && !aScore(m));
+    const aucunLive = !secs.some(live);
+    return secs.map((s, i) => `<h3 class="trn-sec${s.heure ? " trn-sec-h" : ""}">${H(s.titre)}${live(s) ? `<em>En direct</em>` : i === enCours && aucunLive && ST.etat === "direct" ? `<em>${s.heure ? "À suivre" : "En cours"}</em>` : ""}</h3>
       <div class="trn-grille">${s.l.map(m => carteM(t, m, s.tag(m))).join("")}</div>`).join("");
   }
 
@@ -330,7 +349,8 @@
     else if (ko.length){ statut = "✓ Qualifiée pour la phase finale"; cls = "ok"; }
     else if (Q && poulesFinies && r >= 0){ const q = r < Q || repe(t).includes(moi); statut = q ? "✓ Qualifiée pour la phase finale" : "Éliminée en poule"; cls = q ? "ok" : "fin"; }
     const tag = m => m.phase === "poule" ? `Poule ${LETTRE(m.poule || 0)}${m.journee && !m.heure ? " · Tour " + m.journee : ""}` : m.phase;
-    const joues = ms.filter(m => !m.exempt && aScore(m)).reverse(), aVenir = ms.filter(m => !m.exempt && !aScore(m));
+    const joues = ms.filter(m => !m.exempt && aScore(m)).reverse(), enDirect = ms.filter(m => !m.exempt && !aScore(m) && m.direct);
+    const aVenir = ms.filter(m => !m.exempt && !aScore(m) && !m.direct);
     const prochain = aVenir.find(m => m.a && m.b), autres = aVenir.filter(m => m !== prochain);
     const diff = (+l.bp || 0) - (+l.bc || 0);
     return `<section class="trn-moi">
@@ -338,6 +358,7 @@
           <button type="button" class="trn-changer" data-trn-changer>Changer d'équipe</button></div>
         <div class="trn-moi-stats">${[["Pts", pts(l)], ["J", l.j], ["G", l.g], ["N", l.n], ["P", l.p], ["Diff", (diff > 0 ? "+" : "") + diff]].map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join("")}</div>
         ${statut ? `<p class="trn-moi-statut ${cls}">${statut}</p>` : ""}</section>
+      ${enDirect.length ? `<h3 class="trn-sec">En ce moment<em>En direct</em></h3><div class="trn-grille">${enDirect.map(m => carteM(t, m, tag(m))).join("")}</div>` : ""}
       ${prochain ? `<h3 class="trn-sec">Prochain match${prochain.heure ? `<small>à ${hTxt(prochain.heure)}${terrainTxt(t, prochain).replace(" · ", ", ")}</small>` : ""}</h3><div class="trn-grille">${carteM(t, prochain, tag(prochain))}</div>` : ""}
       ${joues.length ? `<h3 class="trn-sec">Ses résultats</h3><div class="trn-grille">${joues.map(m => carteM(t, m, tag(m))).join("")}</div>` : ""}
       ${autres.length ? `<h3 class="trn-sec">Ses matchs suivants</h3><div class="trn-grille">${autres.map(m => carteM(t, m, tag(m))).join("")}</div>` : ""}
@@ -413,7 +434,7 @@
           ${e.ch ? `<small class="trn-carte-v">Vainqueur : ${H(e.ch)}</small>` : e.total && e.joues ? `<small>${compte(e)}</small>` : ""}</span>
         ${pastille(e)}${CHEV}</a>`;
   }
-  window.ASF_TOURNOI = { carte: t => carteTournoi(t), lien: lienDe, programmer };      // l'onglet Matchs montre le tournoi de son week-end
+  window.ASF_TOURNOI = { carte: t => carteTournoi(t), lien: lienDe, programmer, agir: (tid, mid, nom, ...a) => ACTIONS[nom] && agir(tid, mid, ACTIONS[nom](...a)), frais: tournoiFrais };      // l'onglet Matchs montre le tournoi de son week-end
 
   /* ---------- partager : le QR code de la page, le lien ---------- */
   function copier(txt){
@@ -533,13 +554,97 @@
       ${t.horaire && ms.filter(m => m.phase === "poule").some(aScore) ? `<p class="trn-h-note">Les matchs déjà joués gardent leur heure ; « Recalculer » place les autres à partir de l'heure indiquée.</p>` : ""}
     </section>`;
   }
+  /* ---------- matchs en direct : la console de l'organisateur (« Gérer ») ---------- */
+  const chrono = (debut, duree) => {
+    const s = Math.max(0, Math.floor((Date.now() - (+debut || Date.now())) / 1000)), txt = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+    return duree && s >= duree * 60 ? `⏱ ${txt} · temps écoulé` : `⏱ ${txt}${duree ? ` / ${duree}:00` : ""}`;
+  };
+  setInterval(() => document.querySelectorAll("[data-trn-chrono]").forEach(el => {
+    const debut = +el.dataset.trnChrono, duree = +el.dataset.duree || 0;
+    el.textContent = chrono(debut, duree); el.classList.toggle("fini", !!duree && Date.now() - debut >= duree * 60000);
+  }), 1000);
+  function consoleDirect(t){
+    const h = t.horaire || {}, N = Math.max(1, +h.terrains || 1), duree = +h.duree || 0, tous = matchsDe(t);
+    const ms = tous.filter(m => !m.exempt && m.a && m.b);
+    const enCours = ms.filter(m => m.direct && !aScore(m)), aVenir = ms.filter(m => !m.direct && !aScore(m)).slice(0, Math.max(2, N));
+    const poulesFinies = tous.filter(m => m.phase === "poule").every(aScore), koLance = tous.some(m => m.phase !== "poule");
+    const tag = m => (m.phase === "poule" ? `Poule ${LETTRE(m.poule || 0)}` : m.phase) + terrainTxt(t, m);
+    const equipe = (m, n, k) => `<div class="trn-live-eq">${logo(n)}<span>${H(n)}</span>
+        <button type="button" class="trn-live-moins" data-trn-but="${k}" data-d="-1" aria-label="Retirer un but à ${H(n)}">−</button><b>${+m.direct[k] || 0}</b>
+        <button type="button" class="trn-live-plus" data-trn-but="${k}" data-d="1" aria-label="But pour ${H(n)}">+</button></div>`;
+    const enDirect = m => { const d = m.direct, nulKO = (+d.sa || 0) === (+d.sb || 0) && m.phase !== "poule";
+      return `<article class="trn-live-m en-cours" data-trn-m="${H(m.id)}">
+        <header><span>${H(tag(m))}</span><b class="trn-chrono" data-trn-chrono="${+d.debut || 0}" data-duree="${duree}">${chrono(d.debut, duree)}</b></header>
+        ${equipe(m, m.a, "sa")}${equipe(m, m.b, "sb")}
+        <div class="trn-live-act">${nulKO ? `<span class="trn-live-tab">Égalité : qui gagne aux tirs au but ?</span>
+            <button type="button" class="btn danger" data-trn-fin data-tab="${H(m.a)}">${H(m.a)}</button><button type="button" class="btn danger" data-trn-fin data-tab="${H(m.b)}">${H(m.b)}</button>`
+          : `<button type="button" class="btn danger trn-live-fin" data-trn-fin>⏹ Fin du match</button>`}
+          <button type="button" class="trn-live-annuler" data-trn-annuler>Annuler le début</button></div></article>`; };
+    const suivant = m => `<article class="trn-live-m" data-trn-m="${H(m.id)}">
+        <header><span>${m.heure ? `${hTxt(m.heure)} · ` : ""}${H(tag(m))}</span></header>
+        <div class="trn-live-duel"><p>${logo(m.a)}<b>${H(m.a)}</b></p><p>${logo(m.b)}<b>${H(m.b)}</b></p></div>
+        <button type="button" class="btn bleu trn-live-debut" data-trn-debut>▶ Début du match</button></article>`;
+    const fin = !enCours.length && !aVenir.length;
+    return `<section class="trn-live" data-trn-t="${H(t.id)}">
+      <div class="trn-live-t"><h3>⚡ Matchs en direct</h3><p>« Début du match » au coup d'envoi, <b>+</b> à chaque but, « Fin du match » au coup de sifflet : les spectateurs suivent tout en direct, le classement se met à jour.</p></div>
+      ${enCours.length ? `<p class="trn-live-sous">En cours</p><div class="trn-live-l">${enCours.map(enDirect).join("")}</div>` : ""}
+      ${aVenir.length ? `<p class="trn-live-sous">À suivre</p><div class="trn-live-l">${aVenir.map(suivant).join("")}</div>` : ""}
+      ${fin ? (poulesFinies && +t.qualif > 0 && !koLance ? `<p class="trn-live-fini">Toutes les poules sont jouées : lance la phase finale.</p><button type="button" class="btn bleu" data-a="lancer-finale">Lancer la phase finale</button>`
+        : `<p class="trn-live-fini">${tous.length ? "Tous les matchs sont joués ✓" : "Les matchs apparaîtront ici après le tirage au sort."}</p>`) : ""}
+    </section>`;
+  }
+  /* ce que fait chaque bouton, sur une copie du tournoi */
+  function terminer(t, m, tab, auto){
+    const sa = +m.direct.sa || 0, sb = +m.direct.sb || 0;
+    if (m.phase !== "poule" && sa === sb && !tab) return false;            // phase finale à égalité : le vainqueur aux tirs au but d'abord
+    m.sa = sa; m.sb = sb; m.tab = sa === sb ? (tab || null) : null; delete m.direct;
+    if (m.phase !== "poule"){ t.matchs = matchsDe(t).filter(x => !(x.phase !== "poule" && x.tour > m.tour && x.sa === null && x.sb === null && !x.direct)); try { avancer(t); } catch(e){} }
+    return true;
+  }
+  const ACTIONS = {
+    debut: () => (t, m) => {
+      if (aScore(m) || m.direct) return false;
+      // un match resté « en cours » sur ce terrain (« Fin du match » oublié) se termine avec son score
+      matchsDe(t).slice().forEach(x => { if (x !== m && x.direct && !aScore(x) && (+x.terrain || 1) === (+m.terrain || 1)) terminer(t, x, null, true); });
+      m.direct = { debut: Date.now(), sa: 0, sb: 0 };
+    },
+    but: (k, v) => (t, m) => { if (!m.direct || aScore(m) || !/^s[ab]$/.test(k)) return false; m.direct[k] = Math.max(0, v); },
+    fin: tab => (t, m) => { if (!m.direct || aScore(m)) return false; return terminer(t, m, tab) ? undefined : false; },
+    annuler: () => (t, m) => { if (!m.direct || aScore(m)) return false; delete m.direct; },
+  };
+  /* le tournoi tel qu'il est sur le serveur (un autre téléphone a pu saisir sur un autre terrain), sinon la copie du téléphone */
+  async function tournoiFrais(id, copie){
+    try {
+      if (S.heberge && window.ASFP_API){
+        const r = await fetch(window.ASFP_API + "/db", { headers: { Accept: "application/json" }, cache: "no-store" });
+        if (r.ok){ const d = await r.json(), x = d && d["tournois/" + id]; if (x) return { ...x, id }; }
+      }
+    } catch(e){}
+    return copie;
+  }
+  let fileDirect = Promise.resolve();
+  function agir(tid, mid, action, msg){
+    const i = (S.tournois || []).findIndex(x => x.id === tid); if (i < 0) return;
+    const copie = JSON.parse(JSON.stringify(S.tournois[i]));
+    const local = JSON.parse(JSON.stringify(S.tournois[i])), ml = matchsDe(local).find(x => x.id === mid);
+    if (!ml || action(local, ml) === false) return;
+    S.tournois[i] = local;                                                 // tout de suite à l'écran…
+    try { rendrePanneau(); } catch(e){}
+    fileDirect = fileDirect.then(async () => {                             // …puis enregistré, une action après l'autre
+      const t = await tournoiFrais(tid, copie), m = t && matchsDe(t).find(x => x.id === mid);
+      if (!m || action(t, m) === false) return;
+      if (typeof ecrire === "function") await ecrire(() => S.db.doc("tournois/" + tid).update({ matchs: t.matchs }), msg || null);
+      else await S.db.doc("tournois/" + tid).update({ matchs: t.matchs });
+    }).catch(() => {});
+    return fileDirect;
+  }
   const avantPT = window.panTournois;
   if (typeof avantPT === "function" && typeof ONG !== "undefined") window.panTournois = function(){
     const h = avantPT.apply(this, arguments);
     const t = S.ui && !S.ui.tirage && S.ui.tournoi && (S.tournois || []).find(x => x.id === S.ui.tournoi);
     if (!t) return h;
     return ONG.transformer(h, r => {
-      const tpl = document.createElement("template"); tpl.innerHTML = carteAdmin(t) + carteHoraires(t);
+      const tpl = document.createElement("template"); tpl.innerHTML = consoleDirect(t) + carteAdmin(t) + carteHoraires(t);
       const tete = r.querySelector(".ong-tn-tete");
       if (tete) tete.after(tpl.content); else r.prepend(tpl.content);
       const N = t.horaire ? +t.horaire.terrains || 1 : 1;                       // l'heure de chaque match, sur sa ligne
@@ -551,6 +656,17 @@
   /* ---------- actions ---------- */
   document.addEventListener("click", ev => {
     const el = ev.target.closest ? ev.target : null; if (!el) return;
+    const lm = el.closest(".trn-live [data-trn-m]");
+    if (lm){
+      const tid = el.closest(".trn-live").dataset.trnT, mid = lm.dataset.trnM;
+      if (el.closest("[data-trn-debut]")){ agir(tid, mid, ACTIONS.debut()); return; }
+      const bt = el.closest("[data-trn-but]");
+      if (bt){ const t = (S.tournois || []).find(x => x.id === tid), m = t && matchsDe(t).find(x => x.id === mid);
+        if (m && m.direct) agir(tid, mid, ACTIONS.but(bt.dataset.trnBut, (+m.direct[bt.dataset.trnBut] || 0) + (+bt.dataset.d || 0))); return; }
+      const f = el.closest("[data-trn-fin]");
+      if (f){ agir(tid, mid, ACTIONS.fin(f.dataset.tab || null), "Score validé : classement à jour."); return; }
+      if (el.closest("[data-trn-annuler]")){ if (confirm("Annuler le début de ce match ? Son score en cours est effacé.")) agir(tid, mid, ACTIONS.annuler()); return; }
+    }
     const o = el.closest("#trn [data-trno]");
     if (o){ ST.onglet = o.dataset.trno; rendrePage(true); return; }
     const q = el.closest("#trn [data-trn-eq]");
@@ -600,6 +716,11 @@
     finally { try { rendreListe(); if (/^#tournoi\//.test(location.hash)) rendrePage(); } catch(err){ console.warn("tournois", err); } }
   };
   window.addEventListener("hashchange", () => { if (/^#tournoi\//.test(location.hash)) rendrePage(true); else if (location.hash === "#tournois") rendreListe(); });
+  setInterval(() => {                                                      // la minute des matchs en cours avance
+    if (document.hidden || !/^#tournoi\//.test(location.hash)) return;
+    const t = (S.tournois || []).find(x => x.id === idDuHash());
+    if (t && matchsDe(t).some(m => m.direct && !aScore(m))) rendrePage(true);
+  }, 20000);
   rendreListe();
   if (/^#tournoi\//.test(location.hash)) rendrePage(true);
 })();
