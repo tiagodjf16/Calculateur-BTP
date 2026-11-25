@@ -173,3 +173,11 @@ body.sur-espace #panneau [class*="-chip"],body.sur-espace #panneau [class*="-nb"
 body.sur-espace .ong-pli-t:has(> small){display:grid;gap:3px}
 body.sur-espace .ong-pli-t:has(> small) > b{font:700 17px/1.25 var(--f-ui);letter-spacing:.01em;text-transform:none;color:#fff}
 body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui);letter-spacing:0;text-transform:none;color:var(--f-txt-3)}
+/* sous-onglets de l'espace club, collés en haut sur tablette et téléphone : fond plein, rien ne passe dessous */
+@media (max-width:1140px){
+  body.sur-espace .rub-onglets{background:var(--f-bg)!important;box-shadow:0 10px 18px rgba(0,0,0,.35)!important}
+}
+@media (max-width:860px){
+  /* pas de fondu à droite sur cette barre collée en haut : il rendait son fond transparent de ce côté */
+  body.sur-espace .rub-onglets{-webkit-mask-image:none!important;mask-image:none!important}
+}
