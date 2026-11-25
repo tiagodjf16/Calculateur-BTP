@@ -22,8 +22,8 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#030E1C">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="2185ff7d94e1">
-<meta name="asf-version-date" content="2026-11-24">
+<meta name="asf-version" content="d187bc8bdd87">
+<meta name="asf-version-date" content="2026-11-25">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22777,6 +22777,10 @@ body.sur-espace #panneau [class*="-chip"],body.sur-espace #panneau [class*="-nb"
   body.sur-espace .rub-onglets button{flex:0 0 auto;font-size:18px!important;padding:12px 12px!important}
   body.sur-espace .app-tete.esp-bandeau h1{font-size:32px!important}
 }
+/* titres des blocs dépliants : le titre, puis sa phrase en dessous (ex. « Plateaux de la FFF ») */
+body.sur-espace .ong-pli-t:has(> small){display:grid;gap:3px}
+body.sur-espace .ong-pli-t:has(> small) > b{font:700 17px/1.25 var(--f-ui);letter-spacing:.01em;text-transform:none;color:#fff}
+body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui);letter-spacing:0;text-transform:none;color:var(--f-txt-3)}
 </style>
 <script id="appli-js">
 /* =====================================================================
