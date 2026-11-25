@@ -1,10 +1,10 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build7.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <tournoi.js> <output.html> [--test]
+Usage: python3 build8.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <tournoi.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
   appli.js : <script> added at the end of <body> (intro, club tabs, Matchs of the weekend, teams, match events)
-  tournoi.js : <script> added after it (tournament spectator pages #tournoi/<id>, QR code, poster)
+  tournoi.js : <script> added after it (tournament pages #tournoi/<id> with team choice and schedule, QR code, poster)
 --test : runs offline with the built-in data (API set to "") and skips the intro unless the URL has ?intro.
 """
 import datetime
@@ -99,10 +99,11 @@ html = sub_once("family=Barlow+Condensed:ital,wght@",
 html = sub_once('<meta name="theme-color" content="#0F2257">', '<meta name="theme-color" content="#030E1C">', html, "theme-color")
 
 # 6) intro: shown once per visit (the flag is read before the first paint)
-INTRO_HEAD = ('<script>try{if(sessionStorage.getItem("asf-intro"))document.documentElement.classList.add("intro-vue");'
-              'else sessionStorage.setItem("asf-intro","1")}catch(e){}</script>')
+TRN = 'if(/^#tournoi\\//.test(location.hash))document.documentElement.classList.add("trn-mode","intro-vue");'
+INTRO_HEAD = ('<script>' + TRN + 'try{if(sessionStorage.getItem("asf-intro"))document.documentElement.classList.add("intro-vue");'
+              'else if(!/^#tournoi\\//.test(location.hash))sessionStorage.setItem("asf-intro","1")}catch(e){}</script>')
 if test:
-    INTRO_HEAD = '<script>if(location.search.indexOf("intro")<0)document.documentElement.classList.add("intro-vue")</script>'
+    INTRO_HEAD = '<script>' + TRN + 'if(location.search.indexOf("intro")<0)document.documentElement.classList.add("intro-vue")</script>'
 html = sub_once('<meta charset="UTF-8">', '<meta charset="UTF-8">\n' + INTRO_HEAD, html, "intro-head")
 INTRO = """<div id="intro" aria-hidden="true">
   <div class="intro-centre">
@@ -236,13 +237,28 @@ html = sub_once('matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: f
 html = sub_once('S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé.");',
                 'S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé et en ligne : sa page spectateurs et son QR code sont prêts.");', html, "tournoi-cree")
 
+# 10d) TOURNAMENTS: schedule settings in the creation form; the draw alternates the poules (A, B, A, B…) and sets the times
+html = sub_once('<label>Lieu<input data-nt="lieu" value="${esc(n.lieu)}"></label>',
+                '<label>Lieu<input data-nt="lieu" value="${esc(n.lieu)}"></label>'
+                '<div class="t-horaire"><b class="t-horaire-t">⏱️ Horaires des matchs</b>'
+                '<label>Premier match<input type="time" data-nt="debut" value="${esc(n.debut ?? "10:00")}"></label>'
+                '<label>Durée d\'un match<select data-nt="duree">${[5,6,7,8,10,12,15,20,25,30,35,40,45].map(v => `<option value="${v}" ${+(n.duree ?? 10) === v ? "selected" : ""}>${v} min</option>`).join("")}</select></label>'
+                '<label>Pause entre deux<select data-nt="pause">${[0,1,2,3,4,5,8,10,15].map(v => `<option value="${v}" ${+(n.pause ?? 2) === v ? "selected" : ""}>${v ? v + " min" : "aucune"}</option>`).join("")}</select></label>'
+                '<label>Terrains<select data-nt="terrains">${[1,2,3,4,5,6].map(v => `<option ${+(n.terrains ?? 1) === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>'
+                '<small class="t-horaire-n">Les matchs alternent poule A, poule B… et chaque équipe souffle entre deux matchs. Les heures s\'affichent sur la page des spectateurs.</small></div>',
+                html, "tournoi-horaires-form")
+html = sub_once('matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: true, cree: Date.now() };',
+                'matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: true, cree: Date.now() };\n'
+                '  try { if (window.ASF_TOURNOI && ASF_TOURNOI.programmer) ASF_TOURNOI.programmer(doc, T); } catch(e){}   // poule A, poule B… et les horaires',
+                html, "tournoi-programme")
+
 # 11) floating bottom bar with app-style outline icons (same links, ids and labels)
 ts = html.index('<nav class="tabbar" aria-label="Navigation mobile">')
 te = html.index("</nav>", ts) + len("</nav>")
 old_tab = html[ts:te]
 for need in ('data-p="accueil"', 'data-p="calendrier"', 'data-p="compos"', 'id="tab-espace"', 'id="btn-plus"'):
     assert need in old_tab, need
-TABBAR = """<nav class="tabbar" aria-label="Navigation mobile">
+TABBAR = """<nav class="tabbar" id="tabbar-site" aria-label="Navigation mobile">
   <a href="#accueil" data-p="accueil"><svg viewBox="0 0 24 24"><path d="M12 3.4l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.4l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/></svg>Accueil</a>
   <a href="#calendrier" data-p="calendrier"><svg viewBox="0 0 24 24"><path d="M12 2.8l7.2 2.6v5.4c0 4.7-3 8.3-7.2 10.4-4.2-2.1-7.2-5.7-7.2-10.4V5.4z"/><circle cx="12" cy="11" r="3.6"/><path d="M12 9.3l1.2.9-.5 1.4h-1.4l-.5-1.4z"/></svg>Matchs</a>
   <a href="#compos" data-p="compos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/><circle cx="12" cy="12" r="2.6"/><path d="M3 9.5h2.6v5H3M21 9.5h-2.6v5H21"/></svg>Compos</a>

@@ -2,7 +2,7 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<script>try{if(sessionStorage.getItem("asf-intro"))document.documentElement.classList.add("intro-vue");else sessionStorage.setItem("asf-intro","1")}catch(e){}</script>
+<script>if(/^#tournoi\//.test(location.hash))document.documentElement.classList.add("trn-mode","intro-vue");try{if(sessionStorage.getItem("asf-intro"))document.documentElement.classList.add("intro-vue");else if(!/^#tournoi\//.test(location.hash))sessionStorage.setItem("asf-intro","1")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -22,7 +22,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#030E1C">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="dfa642878326">
+<meta name="asf-version" content="f7cb0b13d1a0">
 <meta name="asf-version-date" content="2026-11-25">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -3353,6 +3353,74 @@ body:has(#p-tournoi.visible) .club-tete,body:has(#p-tournoi.visible) .top{displa
 .trn-qr-info p b{color:#fff}
 .trn-qr-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 @media (max-width:560px){ .trn-qr-carte{grid-template-columns:1fr;justify-items:center;text-align:center} .trn-qr-mini{width:190px} .trn-qr-btns{justify-content:center} }
+/* ---------- PAGE D'UN TOURNOI (QR code) : seulement le tournoi, sans la navigation du site ---------- */
+html.trn-mode #tabbar-site,html.trn-mode footer,html.trn-mode .club-tete,html.trn-mode .top{display:none!important}
+html.trn-mode body{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))!important}
+html.trn-mode .toast{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+.trn-blason{width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:#fff;padding:5px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.trn-blason img{width:100%;height:100%;object-fit:contain}
+@media (min-width:700px){ .trn-blason{width:62px;height:62px} }
+/* choisir son équipe */
+.trn-choix{max-width:900px;margin:0 auto}
+.trn-choix-t{margin:22px 0 4px;text-align:center;font:400 clamp(32px,6vw,44px)/1 var(--f-titre)!important;color:var(--f-gold)!important;letter-spacing:.01em}
+.trn-choix-s{margin:0 auto 6px;max-width:560px;text-align:center;font:500 15.5px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-choix-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:12px}
+.trn-eq{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 16px;border:1px solid #0C2545;border-radius:8px;background:var(--f-panel-2);color:#fff;
+  font:700 16px var(--f-ui);text-transform:uppercase;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
+.trn-eq:hover,.trn-eq:focus-visible{background:var(--f-panel-3);border-color:var(--f-gold);outline:0}
+.trn-eq .t-logo{width:40px;height:40px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;flex:none;font:800 15px var(--f-ui);color:#06192F}
+.trn-eq .t-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.trn-eq b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trn-passer{display:block;margin:22px auto 4px;padding:12px 18px;border:0;background:none;color:var(--f-txt-2);font:600 15px var(--f-ui);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* mon équipe */
+.trn-moi{max-width:900px;margin:16px auto 0;padding:18px;border-radius:10px;background:linear-gradient(135deg,rgba(201,176,127,.16),rgba(8,31,57,.92));border:1px solid rgba(201,176,127,.55)}
+.trn-moi-tete{display:grid;grid-template-columns:56px minmax(0,1fr) auto;align-items:center;gap:14px}
+.trn-moi-tete .t-logo{width:56px;height:56px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;font:800 20px var(--f-ui);color:#06192F}
+.trn-moi-tete .t-logo img{width:100%;height:100%;object-fit:contain;padding:4px}
+.trn-moi-nom{min-width:0;display:grid;gap:3px}
+.trn-moi-nom b{font:400 30px/1.02 var(--f-titre);letter-spacing:.01em;color:#fff;overflow-wrap:anywhere}
+.trn-moi-nom small{font:600 14.5px var(--f-ui);color:var(--f-gold)}
+.trn-changer{padding:9px 14px;border:1px solid rgba(255,255,255,.3);border-radius:30px;background:rgba(3,14,28,.4);color:#fff;font:600 13.5px var(--f-ui);cursor:pointer;white-space:nowrap}
+.trn-changer:hover{border-color:var(--f-gold)}
+.trn-moi-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:16px}
+.trn-moi-stats div{display:grid;justify-items:center;gap:2px;padding:9px 2px;border-radius:8px;background:rgba(3,14,28,.45)}
+.trn-moi-stats b{font:700 22px/1 var(--f-ui);color:#fff}
+.trn-moi-stats div:first-child b{color:var(--f-gold)}
+.trn-moi-stats small{font:600 11.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:#8F9BB0}
+.trn-moi-statut{margin:14px 0 0;padding:10px 14px;border-radius:8px;text-align:center;font:700 15.5px var(--f-ui);background:rgba(3,14,28,.45);color:#fff}
+.trn-moi-statut.ok{background:rgba(24,178,107,.18);color:#86EFAC}
+.trn-moi-statut.or{background:rgba(201,176,127,.25);color:#F3E3B8;font-size:18px}
+.trn-moi-statut.fin{color:#C9D4F2}
+@media (max-width:520px){ .trn-moi{padding:14px} .trn-moi-tete{grid-template-columns:48px minmax(0,1fr)} .trn-moi-tete .t-logo{width:48px;height:48px}
+  .trn-changer{grid-column:1/-1;justify-self:start} .trn-moi-nom b{font-size:26px} .trn-moi-stats b{font-size:19px} }
+/* l'équipe choisie, partout */
+.trn-m.moi{box-shadow:inset 0 0 0 1px rgba(201,176,127,.75)}
+.trn-m-l.moi > span:not(.t-logo){color:var(--f-gold)!important}
+.trn-cl-l.moi{background:rgba(201,176,127,.14)}
+.trn-cl-l.moi .eq b{color:var(--f-gold)}
+/* horaires : l'heure dans les cartes, les créneaux du programme */
+.trn-m-tag > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trn-m-tag small{font:700 12px var(--f-ui);color:#8F9BB0;letter-spacing:.04em}
+.trn-m-tag em{font-weight:800;letter-spacing:.04em}
+.trn-sec-h{font:400 30px/1 var(--f-titre)!important;letter-spacing:.02em;color:var(--f-gold)}
+.trn-sec-h em{font:700 11px var(--f-ui)!important}
+/* espace club : la carte « Horaires des matchs », l'heure sur chaque match, les réglages à la création */
+.trn-h-carte{margin:0 0 18px;padding:18px;border-radius:14px;background:rgba(8,31,57,.9);border:1px solid rgba(143,168,240,.3)}
+.trn-h-carte h3{margin:0 0 6px;font:800 20px var(--f-ui)!important;color:#fff}
+.trn-h-carte p{margin:0 0 10px;font:500 15px/1.45 var(--f-ui);color:#D0D9E1}
+.trn-h-carte p b{color:#fff}
+.trn-h-champs,.t-horaire{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.trn-h-champs label,.t-horaire label{display:grid;gap:6px;font:600 14px var(--f-ui);color:#C9D4F2}
+.trn-h-note{margin:10px 0 0!important;font-size:13.5px!important;color:#8F9BB0!important}
+.ong-tn-g1 > .t-horaire,.grille > .t-horaire{grid-column:1/-1}
+.t-horaire{margin-top:4px;padding:14px;border-radius:12px;border:1px dashed rgba(143,168,240,.35)}
+.t-horaire-t{grid-column:1/-1;font:800 16px var(--f-ui);color:#fff}
+.t-horaire-n{grid-column:1/-1;font:500 13.5px/1.4 var(--f-ui);color:#AFC0EA}
+@media (max-width:620px){ .trn-h-champs,.t-horaire{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.ong-tn-duel > .trn-h-badge{grid-column:1/-1;margin:0;padding:7px 14px 0;font:700 13.5px var(--f-ui);color:#F7C566;letter-spacing:.02em}
+/* les onglets du tournoi tiennent sur un téléphone */
+@media (max-width:440px){ #trn .eqp-onglets{justify-content:space-between;padding:0 4px} #trn .eqp-onglets button{font-size:13.5px;padding:13px 7px 12px;letter-spacing:0}
+  #trn .eqp-onglets button.actif::after{left:7px;right:7px} }
 
 /*/HABILLAGE-CSS*/
 </style>
@@ -3690,7 +3758,7 @@ body:has(#p-tournoi.visible) .club-tete,body:has(#p-tournoi.visible) .top{displa
   <a href="#partenaires">Partenaires</a><a href="#contact">Contact</a>
   <a href="#" data-theme-btn>Changer de thème</a>
 </div>
-<nav class="tabbar" aria-label="Navigation mobile">
+<nav class="tabbar" id="tabbar-site" aria-label="Navigation mobile">
   <a href="#accueil" data-p="accueil"><svg viewBox="0 0 24 24"><path d="M12 3.4l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.4l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/></svg>Accueil</a>
   <a href="#calendrier" data-p="calendrier"><svg viewBox="0 0 24 24"><path d="M12 2.8l7.2 2.6v5.4c0 4.7-3 8.3-7.2 10.4-4.2-2.1-7.2-5.7-7.2-10.4V5.4z"/><circle cx="12" cy="11" r="3.6"/><path d="M12 9.3l1.2.9-.5 1.4h-1.4l-.5-1.4z"/></svg>Matchs</a>
   <a href="#compos" data-p="compos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/><circle cx="12" cy="12" r="2.6"/><path d="M3 9.5h2.6v5H3M21 9.5h-2.6v5H21"/></svg>Compos</a>
@@ -7638,7 +7706,7 @@ function panTournois(){
       <label>Nom<input data-nt="nom" value="${esc(n.nom)}" required placeholder="Tournoi de Pâques"></label>
       <label>Catégorie<input data-nt="cat" value="${esc(n.cat)}"></label>
       <label>Date<input type="date" data-nt="date" value="${esc(n.date)}"></label>
-      <label>Lieu<input data-nt="lieu" value="${esc(n.lieu)}"></label>
+      <label>Lieu<input data-nt="lieu" value="${esc(n.lieu)}"></label><div class="t-horaire"><b class="t-horaire-t">⏱️ Horaires des matchs</b><label>Premier match<input type="time" data-nt="debut" value="${esc(n.debut ?? "10:00")}"></label><label>Durée d'un match<select data-nt="duree">${[5,6,7,8,10,12,15,20,25,30,35,40,45].map(v => `<option value="${v}" ${+(n.duree ?? 10) === v ? "selected" : ""}>${v} min</option>`).join("")}</select></label><label>Pause entre deux<select data-nt="pause">${[0,1,2,3,4,5,8,10,15].map(v => `<option value="${v}" ${+(n.pause ?? 2) === v ? "selected" : ""}>${v ? v + " min" : "aucune"}</option>`).join("")}</select></label><label>Terrains<select data-nt="terrains">${[1,2,3,4,5,6].map(v => `<option ${+(n.terrains ?? 1) === v ? "selected" : ""}>${v}</option>`).join("")}</select></label><small class="t-horaire-n">Les matchs alternent poule A, poule B… et chaque équipe souffle entre deux matchs. Les heures s'affichent sur la page des spectateurs.</small></div>
       <label>Nombre de poules<select data-nt="poules" data-nt-redessine>${[1,2,3,4,5,6,7,8].map(v => `<option ${+n.poules===v?"selected":""}>${v}</option>`).join("")}</select></label>
       <label>Qualifiés par poule<select data-nt="qualif" data-nt-redessine>${[[0,"Pas de phase finale"],[1,"1"],[2,"2"],[3,"3"]].map(([v,t]) => `<option value="${v}" ${+n.qualif===v?"selected":""}>${t}</option>`).join("")}</select></label>
     </div>
@@ -7720,6 +7788,7 @@ async function validerTirage(){
   const T = S.ui.tirage;
   const doc = { nom: T.nom.trim(), cat: T.cat, date: T.date, lieu: T.lieu, qualif: +T.qualif, repechage: +T.repechage || 0, poules: T.poules,
     matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: true, cree: Date.now() };
+  try { if (window.ASF_TOURNOI && ASF_TOURNOI.programmer) ASF_TOURNOI.programmer(doc, T); } catch(e){}   // poule A, poule B… et les horaires
   const ok = await ecrire(() => S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé et en ligne : sa page spectateurs et son QR code sont prêts.");
   if (ok){ S.ui.tirage = null; S.ui.nouveauT = null; S.ui.tournoi = T.id; S.tournois = [...S.tournois.filter(t => t.id !== T.id), { id: T.id, ...doc }]; rendrePanneau(); }
 }
@@ -23834,9 +23903,15 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
 <script id="tournoi-direct-js">
 /* =====================================================================
    TOURNOIS EN DIRECT : la page des spectateurs, son QR code, l'affiche à imprimer
-   - chaque tournoi a sa page (#tournoi/<id>) : les matchs et leurs scores, le classement des poules, la phase finale et le
-     vainqueur ; elle se met à jour toute seule dès qu'un score est validé dans l'espace club (le site relit ses données
-     toutes les 30 secondes), sans recharger la page ; les scores qui viennent d'arriver s'éclairent un instant ;
+   - chaque tournoi a sa page (#tournoi/<id>), celle du QR code, avec seulement le tournoi (ni menu, ni barre du bas, ni pied
+     de page, ni animation d'ouverture) : en arrivant, on choisit son équipe parmi les inscrites (retenu sur le téléphone) ;
+     « Mon équipe » donne son classement, son prochain match et son heure, ses résultats ; puis le programme (les matchs par
+     horaire, sinon par tour), le classement des poules, la phase finale et le vainqueur, l'équipe choisie mise en avant ;
+     la page se met à jour toute seule dès qu'un score est validé dans l'espace club (le site relit ses données toutes les
+     30 secondes), les scores qui viennent d'arriver s'éclairent ;
+   - horaires : les matchs de poule alternent (poule A, poule B, A, B…), chaque équipe soufflant entre deux matchs si possible ;
+     l'heure de chacun part de l'heure du premier match, de la durée d'un match, de la pause et du nombre de terrains
+     (création du tournoi, ou carte « Horaires des matchs » dans « Gérer ») ; la phase finale suit, tour après tour ;
    - espace club › Matchs et plateaux › Tournois › Gérer : le QR code de cette page, l'affiche A4 à imprimer, le QR code
      en image, le lien à copier ; un tournoi créé est mis en ligne tout de suite (« Retirer du site » le cache) ;
    - page Tournois du site : un tournoi par carte (en direct, à venir, terminé), qui ouvre sa page.
@@ -23988,7 +24063,8 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const BASE = () => /^https?:$/.test(location.protocol) ? location.origin + location.pathname : "https://asf-pierrelatte.fr/";
   const lienDe = t => BASE() + "#tournoi/" + encodeURIComponent(t.id);
   const idDuHash = () => { const r = location.hash.match(/^#tournoi\/([^/?#]+)/); try { return r ? decodeURIComponent(r[1]) : ""; } catch(e){ return ""; } };
-  const RETOUR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`;
+  /* le blason du club en tête de la page du tournoi : une image, pas un lien (la page ne mène qu'au tournoi) */
+  const BLASON = `<span class="trn-blason" aria-hidden="true">${typeof LOGO_SRC !== "undefined" ? `<img src="${LOGO_SRC}" alt="">` : ""}</span>`;
   const CHEV = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
   const ICO_QR = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg>`;
   const PIN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
@@ -24007,34 +24083,113 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const ETAT_L = { direct: "En direct", avenir: "À venir", fini: "Terminé" };
   const pastille = e => `<span class="trn-etat ${e.k}">${e.k === "direct" ? "<i></i>" : ""}${ETAT_L[e.k]}</span>`;
   const compte = e => `${e.joues} match${e.joues > 1 ? "s" : ""} joué${e.joues > 1 ? "s" : ""} sur ${e.total}`;
-  const metaDe = t => [t.cat, maj1(dateL(t.date)), t.lieu].filter(Boolean).map(H).join(" · ");
+  const metaDe = t => [t.cat, maj1(dateL(t.date)), t.horaire && t.horaire.debut ? "dès " + hTxt(t.horaire.debut) : "", t.lieu].filter(Boolean).map(H).join(" · ");
   const visible = t => !!t && (!!t.publie || membre());
+  /* l'équipe du spectateur, retenue sur son téléphone pour ce tournoi ("-" : il a préféré tout voir) */
+  const equipesDe = t => [...new Set(poulesDe(t).flat().filter(Boolean))];
+  const CLE_EQ = id => "asf-trn-equipe:" + id;
+  function equipeChoisie(t){
+    let v = ""; try { v = localStorage.getItem(CLE_EQ(t.id)) || ""; } catch(e){}
+    return v === "-" || equipesDe(t).includes(v) ? v : "";
+  }
+  const retenirEquipe = (t, v) => { try { if (v) localStorage.setItem(CLE_EQ(t.id), v); else localStorage.removeItem(CLE_EQ(t.id)); } catch(e){} };
+  /* page d'un tournoi : seulement le tournoi (classe aussi posée dès le <head>, pour une arrivée directe par le QR code) */
+  const modeTournoi = () => document.documentElement.classList.toggle("trn-mode", /^#tournoi\//.test(location.hash));
+  modeTournoi();
+  window.addEventListener("hashchange", modeTournoi);
+
+  /* ---------- horaires des matchs ---------- */
+  const minutesDe = h => { const m = String(h || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const hhmm = n => `${String(Math.floor(n / 60) % 24).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  const hTxt = h => h ? String(h).slice(0, 5).replace(":", "h") : "";
+  const borne = (v, a, b, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(b, Math.max(a, n)) : d; };
+  function reglages(src){
+    const d = minutesDe(src && src.debut);
+    return d === null ? null : { debut: hhmm(d), duree: borne(src.duree, 3, 90, 10), pause: borne(src.pause, 0, 60, 0), terrains: borne(src.terrains, 1, 8, 1) };
+  }
+  /* les matchs de poule : poule A, poule B, A, B… ; à chaque créneau, autant de matchs que de terrains, jamais deux fois la même
+     équipe, et de préférence pas une équipe qui vient de jouer ; les matchs déjà joués gardent leur heure */
+  function programmer(t, src){
+    const h = reglages(src), P = poulesDe(t), ms = matchsDe(t);
+    const poule = ms.filter(m => m.phase === "poule"), joues = h ? poule.filter(aScore) : [];
+    const parPoule = P.map((_, i) => poule.filter(m => m.poule === i && !joues.includes(m)));
+    const file = []; for (let k = 0; parPoule.some(l => k < l.length); k++) parPoule.forEach(l => { if (k < l.length) file.push(l[k]); });
+    const ko = ms.filter(m => m.phase !== "poule");
+    if (!h){ t.matchs = [...file, ...ko]; return t; }                    // pas d'heure de début : seulement l'alternance des poules
+    const pas = h.duree + h.pause, d0 = minutesDe(h.debut), N = h.terrains, out = [];
+    let creneau = 0, avant = new Set();
+    while (file.length){
+      const dans = new Set(), pris = [];
+      const essai = repos => { for (const m of file){ if (pris.length >= N) break;
+        if (pris.includes(m) || dans.has(m.a) || dans.has(m.b) || (repos && (avant.has(m.a) || avant.has(m.b)))) continue;
+        pris.push(m); dans.add(m.a); dans.add(m.b); } };
+      essai(true); essai(false);
+      if (!pris.length) pris.push(file[0]);
+      pris.forEach((m, k) => { m.heure = hhmm(d0 + creneau * pas); m.terrain = k + 1; file.splice(file.indexOf(m), 1); out.push(m); });
+      avant = dans; creneau++;
+    }
+    ko.forEach(m => { if (!aScore(m)){ delete m.heure; delete m.terrain; } });
+    t.matchs = [...joues, ...out, ...ko];
+    t.horaire = h;
+    horaireKO(t);
+    return t;
+  }
+  /* la phase finale : ses matchs à la suite des derniers horaires, tour après tour */
+  function horaireKO(t){
+    const h = t && t.horaire; if (!h || minutesDe(h.debut) === null) return;
+    const pas = (+h.duree || 10) + (+h.pause || 0), N = Math.max(1, +h.terrains || 1), ms = matchsDe(t);
+    const sans = ms.filter(m => m.phase !== "poule" && !m.exempt && !m.heure && m.a && m.b && !aScore(m));
+    if (!sans.length) return;
+    const deja = ms.filter(m => m.heure && !sans.includes(m)).map(m => minutesDe(m.heure)).filter(x => x !== null);
+    let t0 = deja.length ? Math.max(...deja) + pas : minutesDe(h.debut);
+    [...new Set(sans.map(m => m.tour))].sort((a, b) => a - b).forEach(tour => {
+      const l = sans.filter(m => m.tour === tour);
+      l.forEach((m, i) => { m.heure = hhmm(t0 + Math.floor(i / N) * pas); m.terrain = i % N + 1; });
+      t0 += Math.ceil(l.length / N) * pas;
+    });
+  }
+  ["lancerFinale", "avancer"].forEach(nom => {                          // les matchs de phase finale reçoivent leur heure en naissant
+    const avant = window[nom]; if (typeof avant !== "function") return;
+    window[nom] = function(t){ const r = avant.apply(this, arguments); try { horaireKO(t); } catch(e){} return r; };
+  });
+  const terrainTxt = (t, m) => m.terrain && t.horaire && +t.horaire.terrains > 1 ? ` · Terrain ${m.terrain}` : "";
 
   /* ---------- une carte de match : les deux équipes, leur score, le vainqueur en blanc ---------- */
-  const ST = { id: "", onglet: "matchs", sig: "", vus: {} };
+  const ST = { id: "", onglet: "matchs", sig: "", vus: {}, moi: "" };
   function carteM(t, m, tag){
-    if (m.exempt) return `<div class="trn-m exempt">${tag ? `<span class="trn-m-tag">${H(tag)}</span>` : ""}
+    if (m.exempt) return `<div class="trn-m exempt${m.a === ST.moi ? " moi" : ""}">${tag ? `<span class="trn-m-tag">${H(tag)}</span>` : ""}
       <div class="trn-m-l g">${logo(m.a)}<span>${H(m.a)}</span><b></b></div><p class="trn-m-note">Qualifiée d'office pour le tour suivant</p></div>`;
     const j = aScore(m), w = j ? gagnant(m) : null, cle = t.id + "|" + m.id, sc = j ? `${m.sa}-${m.sb}-${m.tab || ""}` : "";
     const nouveau = j && ST.vus[cle] !== undefined && ST.vus[cle] !== sc;
     ST.vus[cle] = sc;
-    const ligne = (n, s) => `<div class="trn-m-l${w ? (w === n ? " g" : " p") : ""}">${n ? logo(n) : `<span class="t-logo">?</span>`}<span>${H(n || "À déterminer")}</span><b>${j ? s : ""}</b></div>`;
-    return `<div class="trn-m${j ? " joue" : ""}${nouveau ? " nouveau" : ""}">
-      <span class="trn-m-tag">${H(tag || "")}${j ? (nouveau ? `<em class="neuf">Nouveau score</em>` : "") : `<em>À jouer</em>`}</span>
+    const ligne = (n, s) => `<div class="trn-m-l${w ? (w === n ? " g" : " p") : ""}${n && n === ST.moi ? " moi" : ""}">${n ? logo(n) : `<span class="t-logo">?</span>`}<span>${H(n || "À déterminer")}</span><b>${j ? s : ""}</b></div>`;
+    const aMoi = !!ST.moi && (m.a === ST.moi || m.b === ST.moi), lieu = terrainTxt(t, m);
+    return `<div class="trn-m${j ? " joue" : ""}${nouveau ? " nouveau" : ""}${aMoi ? " moi" : ""}">
+      <span class="trn-m-tag"><span>${H((tag || "") + (tag ? lieu : lieu.replace(/^ · /, "")))}</span>${j ? (nouveau ? `<em class="neuf">Nouveau score</em>` : (m.heure ? `<small>${hTxt(m.heure)}</small>` : ""))
+        : `<em>${m.heure ? hTxt(m.heure) : "À jouer"}</em>`}</span>
       ${ligne(m.a, m.sa)}${ligne(m.b, m.sb)}${j && m.tab && m.sa === m.sb ? `<p class="trn-m-note">${H(m.tab)} gagne aux tirs au but</p>` : ""}</div>`;
   }
 
   /* ---------- onglet Matchs : les tours de poule, puis la phase finale ---------- */
   function ongletMatchs(t){
-    const ms = matchsDe(t), poule = ms.filter(m => m.phase === "poule");
-    const tours = [...new Set(poule.map(m => +m.journee || 1))].sort((a, b) => a - b);
-    const secs = tours.map(j => ({ titre: tours.length > 1 ? `Tour ${j}` : "Matchs de poule",
-      l: poule.filter(m => (+m.journee || 1) === j).sort((a, b) => (a.poule || 0) - (b.poule || 0)), tag: m => `Poule ${LETTRE(m.poule || 0)}` }));
-    const ko = ms.filter(m => m.phase !== "poule");
-    [...new Set(ko.map(m => m.tour))].sort((a, b) => a - b).forEach(n => { const l = ko.filter(m => m.tour === n); secs.push({ titre: l[0].phase, l, tag: () => l[0].phase }); });
+    const ms = matchsDe(t), poule = ms.filter(m => m.phase === "poule"), ko = ms.filter(m => m.phase !== "poule");
+    const tagDe = m => m.phase === "poule" ? `Poule ${LETTRE(m.poule || 0)}` : m.phase;
+    let secs;
+    if (ms.some(m => m.heure)){                                           // le programme : un créneau par horaire
+      const avecH = ms.filter(m => m.heure), heures = [...new Set(avecH.map(m => m.heure))].sort();
+      secs = heures.map(h => ({ titre: hTxt(h), l: avecH.filter(m => m.heure === h).sort((a, b) => (a.terrain || 0) - (b.terrain || 0)), tag: tagDe, heure: true }));
+      const sans = ms.filter(m => !m.heure);
+      [...new Set(sans.map(m => m.phase === "poule" ? "poule" : m.tour))].forEach(k => { const l = sans.filter(m => (m.phase === "poule" ? "poule" : m.tour) === k);
+        secs.push({ titre: k === "poule" ? "Matchs de poule" : l[0].phase, l, tag: tagDe }); });
+    } else {
+      const tours = [...new Set(poule.map(m => +m.journee || 1))].sort((a, b) => a - b);
+      secs = tours.map(j => ({ titre: tours.length > 1 ? `Tour ${j}` : "Matchs de poule",
+        l: poule.filter(m => (+m.journee || 1) === j).sort((a, b) => (a.poule || 0) - (b.poule || 0)), tag: tagDe }));
+      [...new Set(ko.map(m => m.tour))].sort((a, b) => a - b).forEach(n => { const l = ko.filter(m => m.tour === n); secs.push({ titre: l[0].phase, l, tag: () => l[0].phase }); });
+    }
     if (!secs.length) return `<p class="fa-vide">Les matchs s'afficheront ici après le tirage au sort.</p>`;
     const enCours = secs.findIndex(s => s.l.some(m => !m.exempt && !aScore(m)));
-    return secs.map((s, i) => `<h3 class="trn-sec">${H(s.titre)}${i === enCours && ST.etat === "direct" ? `<em>En cours</em>` : ""}</h3>
+    return secs.map((s, i) => `<h3 class="trn-sec${s.heure ? " trn-sec-h" : ""}">${H(s.titre)}${i === enCours && ST.etat === "direct" ? `<em>${s.heure ? "À suivre" : "En cours"}</em>` : ""}</h3>
       <div class="trn-grille">${s.l.map(m => carteM(t, m, s.tag(m))).join("")}</div>`).join("");
   }
 
@@ -24047,10 +24202,48 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
       const l = clPoule(t, i), ms = matchsDe(t).filter(m => m.phase === "poule" && m.poule === i);
       return `<section class="trn-poule"><h3 class="trn-sec">Poule ${LETTRE(i)}<small>${ms.filter(aScore).length} / ${ms.length} matchs joués</small></h3>
         <div class="trn-cl"><div class="trn-cl-l trn-cl-t"><span></span><span></span><span>J</span><span class="gnp">G</span><span class="gnp">N</span><span class="gnp">P</span><span>Diff</span><span class="pts">Pts</span></div>
-        ${l.map((e, r) => `<div class="trn-cl-l${r < Q ? " q" : rep.includes(e.nom) ? " r" : ""}"><span class="rg">${r + 1}</span><span class="eq">${logo(e.nom)}<b>${H(e.nom)}</b></span>
+        ${l.map((e, r) => `<div class="trn-cl-l${r < Q ? " q" : rep.includes(e.nom) ? " r" : ""}${e.nom === ST.moi ? " moi" : ""}"><span class="rg">${r + 1}</span><span class="eq">${logo(e.nom)}<b>${H(e.nom)}</b></span>
           <span>${e.j}</span><span class="gnp">${e.g}</span><span class="gnp">${e.n}</span><span class="gnp">${e.p}</span><span>${diff(e)}</span><span class="pts">${pts(e)}</span></div>`).join("")}</div></section>`;
     }).join("") + (Q ? `<p class="trn-legende"><span class="q"></span>${Q > 1 ? `Les ${Q} premiers sont qualifiés` : "Le premier est qualifié"} pour la phase finale${+t.repechage ? `<span class="r"></span>${+t.repechage > 1 ? `Les ${+t.repechage} meilleurs ${Q + 1}es sont repêchés` : `Le meilleur ${Q + 1}e est repêché`}` : ""}</p>`
       : `<p class="trn-legende">3 points la victoire, 1 le match nul ; à égalité, la différence de buts départage.</p>`);
+  }
+
+  /* ---------- onglet Mon équipe : choisir son équipe parmi les inscrites, puis tout sur elle ---------- */
+  function choixEquipe(t){
+    const P = poulesDe(t);
+    return `<section class="trn-choix"><h2 class="trn-choix-t">Choisis ton équipe</h2>
+        <p class="trn-choix-s">Ses matchs, leurs horaires, ses scores et son classement s'afficheront en premier. Tu pourras en changer quand tu veux.</p>
+        ${P.map((p, i) => `${P.length > 1 ? `<h3 class="trn-sec">Poule ${LETTRE(i)}</h3>` : ""}<div class="trn-choix-l">${(p || []).filter(Boolean).map(n =>
+          `<button type="button" class="trn-eq" data-trn-eq="${H(n)}">${logo(n)}<b>${H(n)}</b></button>`).join("")}</div>`).join("")}
+        <button type="button" class="trn-passer" data-trn-eq="-">Voir tout le tournoi sans choisir d'équipe</button></section>`;
+  }
+  const rangTxt = r => r === 1 ? "1re" : r + "e";
+  function ongletEquipe(t, e){
+    const moi = ST.moi;
+    if (!moi) return choixEquipe(t);
+    const ms = matchsDe(t).filter(m => m.a === moi || m.b === moi);
+    const pi = poulesDe(t).findIndex(p => (p || []).includes(moi)), cl = pi >= 0 ? clPoule(t, pi) : [];
+    const r = cl.findIndex(x => x.nom === moi), l = cl[r] || { j: 0, g: 0, n: 0, p: 0, bp: 0, bc: 0 }, Q = +t.qualif || 0;
+    const ko = ms.filter(m => m.phase !== "poule"), perdu = ko.find(m => aScore(m) && gagnant(m) && gagnant(m) !== moi);
+    const poulesFinies = matchsDe(t).filter(m => m.phase === "poule").every(aScore);
+    let statut = "", cls = "";
+    if (e.ch === moi){ statut = "🏆 Vainqueur du tournoi !"; cls = "or"; }
+    else if (perdu){ statut = `Éliminée en phase finale (${perdu.phase.toLowerCase()})`; cls = "fin"; }
+    else if (ko.length){ statut = "✓ Qualifiée pour la phase finale"; cls = "ok"; }
+    else if (Q && poulesFinies && r >= 0){ const q = r < Q || repe(t).includes(moi); statut = q ? "✓ Qualifiée pour la phase finale" : "Éliminée en poule"; cls = q ? "ok" : "fin"; }
+    const tag = m => m.phase === "poule" ? `Poule ${LETTRE(m.poule || 0)}${m.journee && !m.heure ? " · Tour " + m.journee : ""}` : m.phase;
+    const joues = ms.filter(m => !m.exempt && aScore(m)).reverse(), aVenir = ms.filter(m => !m.exempt && !aScore(m));
+    const prochain = aVenir.find(m => m.a && m.b), autres = aVenir.filter(m => m !== prochain);
+    const diff = (+l.bp || 0) - (+l.bc || 0);
+    return `<section class="trn-moi">
+        <div class="trn-moi-tete">${logo(moi)}<div class="trn-moi-nom"><b>${H(moi)}</b><small>${pi >= 0 ? `Poule ${LETTRE(pi)}${r >= 0 && l.j ? ` · ${rangTxt(r + 1)} sur ${cl.length}` : ""}` : ""}</small></div>
+          <button type="button" class="trn-changer" data-trn-changer>Changer d'équipe</button></div>
+        <div class="trn-moi-stats">${[["Pts", pts(l)], ["J", l.j], ["G", l.g], ["N", l.n], ["P", l.p], ["Diff", (diff > 0 ? "+" : "") + diff]].map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join("")}</div>
+        ${statut ? `<p class="trn-moi-statut ${cls}">${statut}</p>` : ""}</section>
+      ${prochain ? `<h3 class="trn-sec">Prochain match${prochain.heure ? `<small>à ${hTxt(prochain.heure)}${terrainTxt(t, prochain).replace(" · ", ", ")}</small>` : ""}</h3><div class="trn-grille">${carteM(t, prochain, tag(prochain))}</div>` : ""}
+      ${joues.length ? `<h3 class="trn-sec">Ses résultats</h3><div class="trn-grille">${joues.map(m => carteM(t, m, tag(m))).join("")}</div>` : ""}
+      ${autres.length ? `<h3 class="trn-sec">Ses matchs suivants</h3><div class="trn-grille">${autres.map(m => carteM(t, m, tag(m))).join("")}</div>` : ""}
+      ${!ms.length ? `<p class="fa-vide">Pas encore de match pour ${H(moi)}.</p>` : ""}`;
   }
 
   /* ---------- onglet Phase finale : le tableau, tour par tour, jusqu'au vainqueur ---------- */
@@ -24071,35 +24264,35 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   function rendrePage(force){
     const z = document.getElementById("trn"); if (!z) return;
     const id = idDuHash(); if (!id) return;
-    if (ST.id !== id){ ST.id = id; ST.onglet = "matchs"; ST.sig = ""; }
     const t = (S.tournois || []).find(x => x.id === id);
+    if (ST.id !== id && t){ ST.id = id; ST.sig = ""; ST.onglet = equipeChoisie(t) === "-" ? "matchs" : "equipe"; }
     if (!t || !visible(t)){
       const msg = !S.pret ? "Chargement du tournoi…" : "Ce tournoi n'est pas (ou plus) en ligne.";
-      const html = `<div class="eqp-tete trn-tete"><a class="hexa-b" href="#tournois" aria-label="Tous les tournois">${RETOUR}</a><h1 class="eqp-titre">Tournoi</h1></div>
-        <div class="wrap trn-corps"><p class="fa-vide">${msg}${S.pret ? `<br><a class="lien" href="#tournois">Voir les tournois du club</a>` : ""}</p></div>`;
+      const html = `<div class="eqp-tete trn-tete">${BLASON}<h1 class="eqp-titre">Tournoi</h1></div>
+        <div class="wrap trn-corps"><p class="fa-vide">${msg}</p></div>`;
       if (html !== ST.sig){ ST.sig = html; z.innerHTML = html; }
       return;
     }
     const e = etat(t); ST.etat = e.k;
+    const choix = equipeChoisie(t); ST.moi = choix && choix !== "-" ? choix : "";
     const ko = e.ko || +t.qualif > 0;
     if (ST.onglet === "finale" && !ko) ST.onglet = "matchs";
-    const sig = JSON.stringify([t, ST.onglet, e.k]);
+    const sig = JSON.stringify([t, ST.onglet, e.k, choix]);
     if (!force && sig === ST.sig) return;
     ST.sig = sig;
     const pct = e.total ? Math.round(e.joues / e.total * 100) : 0;
-    const ONGS = [["matchs", "Matchs"], ["classement", "Classement"], ...(ko ? [["finale", "Phase finale"]] : [])];
-    const corps = ST.onglet === "classement" ? ongletClassement(t) : ST.onglet === "finale" ? ongletFinale(t, e) : ongletMatchs(t);
+    const ONGS = [["equipe", "Mon équipe"], ["matchs", "Matchs"], ["classement", "Classement"], ...(ko ? [["finale", "Phase finale"]] : [])];
+    const corps = ST.onglet === "equipe" ? ongletEquipe(t, e) : ST.onglet === "classement" ? ongletClassement(t) : ST.onglet === "finale" ? ongletFinale(t, e) : ongletMatchs(t);
     const q = t.lieu ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.lieu)}` : "";
     z.innerHTML = `<div class="eqp-tete trn-tete ${e.k}">
-        <a class="hexa-b" href="#tournois" aria-label="Tous les tournois">${RETOUR}</a>
+        ${BLASON}
         <h1 class="eqp-titre">${H(t.nom || "Tournoi")}</h1>
         <button type="button" class="hexa-b" data-trn-partager aria-label="Partager la page du tournoi (QR code)">${ICO_QR}</button>
         <p class="trn-meta">${metaDe(t)}${q ? ` <a class="trn-pin" href="${q}" target="_blank" rel="noopener" aria-label="Voir le lieu sur le plan">${PIN}</a>` : ""}</p>
         <div class="trn-ligne">${pastille(e)}${e.total ? `<span class="trn-compte">${compte(e)}</span>` : ""}</div>
         ${e.total ? `<div class="trn-barre" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ""}
         ${e.ch ? `<div class="trn-champion"><span aria-hidden="true">🏆</span>${logo(e.ch)}<div><small>Vainqueur</small><b>${H(e.ch)}</b></div></div>` : ""}
-        ${e.k === "direct" ? `<p class="trn-auto">Les scores arrivent tout seuls, sans recharger la page.</p>` : ""}
-        <a class="eqp-club" href="#accueil"><span class="cl-blason"><img src="${typeof LOGO_SRC !== "undefined" ? LOGO_SRC : ""}" alt=""></span><b>Atom'Sports Football Pierrelatte</b>${CHEV}</a></div>
+        ${e.k === "direct" ? `<p class="trn-auto">Les scores arrivent tout seuls, sans recharger la page.</p>` : ""}</div>
       <nav class="club-onglets eqp-onglets" aria-label="${H(t.nom || "Tournoi")}">${ONGS.map(([k, l]) => `<button type="button" class="${ST.onglet === k ? "actif" : ""}" data-trno="${k}">${l}</button>`).join("")}</nav>
       <div class="wrap trn-corps">${corps}</div>`;
   }
@@ -24122,7 +24315,7 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
           ${e.ch ? `<small class="trn-carte-v">Vainqueur : ${H(e.ch)}</small>` : e.total && e.joues ? `<small>${compte(e)}</small>` : ""}</span>
         ${pastille(e)}${CHEV}</a>`;
   }
-  window.ASF_TOURNOI = { carte: t => carteTournoi(t), lien: lienDe };      // l'onglet Matchs montre le tournoi de son week-end
+  window.ASF_TOURNOI = { carte: t => carteTournoi(t), lien: lienDe, programmer };      // l'onglet Matchs montre le tournoi de son week-end
 
   /* ---------- partager : le QR code de la page, le lien ---------- */
   function copier(txt){
@@ -24224,15 +24417,36 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
         </div>
       </div></section>`;
   }
+  function carteHoraires(t){
+    const h = t.horaire || {}, ms = matchsDe(t), reste = ms.some(m => m.heure && !aScore(m) && !m.exempt);
+    const opt = (l, v, f) => l.map(x => `<option value="${x}" ${+v === x ? "selected" : ""}>${f(x)}</option>`).join("");
+    return `<section class="trn-h-carte" data-trn-t="${H(t.id)}">
+      <h3>⏱️ Horaires des matchs</h3>
+      <p>${t.horaire ? `Premier match à <b>${hTxt(h.debut)}</b>, ${h.duree} min par match${h.pause ? `, ${h.pause} min entre deux` : ""}, ${h.terrains} terrain${h.terrains > 1 ? "s" : ""}. Les matchs alternent poule A, poule B… et chaque équipe souffle entre deux matchs : les horaires sont sur la page des spectateurs.`
+        : "Donne l'heure du premier match et le temps d'un match : les horaires se calculent tout seuls, en alternant poule A, poule B… La phase finale suit."}</p>
+      <div class="trn-h-champs">
+        <label>Premier match<input type="time" data-trn-h="debut" value="${H(h.debut || "10:00")}"></label>
+        <label>Durée d'un match<select data-trn-h="duree">${opt([5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 35, 40, 45], h.duree || 10, x => x + " min")}</select></label>
+        <label>Pause entre deux<select data-trn-h="pause">${opt([0, 1, 2, 3, 4, 5, 8, 10, 15], h.pause ?? 2, x => x ? x + " min" : "aucune")}</select></label>
+        <label>Terrains<select data-trn-h="terrains">${opt([1, 2, 3, 4, 5, 6], h.terrains || 1, x => x)}</select></label>
+      </div>
+      <div class="trn-qr-btns"><button type="button" class="btn ${t.horaire ? "contour" : "bleu"}" data-trn-a="horaires">${t.horaire ? "Recalculer les horaires" : "Calculer les horaires"}</button>
+        ${t.horaire && reste ? `<button type="button" class="btn contour" data-trn-a="retard" data-min="5">⏳ Retard : +5 min</button><button type="button" class="btn contour" data-trn-a="retard" data-min="-5">−5 min</button>` : ""}</div>
+      ${t.horaire && ms.filter(m => m.phase === "poule").some(aScore) ? `<p class="trn-h-note">Les matchs déjà joués gardent leur heure ; « Recalculer » place les autres à partir de l'heure indiquée.</p>` : ""}
+    </section>`;
+  }
   const avantPT = window.panTournois;
   if (typeof avantPT === "function" && typeof ONG !== "undefined") window.panTournois = function(){
     const h = avantPT.apply(this, arguments);
     const t = S.ui && !S.ui.tirage && S.ui.tournoi && (S.tournois || []).find(x => x.id === S.ui.tournoi);
     if (!t) return h;
     return ONG.transformer(h, r => {
-      const tpl = document.createElement("template"); tpl.innerHTML = carteAdmin(t);
+      const tpl = document.createElement("template"); tpl.innerHTML = carteAdmin(t) + carteHoraires(t);
       const tete = r.querySelector(".ong-tn-tete");
       if (tete) tete.after(tpl.content); else r.prepend(tpl.content);
+      const N = t.horaire ? +t.horaire.terrains || 1 : 1;                       // l'heure de chaque match, sur sa ligne
+      r.querySelectorAll("#t-edit [data-m]").forEach(d => { const m = matchsDe(t).find(x => x.id === d.dataset.m); if (!m || !m.heure) return;
+        d.insertAdjacentHTML("afterbegin", `<p class="trn-h-badge">🕒 ${hTxt(m.heure)}${N > 1 && m.terrain ? ` · Terrain ${m.terrain}` : ""}</p>`); });
     });
   };
 
@@ -24241,6 +24455,17 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     const el = ev.target.closest ? ev.target : null; if (!el) return;
     const o = el.closest("#trn [data-trno]");
     if (o){ ST.onglet = o.dataset.trno; rendrePage(true); return; }
+    const q = el.closest("#trn [data-trn-eq]");
+    if (q){
+      const t = (S.tournois || []).find(x => x.id === idDuHash()); if (!t) return;
+      retenirEquipe(t, q.dataset.trnEq); ST.onglet = q.dataset.trnEq === "-" ? "matchs" : "equipe"; rendrePage(true);
+      const n = document.querySelector("#trn .eqp-onglets"); if (n) n.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+    if (el.closest("#trn [data-trn-changer]")){
+      const t = (S.tournois || []).find(x => x.id === idDuHash()); if (!t) return;
+      retenirEquipe(t, ""); ST.onglet = "equipe"; rendrePage(true); return;
+    }
     const tid = () => { const c = el.closest("[data-trn-t]"); return c ? c.dataset.trnT : (S.ui && S.ui.tournoi) || idDuHash(); };
     const tDe = id => (S.tournois || []).find(x => x.id === id);
     if (el.closest("[data-trn-partager]")){ const t = tDe(idDuHash()); if (t) ouvrirPartage(t); return; }
@@ -24253,6 +24478,21 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     if (k === "partager" && navigator.share) navigator.share({ title: t.nom || "Tournoi", text: `${t.nom || "Tournoi"} : les scores en direct`, url: lienDe(t) }).catch(() => {});
     if (k === "qr-png") imageQR(t);
     if (k === "affiche"){ a.disabled = true; affiche(t).finally(() => { a.disabled = false; }); }
+    if ((k === "horaires" || k === "retard") && typeof ecrire === "function"){
+      const t2 = JSON.parse(JSON.stringify(t));
+      if (k === "horaires"){
+        const c = a.closest(".trn-h-carte"), v = n => ((c && c.querySelector(`[data-trn-h="${n}"]`)) || {}).value;
+        programmer(t2, { debut: v("debut"), duree: v("duree"), pause: v("pause"), terrains: v("terrains") });
+        if (!t2.horaire){ dire("Choisis l'heure du premier match.", true); return; }
+      } else {
+        const d = +a.dataset.min || 5;
+        matchsDe(t2).forEach(m => { if (m.heure && !aScore(m) && !m.exempt){ const n = minutesDe(m.heure); if (n !== null) m.heure = hhmm(Math.max(0, n + d)); } });
+      }
+      a.disabled = true;
+      ecrire(() => S.db.doc("tournois/" + t.id).update({ matchs: t2.matchs, horaire: t2.horaire || null }),
+        k === "horaires" ? "Horaires calculés : ils sont sur la page des spectateurs." : `Matchs restants décalés de ${+a.dataset.min > 0 ? "+" : ""}${+a.dataset.min} min.`)
+        .then(() => { a.disabled = false; try { rendrePanneau(); } catch(e){} });
+    }
   });
 
   /* ---------- redessiner : à chaque arrivée de données, et en ouvrant la page d'un tournoi ---------- */

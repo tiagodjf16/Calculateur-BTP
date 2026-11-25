@@ -1173,5 +1173,73 @@ body:has(#p-tournoi.visible) .club-tete,body:has(#p-tournoi.visible) .top{displa
 .trn-qr-info p b{color:#fff}
 .trn-qr-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 @media (max-width:560px){ .trn-qr-carte{grid-template-columns:1fr;justify-items:center;text-align:center} .trn-qr-mini{width:190px} .trn-qr-btns{justify-content:center} }
+/* ---------- PAGE D'UN TOURNOI (QR code) : seulement le tournoi, sans la navigation du site ---------- */
+html.trn-mode #tabbar-site,html.trn-mode footer,html.trn-mode .club-tete,html.trn-mode .top{display:none!important}
+html.trn-mode body{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))!important}
+html.trn-mode .toast{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+.trn-blason{width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:#fff;padding:5px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.trn-blason img{width:100%;height:100%;object-fit:contain}
+@media (min-width:700px){ .trn-blason{width:62px;height:62px} }
+/* choisir son équipe */
+.trn-choix{max-width:900px;margin:0 auto}
+.trn-choix-t{margin:22px 0 4px;text-align:center;font:400 clamp(32px,6vw,44px)/1 var(--f-titre)!important;color:var(--f-gold)!important;letter-spacing:.01em}
+.trn-choix-s{margin:0 auto 6px;max-width:560px;text-align:center;font:500 15.5px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-choix-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:12px}
+.trn-eq{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 16px;border:1px solid #0C2545;border-radius:8px;background:var(--f-panel-2);color:#fff;
+  font:700 16px var(--f-ui);text-transform:uppercase;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
+.trn-eq:hover,.trn-eq:focus-visible{background:var(--f-panel-3);border-color:var(--f-gold);outline:0}
+.trn-eq .t-logo{width:40px;height:40px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;flex:none;font:800 15px var(--f-ui);color:#06192F}
+.trn-eq .t-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.trn-eq b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trn-passer{display:block;margin:22px auto 4px;padding:12px 18px;border:0;background:none;color:var(--f-txt-2);font:600 15px var(--f-ui);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* mon équipe */
+.trn-moi{max-width:900px;margin:16px auto 0;padding:18px;border-radius:10px;background:linear-gradient(135deg,rgba(201,176,127,.16),rgba(8,31,57,.92));border:1px solid rgba(201,176,127,.55)}
+.trn-moi-tete{display:grid;grid-template-columns:56px minmax(0,1fr) auto;align-items:center;gap:14px}
+.trn-moi-tete .t-logo{width:56px;height:56px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;font:800 20px var(--f-ui);color:#06192F}
+.trn-moi-tete .t-logo img{width:100%;height:100%;object-fit:contain;padding:4px}
+.trn-moi-nom{min-width:0;display:grid;gap:3px}
+.trn-moi-nom b{font:400 30px/1.02 var(--f-titre);letter-spacing:.01em;color:#fff;overflow-wrap:anywhere}
+.trn-moi-nom small{font:600 14.5px var(--f-ui);color:var(--f-gold)}
+.trn-changer{padding:9px 14px;border:1px solid rgba(255,255,255,.3);border-radius:30px;background:rgba(3,14,28,.4);color:#fff;font:600 13.5px var(--f-ui);cursor:pointer;white-space:nowrap}
+.trn-changer:hover{border-color:var(--f-gold)}
+.trn-moi-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:16px}
+.trn-moi-stats div{display:grid;justify-items:center;gap:2px;padding:9px 2px;border-radius:8px;background:rgba(3,14,28,.45)}
+.trn-moi-stats b{font:700 22px/1 var(--f-ui);color:#fff}
+.trn-moi-stats div:first-child b{color:var(--f-gold)}
+.trn-moi-stats small{font:600 11.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:#8F9BB0}
+.trn-moi-statut{margin:14px 0 0;padding:10px 14px;border-radius:8px;text-align:center;font:700 15.5px var(--f-ui);background:rgba(3,14,28,.45);color:#fff}
+.trn-moi-statut.ok{background:rgba(24,178,107,.18);color:#86EFAC}
+.trn-moi-statut.or{background:rgba(201,176,127,.25);color:#F3E3B8;font-size:18px}
+.trn-moi-statut.fin{color:#C9D4F2}
+@media (max-width:520px){ .trn-moi{padding:14px} .trn-moi-tete{grid-template-columns:48px minmax(0,1fr)} .trn-moi-tete .t-logo{width:48px;height:48px}
+  .trn-changer{grid-column:1/-1;justify-self:start} .trn-moi-nom b{font-size:26px} .trn-moi-stats b{font-size:19px} }
+/* l'équipe choisie, partout */
+.trn-m.moi{box-shadow:inset 0 0 0 1px rgba(201,176,127,.75)}
+.trn-m-l.moi > span:not(.t-logo){color:var(--f-gold)!important}
+.trn-cl-l.moi{background:rgba(201,176,127,.14)}
+.trn-cl-l.moi .eq b{color:var(--f-gold)}
+/* horaires : l'heure dans les cartes, les créneaux du programme */
+.trn-m-tag > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trn-m-tag small{font:700 12px var(--f-ui);color:#8F9BB0;letter-spacing:.04em}
+.trn-m-tag em{font-weight:800;letter-spacing:.04em}
+.trn-sec-h{font:400 30px/1 var(--f-titre)!important;letter-spacing:.02em;color:var(--f-gold)}
+.trn-sec-h em{font:700 11px var(--f-ui)!important}
+/* espace club : la carte « Horaires des matchs », l'heure sur chaque match, les réglages à la création */
+.trn-h-carte{margin:0 0 18px;padding:18px;border-radius:14px;background:rgba(8,31,57,.9);border:1px solid rgba(143,168,240,.3)}
+.trn-h-carte h3{margin:0 0 6px;font:800 20px var(--f-ui)!important;color:#fff}
+.trn-h-carte p{margin:0 0 10px;font:500 15px/1.45 var(--f-ui);color:#D0D9E1}
+.trn-h-carte p b{color:#fff}
+.trn-h-champs,.t-horaire{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.trn-h-champs label,.t-horaire label{display:grid;gap:6px;font:600 14px var(--f-ui);color:#C9D4F2}
+.trn-h-note{margin:10px 0 0!important;font-size:13.5px!important;color:#8F9BB0!important}
+.ong-tn-g1 > .t-horaire,.grille > .t-horaire{grid-column:1/-1}
+.t-horaire{margin-top:4px;padding:14px;border-radius:12px;border:1px dashed rgba(143,168,240,.35)}
+.t-horaire-t{grid-column:1/-1;font:800 16px var(--f-ui);color:#fff}
+.t-horaire-n{grid-column:1/-1;font:500 13.5px/1.4 var(--f-ui);color:#AFC0EA}
+@media (max-width:620px){ .trn-h-champs,.t-horaire{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.ong-tn-duel > .trn-h-badge{grid-column:1/-1;margin:0;padding:7px 14px 0;font:700 13.5px var(--f-ui);color:#F7C566;letter-spacing:.02em}
+/* les onglets du tournoi tiennent sur un téléphone */
+@media (max-width:440px){ #trn .eqp-onglets{justify-content:space-between;padding:0 4px} #trn .eqp-onglets button{font-size:13.5px;padding:13px 7px 12px;letter-spacing:0}
+  #trn .eqp-onglets button.actif::after{left:7px;right:7px} }
 
 /*/HABILLAGE-CSS*/
