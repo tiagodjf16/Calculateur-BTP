@@ -22,7 +22,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#030E1C">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="973b8e8a32df">
+<meta name="asf-version" content="1d75aa76e76a">
 <meta name="asf-version-date" content="2026-11-25">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -3217,6 +3217,26 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 @media (max-width:480px){ .inst b{font-size:15.5px} .inst span{font-size:14px} .inst{column-gap:12px} .inst > svg{width:32px;height:32px} .install{padding:4px 16px} }
 .fr-note{margin:14px 6px 2px;text-align:center;font:500 13.5px/1.4 var(--f-ui);color:var(--f-txt-3)}
 .mx .fm-resume .fr-titre{margin-top:16px}
+/* ---------- MATCHS : tous les matchs du week-end, toutes catégories (l'ancien calendrier par équipe reste caché) ---------- */
+#p-calendrier > .cal-filtres,#p-calendrier > .cal-affiche,#p-resultats{display:none!important}
+.mw-bloc{padding-top:14px}
+.mw-titre{margin:4px 0 18px;font-size:clamp(34px,5.6vw,50px);color:var(--f-txt)}
+.mw-nav{display:grid;grid-template-columns:76px minmax(0,1fr) 76px;max-width:560px;margin:0 auto 12px}
+.mw-nav > *{min-height:56px;display:flex;align-items:center;justify-content:center;margin:0;background:var(--f-panel-2);color:#fff;border:1px solid #0C2545;
+  cursor:pointer;font:700 15px var(--f-ui);letter-spacing:.03em;text-transform:uppercase;transition:background .15s}
+.mw-nav > .mw-fl{padding:0;background:#0C2545;border-radius:30px 0 0 30px}
+.mw-nav > .mw-fl:last-child{border-radius:0 30px 30px 0}
+.mw-nav > :hover{background:var(--f-panel-3)}
+.mw-fl svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2}
+.mw-nav > .mw-cal{gap:12px;margin:0 -1px;padding:0 10px;border-radius:0}
+.mw-cal svg{width:24px;height:24px;flex:none;stroke:var(--f-gold);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.mw-info{text-align:center;margin:0 0 4px;font:500 15px/1.5 var(--f-ui);color:var(--f-txt-3)}
+.mw-auj{background:none;border:0;padding:0;color:var(--f-gold);font:600 15px var(--f-ui);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.mw-jour{margin:28px 0 14px;font:700 21px var(--f-ui);letter-spacing:.01em;text-transform:uppercase;color:var(--f-txt)}
+#mw-zone .mc-liste{align-items:start}
+.mw-dp{display:none!important}                    /* champ caché du calendrier : il donne seulement son titre à la fenêtre */
+#mw-zone .fa-vide{margin-top:22px}
+@media (max-width:480px){ .mw-nav{grid-template-columns:64px minmax(0,1fr) 64px} .mw-jour{font-size:19px;margin-top:24px} }
 
 /*/HABILLAGE-CSS*/
 </style>
@@ -3250,7 +3270,7 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
   <a class="club-blason" href="#accueil" aria-label="Accueil du club"><span data-blason></span></a>
   <p class="club-nom">Atom'Sports Football Pierrelatte</p>
   <nav class="club-onglets" id="club-onglets" aria-label="Rubriques du club">
-    <a href="#accueil" data-o="accueil">Accueil</a><a href="#club" data-o="club">Le club</a><a href="#equipes" data-o="equipes">Équipes</a><a href="#calendrier" data-o="matchs">Matchs</a><a href="#animation" data-o="animation">Foot d'animation</a><a href="#compos" data-o="compos">Compos</a><a href="#photos" data-o="photos">Photos</a><a href="#inscriptions" data-o="inscriptions">Inscriptions</a><a href="#partenaires" data-o="partenaires">Partenaires</a><a href="#contact" data-o="contact">Contact</a>
+    <a href="#accueil" data-o="accueil">Accueil</a><a href="#club" data-o="club">Le club</a><a href="#equipes" data-o="equipes">Équipes</a><a href="#calendrier" data-o="matchs">Matchs</a><a href="#compos" data-o="compos">Compos</a><a href="#photos" data-o="photos">Photos</a><a href="#inscriptions" data-o="inscriptions">Inscriptions</a><a href="#partenaires" data-o="partenaires">Partenaires</a><a href="#contact" data-o="contact">Contact</a>
   </nav>
 </section>
 
@@ -3371,19 +3391,17 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 </div>
 
 <div class="page" id="p-calendrier">
-  <nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>
+  <section class="bloc mw-bloc"><div class="wrap" id="mw-zone"></div></section>
   <div class="cal-filtres"><div class="filtres" id="f-cal" role="group" aria-label="Choisir l'équipe"></div></div>
   <div class="cal-affiche" id="cal-affiche"></div>
 </div>
 
 <div class="page" id="p-resultats">
-  <nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>
   <div class="cal-filtres"><div class="filtres" id="f-res" role="group" aria-label="Choisir l'équipe"></div></div>
   <div class="res-affiche"><div class="res-contenu" id="liste-res"></div></div>
 </div>
 
 <div class="page" id="p-classement">
-  <nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>
   <div class="cal-filtres"><div class="filtres" id="f-classement" role="group" aria-label="Choisir l'équipe"></div></div>
   <div class="res-affiche"><div class="res-contenu" id="classement-zone"></div></div>
 </div>
@@ -3395,15 +3413,10 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 
 <div class="page" id="p-tournois">
   <div class="titre-page"><div class="wrap"><h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>
-  <nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>
   <section class="bloc"><div class="wrap" id="liste-tournois"></div></section>
 </div>
 
 <div class="page" id="p-equipe"><div id="eqp"></div></div>
-
-<div class="page" id="p-animation">
-  <section class="bloc"><div class="wrap" id="fa-zone"></div></section>
-</div>
 
 <div class="page" id="p-photos">
   <div class="titre-page"><div class="wrap"><h1>Photos</h1><p>Les images des derniers matchs, publiées par le club.</p></div></div>
@@ -3554,7 +3567,7 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 
 <div class="plus" id="plus">
   <a href="#connexion">Se connecter</a>
-  <a href="#resultats">Résultats</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a>
+  <a href="#calendrier">Matchs</a><a href="#classement">Classement</a><a href="#tournois">Tournois</a>
   <a href="#photos">Photos</a><a href="#club">Le club</a><a href="#equipes">Équipes</a><a href="#inscriptions">Inscriptions</a>
   <a href="#partenaires">Partenaires</a><a href="#contact">Contact</a>
   <a href="#" data-theme-btn>Changer de thème</a>
@@ -3917,8 +3930,8 @@ const matchsAvecEquipe = l => {
 const ordreOnglet = e => (/^seniors?\s*1/i.test(e) ? "0" : /^seniors?/i.test(e) ? "1" : /^f[ée]m/i.test(e) ? "2" : "3")
   + String((String(e).match(/U\s?(\d{1,2})/i) || [0, 99])[1]).padStart(2, "0")
   + (ONGLETS_ANIM_CAL.includes(e) ? String(ONGLETS_ANIM_CAL.indexOf(e)).padStart(2, "0") : "") + e;   // foot animation : dans l'ordre de la FFF
-const ONGLETS_ANIM_CAL = ["U6 · U7", "U8 · U9", "U8 · U9 Promotion", "U8 · U9 Espoir", "U8 · U9 Bourgeon", "U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons", "U13 · équipe 3", "U13 · équipe 4"];
-const ONGLETS_ANIM_RES = ["U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons", "U13 · équipe 3", "U13 · équipe 4"];
+const ONGLETS_ANIM_CAL = ["U6 · U7", "U8 · U9 Promotion", "U8 · U9 Espoir", "U8 · U9 Bourgeon", "U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons"];
+const ONGLETS_ANIM_RES = ["U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons"];
 /* catégorie d'une équipe : « Seniors 2 » → Seniors, « U13 · D1 » → U13, « U11 Avenir » → U11, « U6 · U7 » reste tel quel */
 const groupeEquipe = e => {
   const t = String(e || "");
@@ -4362,7 +4375,7 @@ function panScores(){
   const autor = equipesAutorisees();
   const permis = m => !autor.length || autor.includes(m.equipe) || autor.includes(eqDe(m));
   const matchs = S.matchs.filter(m => w.jours.includes(m.date) && permis(m)).sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
-  const fal = (S.matchsAnimation || []).filter(m => /^pl-/.test(m.id) && w.jours.includes(m.date) && /U1[013]/i.test(m.equipe || "") && permis(m));
+  const fal = (S.matchsAnimation || []).filter(m => /^pl-/.test(m.id) && w.jours.includes(m.date) && /U1[01]/i.test(m.equipe || "") && permis(m));
   const aSaisir = matchs.filter(m => !joue(m)).length + fal.reduce((n, m) => n + (m.adversaires || []).filter((a, i) => { const r = (m.resultats || []).find(x => x.adv === a) || (m.resultats || [])[i] || {}; return r.bp === null || r.bp === undefined || r.bp === ""; }).length, 0);
   const j = x => jd(x).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const ligneMatch = m => {
@@ -4383,7 +4396,7 @@ function panScores(){
       <button class="ent-fl" data-a="sc-semaine" data-d="${Math.min(0, decal + 1)}" aria-label="Week-end suivant" ${decal >= 0 ? "disabled" : ""}>›</button></div>
     <p class="quoi">Les scores de la FFF arrivent tout seuls ; ici tu complètes ceux qui manquent (vétérans, foot animation, matchs pas encore remontés). Ils partent sur l'affiche des résultats du lundi.</p>
     ${matchs.length ? `<h3 class="club-titre">Matchs</h3><div class="sc-liste">${matchs.map(ligneMatch).join("")}</div>` : ""}
-    ${fal.length ? `<h3 class="club-titre">Foot animation · U10-U11 et U13</h3><div class="sc-liste">${fal.map(carteFal).join("")}</div>` : ""}
+    ${fal.length ? `<h3 class="club-titre">Foot animation · U10-U11</h3><div class="sc-liste">${fal.map(carteFal).join("")}</div>` : ""}
     ${matchs.length || fal.length ? `<div class="club-enregistrer"><span>Seuls les scores remplis ou changés sont enregistrés.</span>
       <div class="btns"><button class="btn bleu" data-a="sc-enregistrer">Enregistrer les scores</button></div></div>`
       : `<div class="ent-vide">Aucun match ce week-end${autor.length && !peutBureau() ? " pour tes équipes" : ""}.</div>`}`;
@@ -4745,7 +4758,7 @@ function lieuMatch(m){
 }
 /* un rendez-vous du foot animation avec ses scores devient autant de « matchs » que d'adversaires, pour la page Résultats */
 const matchsResultatsAnimation = () => (S.matchsAnimation || [])
-  .filter(m => /^pl-/.test(m.id) && /U1[013]/i.test(m.equipe || ""))
+  .filter(m => /^pl-/.test(m.id) && /U1[01]/i.test(m.equipe || ""))
   .flatMap(m => (m.resultats || []).filter(r => r.adv && r.bp !== null && r.bc !== null && r.bp !== "" && r.bc !== "")
     .map((r, i) => ({ ...m, id: m.id + "-r" + i, adv: r.adv, bp: +r.bp, bc: +r.bc, dom: true })));
 function rendreMatchs(){
@@ -4912,7 +4925,6 @@ function rendreClassement(){
   const z = $("#classement-zone"), zf = $("#f-classement");
   const eqs = Object.values(S.classements).filter(c => !/coupe|gambardella|challenge|troph/i.test(String(c.titre || c.competition || "")))
     .map(c => c.equipe).filter(Boolean).sort((a,b) => ORDRE_EQ(a).localeCompare(ORDRE_EQ(b)));
-  ["U13 · ÉQUIPE 3", "U13 · ÉQUIPE 4"].forEach(e => { if (!eqs.includes(e)) eqs.push(e); });
   if (!S.filtreClassement || !eqs.includes(S.filtreClassement)) S.filtreClassement = eqs[0] || "";
   const nomCl = e => /ÉQUIPE/.test(e) ? e.replace("ÉQUIPE", "équipe") : joliEquipe(e);
   eqs.sort((a, b) => ordreOnglet(nomCl(a)).localeCompare(ordreOnglet(nomCl(b))));
@@ -5664,7 +5676,7 @@ const ONGLETS = [["tableau","Tableau de bord","entraineur","Mon équipe","Le wee
   ["compos","Compos","entraineur","Mon équipe","Composition, banc et mot du coach"],
   ["entrainements","Entraînements","entraineur","Mon équipe","Créneaux, séances et présences"],
   ["effectifs","Effectifs","entraineur","Mon équipe","Joueurs, licences et photos"],
-  ["animation","Foot animation","entraineur","Mon équipe","Plateaux et brassages : dates, adversaires et résultats"],
+  ["animation","Foot animation","entraineur","Mon équipe","Plateaux : dates, adversaires et résultats"],
   ["veterans","Vétérans","entraineur","Mon équipe","Les matchs des vétérans : date, adversaire, lieu, score"],
   ["stages","Stages","entraineur","Le club","Fiche du stage, inscriptions en ligne des familles"],
   ["messages","Messages","entraineur","Le club","Les messages envoyés depuis la page Contact du site"],
@@ -6168,7 +6180,7 @@ const CLUBS_DISTRICT_NUM = [["R.C. SAVASSON", 538001], ["A. S. BERG HELVIE", 581
 const CLUBS_DISTRICT = CLUBS_DISTRICT_NUM.map(c => c[0]);
 
 const ADRESSE_CLUB = "Stade Gustave Jaume, avenue Pierre de Coubertin, 26700 Pierrelatte";
-const CATS_AN = [["U6 · U7", "Plateau"], ["U8 · U9", "Plateau"], ["U8 · U9 Promotion", "Plateau"], ["U8 · U9 Espoir", "Plateau"], ["U8 · U9 Bourgeon", "Plateau"], ["U10 · U11 Avenir", "Plateau", true], ["U10 · U11 Espoir", "Plateau", true], ["U10 · U11 Bourgeons", "Plateau", true], ["U13 · ÉQUIPE 3", "Brassage", true], ["U13 · ÉQUIPE 4", "Brassage", true]];
+const CATS_AN = [["U6 · U7", "Plateau"], ["U8 · U9 Promotion", "Plateau"], ["U8 · U9 Espoir", "Plateau"], ["U8 · U9 Bourgeon", "Plateau"], ["U10 · U11 Avenir", "Plateau", true], ["U10 · U11 Espoir", "Plateau", true], ["U10 · U11 Bourgeons", "Plateau", true]];
 const samediProchain = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.toISOString().slice(0, 10); };
 /* ===== choisir un club dans la liste du district (fenêtre avec recherche) ===== */
 let pickCible = null;
@@ -6361,7 +6373,7 @@ function panAnimation(){
     <div class="an-barre"><h2>${esc(cat)} · ${type === "Brassage" ? "brassages" : "plateaux"}</h2>
       <button class="btn bleu" data-a="an-ajout">+ Ajouter un rendez-vous</button></div>
     ${l.length ? l.map(carte).join("") : videHtml("tournoi", `Aucun rendez-vous pour les ${cat}`, "Ajoute les dates dès que le district les publie : elles partent toutes seules sur les affiches Foot animation.")}
-    <p class="quoi" style="margin-top:14px">Touche un champ de club pour ouvrir la liste des clubs du district et chercher par le nom : leur logo apparaîtra sur les affiches. Les scores se saisissent pour les U10 · U11 et les deux équipes U13 ; les U6 à U9 n'ont pas de résultats.</p>`;
+    <p class="quoi" style="margin-top:14px">Touche un champ de club pour ouvrir la liste des clubs du district et chercher par le nom : leur logo apparaîtra sur les affiches. Les scores se saisissent pour les U10 · U11 ; les U6 à U9 n'ont pas de résultats.</p>`;
 }
 function panPlateaux(){
   const eqOk = equipesAutorisees();
@@ -6956,7 +6968,7 @@ document.addEventListener("click", ev => { const b = ev.target.closest("[data-in
 const NAV_PUBLIC = [
   ["🏠", "Accueil", "#accueil"],
   ["🏟️", "Le club", [["Présentation", "#club"], ["Équipes", "#equipes"], ["Partenaires", "#partenaires"]]],
-  ["⚽", "Matchs", [["Calendrier", "#calendrier"], ["Résultats", "#resultats"], ["Classement", "#classement"], ["Compos", "#compos"], ["Tournois", "#tournois"], ["Foot d'animation", "#animation"]]],
+  ["⚽", "Matchs", [["Tous les matchs", "#calendrier"], ["Classement", "#classement"], ["Compos", "#compos"], ["Tournois", "#tournois"]]],
   ["📸", "Photos", "#photos"],
   ["✍️", "Inscriptions", [["S'inscrire au club", "#inscriptions"], ["S'inscrire au stage", "stage"]]],
   ["✉️", "Contact", "#contact"],
@@ -10053,7 +10065,7 @@ document.addEventListener("submit", async ev => {
 /* ============================================================
    NAVIGATION, THÈME, DÉMARRAGE
    ============================================================ */
-const PAGES = ["animation","equipe","portail","connexion","espaces","joueur","photos","legal","confidentialite","accueil","club","equipes","calendrier","resultats","classement","compos","tournois","inscriptions","partenaires","contact","espace"];
+const PAGES = ["equipe","portail","connexion","espaces","joueur","photos","legal","confidentialite","accueil","club","equipes","calendrier","resultats","classement","compos","tournois","inscriptions","partenaires","contact","espace"];
 function route(){
   const p = PAGES.includes(location.hash.slice(1).split("/")[0]) ? location.hash.slice(1).split("/")[0] : "accueil";   // on arrive sur l'accueil visiteur
   // sur le site en ligne, les espaces membres demandent d'être connecté
@@ -14403,7 +14415,7 @@ ${R} .ong-aff-reg-btns{margin-top:14px}
       <li>Touche <b>« + Ajouter un rendez-vous »</b>, puis remplis la fiche dans l'ordre : quand et où, l'organisation (plateau, brassage ou poules), les équipes rencontrées.</li>
       <li>Touche <b>« Enregistrer »</b> : le rendez-vous part tout seul sur les affiches Foot animation.</li>
     </ol>
-    <p class="ong-anim-astuce">Pour choisir un club, touche le champ : la liste des clubs du district s'ouvre, cherche par le nom (son logo ira sur l'affiche). Les scores se mettent seulement pour les U10 · U11 et les U13 ; les U6 à U9 n'ont pas de résultats.</p>`;
+    <p class="ong-anim-astuce">Pour choisir un club, touche le champ : la liste des clubs du district s'ouvre, cherche par le nom (son logo ira sur l'affiche). Les scores se mettent seulement pour les U10 · U11 ; les U6 à U9 n'ont pas de résultats.</p>`;
 
   const avant = window.panAnimation;
   window.panAnimation = function(){
@@ -21027,7 +21039,7 @@ location.href=SITE+"/?fal=1#fal="+encodeURIComponent(JSON.stringify({type:"asf-f
     const texte = maj([s.epNom, s.caCod, s.lib, (s.nos.find(x => x.eq === eq) || {}).nom].join(" "));
     const c = maj(s.caCod).match(/\d{1,2}/), u = texte.match(/U\s?(\d{1,2})/), age = c ? +c[0] : u ? +u[1] : 0;
     let lab = null;
-    if (age === 13) lab = eq ? `U13 · ÉQUIPE ${+eq || eq}` : null;
+    if (age === 13) return false;                                  // les U13 jouent en championnat : résultats de la FFF
     else if (age === 6 || age === 7) lab = "U6 · U7";
     else if (age === 8 || age === 9) lab = /PROMOTION/.test(texte) ? "U8 · U9 Promotion" : /ESPOIR/.test(texte) ? "U8 · U9 Espoir" : /BOURGEON/.test(texte) ? "U8 · U9 Bourgeon" : "U8 · U9";
     else if (age === 10 || age === 11) lab = /AVENIR/.test(texte) ? "U10 · U11 Avenir" : /ESPOIR/.test(texte) ? "U10 · U11 Espoir" : /BOURGEON/.test(texte) ? "U10 · U11 Bourgeons" : null;
@@ -22852,15 +22864,14 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
       nav.querySelectorAll("a").forEach(a => { const on = a.dataset.o === o; a.classList.toggle("actif", on); if (on) actif = a; a.setAttribute("aria-current", on ? "page" : "false"); });
       if (actif && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.clientWidth) / 2, behavior: "smooth" });
     }
-    // barre du bas : « Matchs » reste allumé sur résultats, classement, tournois et foot d'animation
+    // barre du bas : « Matchs » reste allumé sur classement et tournois
     const m = document.querySelector('.tabbar a[data-p="calendrier"]');
     if (m && ["resultats", "classement", "tournois", "animation"].includes(h)) m.classList.add("actif");
   }
   window.addEventListener("hashchange", () => setTimeout(majOnglets, 0));
   majOnglets();
 
-  /* ---------- FOOT D'ANIMATION : les plateaux du mois, comme dans l'appli ---------- */
-  let faDecal = 0, faSig = "", faTimer = null;
+  /* ---------- PLATEAUX DU FOOT D'ANIMATION : la carte de l'appli (pages des équipes et Matchs du week-end) ---------- */
   const MOIS_L2 = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   const escA = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const FL_G = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`, FL_D = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
@@ -22896,30 +22907,7 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
       if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(m); });
     return [...groupes.values()].map(faCarte).join("");
   }
-  function rendreAnimation(force){
-    const z = document.getElementById("fa-zone"); if (!z || typeof S === "undefined") return;
-    const l0 = Array.isArray(S.matchsAnimation) ? S.matchsAnimation : [];
-    const sig = faDecal + "|" + l0.length + "|" + l0.map(m => m.id + (m.date || "") + (m.heure || "")).join(",").length;
-    if (!force && sig === faSig) return;
-    faSig = sig;
-    const auj = new Date(), d = new Date(auj.getFullYear(), auj.getMonth() + faDecal, 1);
-    const pref = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const groupes = new Map();
-    l0.filter(m => m && String(m.date || "").startsWith(pref)).forEach(m => {
-      const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
-      if (!groupes.has(k)) groupes.set(k, []);
-      groupes.get(k).push(m);
-    });
-    const liste = [...groupes.values()].sort((a, b) => (a[0].date + (a[0].heure || "")).localeCompare(b[0].date + (b[0].heure || "")));
-    const carte = faCarte;
-    z.innerHTML = `<h2 class="fa-mois">${MOIS_L2[d.getMonth()]} ${d.getFullYear()}</h2>
-      <div class="fa-nav"><button type="button" data-fa-mois="-1">${FL_G}Mois précédent</button><button type="button" data-fa-mois="1">Mois suivant${FL_D}</button></div>
-      ${liste.length ? `<div class="fa-liste">${liste.map(carte).join("")}</div>`
-        : `<p class="fa-vide">Aucun plateau ni brassage ce mois-ci.<br>Les dates sont ajoutées par le club dans l'espace dirigeants, onglet Foot animation.</p>`}`;
-  }
   document.addEventListener("click", ev => {
-    const n = ev.target.closest && ev.target.closest("[data-fa-mois]");
-    if (n){ faDecal += +n.dataset.faMois; rendreAnimation(true); return; }
     if (ev.target.closest && ev.target.closest("[data-fa-pin]")) return;          // l'épingle ouvre le plan, pas la fiche
     const c = ev.target.closest && ev.target.closest("[data-fa]");
     if (c && typeof window.ouvrirFiche === "function") window.ouvrirFiche(c.dataset.fa);
@@ -22929,14 +22917,15 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     const c = ev.target.closest && ev.target.closest("article[data-fa]");
     if (c && typeof window.ouvrirFiche === "function"){ ev.preventDefault(); window.ouvrirFiche(c.dataset.fa); }
   });
-  function suivreAnimation(){
-    clearInterval(faTimer);
-    if (location.hash !== "#animation") return;
-    rendreAnimation(true);
-    faTimer = setInterval(() => rendreAnimation(false), 2500);                      // les plateaux arrivent après l'ouverture
+  /* ---------- anciennes adresses : « Foot d'animation » → Équipes ; « Résultats » → Matchs, au dernier week-end joué ---------- */
+  const MW = { resultats: 0 };                       // moment de l'arrivée par « Résultats »
+  function rediriger(){
+    const h = location.hash, base = location.pathname + location.search;
+    if (h === "#animation"){ location.replace(base + "#equipes"); return; }
+    if (h === "#resultats"){ MW.resultats = Date.now(); location.replace(base + "#calendrier"); }
   }
-  window.addEventListener("hashchange", suivreAnimation);
-  suivreAnimation();
+  window.addEventListener("hashchange", rediriger);
+  rediriger();
 
 
   /* =====================================================================
@@ -22947,7 +22936,7 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const esc2 = H;
   const nous = () => { try { return C().nomCourt || "Pierrelatte"; } catch(e){ return "Pierrelatte"; } };
   const eqDe2 = m => { try { return eqDe(m); } catch(e){ return String(m.equipe || ""); } };
-  const nomNous = m => { const k = String(eqDe2(m)).match(/(\d+)\s*$/); return nous() + (k && k[1] !== "1" ? " " + k[1] : ""); };
+  const nomNous = m => { const k = String(eqDe2(m)).match(/^(?:seniors?|v[ée]t[ée]rans?|f[ée]minines?|U\d{1,2}\s*·)\s*(\d+)$/i); return nous() + (k && k[1] !== "1" ? " " + k[1] : ""); };
   const advNom = m => String(m.adv || "Adversaire").replace(/\s+\d+$/, "");
   const trouve = id => (S.matchs || []).find(x => x.id === id) || (S.matchsAnimation || []).find(x => x.id === id);
   const estCoupe = m => { try { return COUPE(m); } catch(e){ return /coupe/i.test(String(m.comp || "")); } };
@@ -22991,10 +22980,11 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     const a = `<div class="mc-eq">${blasonDe(m.adv)}<b>${H(String(m.adv || "Adversaire").trim())}</b></div>`;
     return m.dom ? [n, a] : [a, n];
   };
-  function carteMatch(m){
+  function carteMatch(m){ return carteMatchLab(m, m ? etiquette(m) : ""); }
+  function carteMatchLab(m, lab){
     if (!m) return "";
     const [g, d] = cotes(m);
-    return `<button type="button" class="mc" data-fiche="${H(m.id)}"><span class="mc-label">${H(etiquette(m))}</span>${g}
+    return `<button type="button" class="mc" data-fiche="${H(m.id)}"><span class="mc-label">${H(lab)}</span>${g}
       <div class="mc-centre"><small>${H(dateCourte(m))}</small><b>${scoreDe(m)}</b></div>${d}</button>`;
   }
   window.carteResultat = carteMatch;      // résultats, accueil, espace joueur : la même carte partout
@@ -23154,6 +23144,109 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     const c = t.closest("#eqp [data-fiche]");
     if (c) window.ouvrirFiche(c.dataset.fiche);
   });
+
+  /* ---------- MATCHS : tous les matchs d'un week-end, toutes catégories, du premier au dernier ---------- */
+  /* un « week-end » va du mercredi au mardi suivant (les matchs en semaine restent avec leur week-end) ; il est désigné par son samedi */
+  const JOURS_L = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const isoJ = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const dJ = iso => new Date(iso + "T12:00:00");
+  const plusJ = (iso, n) => { const d = dJ(iso); d.setDate(d.getDate() + n); return isoJ(d); };
+  const samediDe = iso => { const d = dJ(iso), w = d.getDay(); d.setDate(d.getDate() + (w >= 3 ? 6 - w : -(w + 1))); return isoJ(d); };
+  const jourNum = d => d.getDate() === 1 ? "1er" : String(d.getDate());
+  const CAL = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 17h2M11 17h2"/></svg>`;
+  /* les plateaux des équipes actuelles du foot animation (pas les anciennes fiches : U13 en brassage, « U8 · U9 » d'avant…) */
+  const plateauActuel = m => /^pl-/.test(String(m.id || "")) && (typeof CATS_AN === "undefined" || CATS_AN.some(c => c[0] === m.equipe));
+  function duWeekend(sam){
+    const de = plusJ(sam, -3), a = plusJ(sam, 3), dans = m => m && /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || "")) && m.date >= de && m.date <= a;
+    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)) };
+  }
+  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length; };
+  /* par défaut : le week-end en cours ; pendant une trêve, le prochain qui a des matchs */
+  function samediCourant(){
+    const s0 = samediDe(auj());
+    if (nbDu(s0)) return s0;
+    for (let n = 1; n <= 16; n++) if (nbDu(plusJ(s0, 7 * n))) return plusJ(s0, 7 * n);
+    for (let n = 1; n <= 16; n++) if (nbDu(plusJ(s0, -7 * n))) return plusJ(s0, -7 * n);
+    return s0;
+  }
+  /* arrivé par « Résultats » : le dernier week-end où un match a été joué */
+  function samediResultats(){
+    const a = auj(), l = (S.matchs || []).filter(m => joue(m) && String(m.date || "") <= a).map(m => m.date).sort();
+    return l.length ? samediDe(l[l.length - 1]) : samediCourant();
+  }
+  /* l'étiquette de la carte : l'équipe d'abord, sauf si la compétition dit déjà la catégorie (« U13 D1 », « Coupe U15 Gilbert Pestre »…) */
+  function labelSemaine(m){
+    const eq = eqDe2(m), e = etiquette(m), cat = (String(eq).match(/^(U\d{1,2})(?!\d)/i) || [])[1];
+    if (cat && new RegExp("(^|[^a-z0-9])" + cat + "(?!\\d)", "i").test(String(m.comp || ""))) return e;
+    return `${eq} · ${e}`;
+  }
+  const ordreEq = m => { try { return ordreOnglet(eqDe2(m)); } catch(e){ return String(eqDe2(m)); } };
+  let mw = { sam: null, auto: "courant" };            // auto : le week-end suit les données tant qu'on n'a rien choisi
+  let mwSig = "";
+  function rendreSemaine(force){
+    const z = document.getElementById("mw-zone"); if (!z) return;
+    if (mw.auto) mw.sam = mw.auto === "resultats" ? samediResultats() : samediCourant();
+    if (!mw.sam) mw.sam = samediDe(auj());
+    const { ms, pls } = duWeekend(mw.sam);
+    const jours = new Map(), ajoute = (date, heure, ordre, html) => { if (!jours.has(date)) jours.set(date, []); jours.get(date).push({ h: heure || "99:99", ordre, html }); };
+    ms.forEach(m => ajoute(m.date, m.heure, ordreEq(m), carteMatchLab(m, labelSemaine(m))));
+    const gr = new Map();
+    pls.forEach(m => { const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
+      if (!gr.has(k)) gr.set(k, []); gr.get(k).push(m); });
+    [...gr.values()].forEach(g => ajoute(g[0].date, g[0].heure, "~" + ordreEq(g[0]), faCarte(g)));
+    const s = dJ(mw.sam), d = dJ(plusJ(mw.sam, 1)), an = s.getFullYear() !== new Date().getFullYear() ? " " + s.getFullYear() : "";
+    const titre = s.getMonth() === d.getMonth() ? `Week-end du ${jourNum(s)} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`
+      : `Week-end du ${jourNum(s)} ${MOIS_L2[s.getMonth()]} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`;
+    const nbP = gr.size;
+    const compte = ms.length || nbP ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : ""].filter(Boolean).join(" et ") + " · toutes catégories"
+      : "Aucun match ce week-end";
+    const ici = mw.sam === samediDe(auj());
+    const corps = [...jours.keys()].sort().map(j => {
+      const l = jours.get(j).sort((a, b) => a.h.localeCompare(b.h) || String(a.ordre).localeCompare(String(b.ordre)));
+      const dj = dJ(j), nom = JOURS_L[dj.getDay()];
+      return `<h3 class="mw-jour">${nom.charAt(0).toUpperCase() + nom.slice(1)} ${jourNum(dj)} ${MOIS_L2[dj.getMonth()]}</h3><div class="mc-liste">${l.map(x => x.html).join("")}</div>`;
+    }).join("");
+    const html = `<h2 class="fa-mois mw-titre">${H(titre)}</h2>
+      <div class="mw-nav">
+        <button type="button" class="mw-fl" data-mw="-1" aria-label="Week-end précédent">${FL_G}</button>
+        <button type="button" class="mw-cal" data-mw-cal aria-label="Choisir le week-end dans le calendrier">${CAL}<span>Calendrier</span></button>
+        <button type="button" class="mw-fl" data-mw="1" aria-label="Week-end suivant">${FL_D}</button></div>
+      <label class="mw-dp" hidden>Choisir un week-end<input type="hidden" data-mw-date data-dp="1" data-dp-requis="1" value="${H(mw.sam)}"></label>
+      <p class="mw-info">${H(compte)}${ici ? "" : ` · <button type="button" class="mw-auj" data-mw-auj>Revenir à ce week-end</button>`}</p>
+      ${corps || `<p class="fa-vide">Aucun match ni plateau ce week-end.<br>Touche les flèches ou le calendrier pour changer de week-end.</p>`}`;
+    if (!force && (html === mwSig || document.getElementById("dp-zone"))) return;   // rien de changé, ou le calendrier est ouvert : on attend
+    mwSig = html; z.innerHTML = html;
+  }
+  /* changer de week-end : flèches, calendrier, retour à ce week-end ; une carte ouvre la page du match ou du plateau */
+  document.addEventListener("click", ev => {
+    const t = ev.target.closest ? ev.target : null; if (!t || !t.closest("#mw-zone")) return;
+    const f = t.closest("[data-mw]");
+    if (f){ mw = { sam: plusJ(mw.sam || samediDe(auj()), 7 * +f.dataset.mw), auto: false }; rendreSemaine(true); return; }
+    if (t.closest("[data-mw-auj]")){ mw = { sam: null, auto: "courant" }; rendreSemaine(true); return; }
+    if (t.closest("[data-mw-cal]")){
+      const i = document.querySelector("#mw-zone [data-mw-date]");
+      if (i && typeof dpOuvrir === "function") dpOuvrir(i);
+      return;
+    }
+    const c = t.closest("[data-fiche]");
+    if (c) window.ouvrirFiche(c.dataset.fiche);
+  });
+  document.addEventListener("change", ev => {
+    const i = ev.target.closest && ev.target.closest("#mw-zone [data-mw-date]"); if (!i || !/^\d{4}-\d{2}-\d{2}$/.test(i.value)) return;
+    mw = { sam: samediDe(i.value), auto: false }; rendreSemaine(true);
+  });
+  /* redessiné à chaque arrivée de données (scores, nouveaux matchs) ; à chaque ouverture de l'onglet, on repart du week-end en cours */
+  const avantRM = window.rendreMatchs;
+  if (typeof avantRM === "function") window.rendreMatchs = function(){
+    try { return avantRM.apply(this, arguments); } finally { try { rendreSemaine(); } catch(e){ console.warn("matchs du week-end", e); } }
+  };
+  function ouvrirSemaine(){
+    if (location.hash !== "#calendrier") return;
+    mw = { sam: null, auto: Date.now() - MW.resultats < 3000 ? "resultats" : "courant" };
+    rendreSemaine(true);
+  }
+  window.addEventListener("hashchange", ouvrirSemaine);
+  if (location.hash === "#calendrier") ouvrirSemaine(); else rendreSemaine(true);
 
   /* ---------- PAGE D'UN MATCH : résumé, classement, infos ---------- */
   const cle = min => { const p = String(min || "").match(/(\d+)(?:\s*\+\s*(\d+))?/); return p ? +p[1] + (p[2] ? +p[2] / 100 : 0) : 999; };
@@ -23445,14 +23538,18 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const numEq = s => { const m = String(s || "").match(/(\d+)\s*$/); return m ? +m[1] : 1; };
   const eqDe2 = m => { try { return eqDe(m); } catch(err){ return String(m.equipe || ""); } };
   const joue2 = m => typeof m.bp === "number" && typeof m.bc === "number";
+  /* numéro FFF du match posé par l'import du serveur du club (fff.match) : la référence la plus sûre */
+  const noServeur = m => (m && m.fff && m.fff.match) ? String(m.fff.match) : "";
   function trouver(x, pris){
     const l = (S.matchs || []).filter(m => !/^pl-/.test(String(m.id || "")));
-    const direct = l.find(m => String(m.fffNo || "") === x.no || new RegExp("(^|\\D)" + x.no + "(\\D|$)").test(String(m.id || "")));
+    const serveur = l.find(m => noServeur(m) === x.no);
+    if (serveur) return serveur;
+    const direct = l.find(m => !noServeur(m) && (String(m.fffNo || "") === x.no || new RegExp("(^|\\D)" + x.no + "(\\D|$)").test(String(m.id || ""))));
     if (direct) return direct;
     const jour = x.d.slice(0, 10), heure = x.d.slice(11, 16);
     let best = null, bestS = 0;
     for (const m of l){
-      if (m.date !== jour || pris.has(m.id)) continue;
+      if (m.date !== jour || pris.has(m.id) || noServeur(m)) continue;       // déjà identifié par le serveur : c'est un autre match de la FFF
       if (typeof m.dom === "boolean" && m.dom !== x.dom) continue;
       let s = ressemble(m.adv, x.adv) * 10;
       if (m.heure && m.heure === heure) s += 2;
@@ -23522,7 +23619,8 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
       const fff = faitsDe(x, inconnus);
       if (!fff.length) b.sans++;
       const maj = { fffNo: x.no };
-      if (fff.length){ maj.faits = fusion(m.faits, fff); const st = statsDe(m, maj.faits); if (st) maj.stats = st; }
+      const autreMatch = m.fffNo && String(m.fffNo) !== x.no;             // rangé avant sur un autre match de la FFF : ses faits s'en vont
+      if (fff.length || autreMatch){ maj.faits = fusion(m.faits, fff); const st = statsDe(m, maj.faits); if (st) maj.stats = st; }
       if (!m.dom && x.st && !m.adresse) maj.adresse = x.st;
       const avant = JSON.stringify([m.faits || [], m.stats || [], m.adresse || "", m.fffNo || ""]);
       const apres = JSON.stringify([maj.faits || m.faits || [], maj.stats || m.stats || [], maj.adresse || m.adresse || "", x.no]);

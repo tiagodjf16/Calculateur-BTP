@@ -74,14 +74,18 @@
   const numEq = s => { const m = String(s || "").match(/(\d+)\s*$/); return m ? +m[1] : 1; };
   const eqDe2 = m => { try { return eqDe(m); } catch(err){ return String(m.equipe || ""); } };
   const joue2 = m => typeof m.bp === "number" && typeof m.bc === "number";
+  /* numéro FFF du match posé par l'import du serveur du club (fff.match) : la référence la plus sûre */
+  const noServeur = m => (m && m.fff && m.fff.match) ? String(m.fff.match) : "";
   function trouver(x, pris){
     const l = (S.matchs || []).filter(m => !/^pl-/.test(String(m.id || "")));
-    const direct = l.find(m => String(m.fffNo || "") === x.no || new RegExp("(^|\\D)" + x.no + "(\\D|$)").test(String(m.id || "")));
+    const serveur = l.find(m => noServeur(m) === x.no);
+    if (serveur) return serveur;
+    const direct = l.find(m => !noServeur(m) && (String(m.fffNo || "") === x.no || new RegExp("(^|\\D)" + x.no + "(\\D|$)").test(String(m.id || ""))));
     if (direct) return direct;
     const jour = x.d.slice(0, 10), heure = x.d.slice(11, 16);
     let best = null, bestS = 0;
     for (const m of l){
-      if (m.date !== jour || pris.has(m.id)) continue;
+      if (m.date !== jour || pris.has(m.id) || noServeur(m)) continue;       // déjà identifié par le serveur : c'est un autre match de la FFF
       if (typeof m.dom === "boolean" && m.dom !== x.dom) continue;
       let s = ressemble(m.adv, x.adv) * 10;
       if (m.heure && m.heure === heure) s += 2;
@@ -151,7 +155,8 @@
       const fff = faitsDe(x, inconnus);
       if (!fff.length) b.sans++;
       const maj = { fffNo: x.no };
-      if (fff.length){ maj.faits = fusion(m.faits, fff); const st = statsDe(m, maj.faits); if (st) maj.stats = st; }
+      const autreMatch = m.fffNo && String(m.fffNo) !== x.no;             // rangé avant sur un autre match de la FFF : ses faits s'en vont
+      if (fff.length || autreMatch){ maj.faits = fusion(m.faits, fff); const st = statsDe(m, maj.faits); if (st) maj.stats = st; }
       if (!m.dom && x.st && !m.adresse) maj.adresse = x.st;
       const avant = JSON.stringify([m.faits || [], m.stats || [], m.adresse || "", m.fffNo || ""]);
       const apres = JSON.stringify([maj.faits || m.faits || [], maj.stats || m.stats || [], maj.adresse || m.adresse || "", x.no]);

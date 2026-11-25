@@ -58,15 +58,14 @@
       nav.querySelectorAll("a").forEach(a => { const on = a.dataset.o === o; a.classList.toggle("actif", on); if (on) actif = a; a.setAttribute("aria-current", on ? "page" : "false"); });
       if (actif && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.clientWidth) / 2, behavior: "smooth" });
     }
-    // barre du bas : « Matchs » reste allumé sur résultats, classement, tournois et foot d'animation
+    // barre du bas : « Matchs » reste allumé sur classement et tournois
     const m = document.querySelector('.tabbar a[data-p="calendrier"]');
     if (m && ["resultats", "classement", "tournois", "animation"].includes(h)) m.classList.add("actif");
   }
   window.addEventListener("hashchange", () => setTimeout(majOnglets, 0));
   majOnglets();
 
-  /* ---------- FOOT D'ANIMATION : les plateaux du mois, comme dans l'appli ---------- */
-  let faDecal = 0, faSig = "", faTimer = null;
+  /* ---------- PLATEAUX DU FOOT D'ANIMATION : la carte de l'appli (pages des équipes et Matchs du week-end) ---------- */
   const MOIS_L2 = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   const escA = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const FL_G = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`, FL_D = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
@@ -102,30 +101,7 @@
       if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(m); });
     return [...groupes.values()].map(faCarte).join("");
   }
-  function rendreAnimation(force){
-    const z = document.getElementById("fa-zone"); if (!z || typeof S === "undefined") return;
-    const l0 = Array.isArray(S.matchsAnimation) ? S.matchsAnimation : [];
-    const sig = faDecal + "|" + l0.length + "|" + l0.map(m => m.id + (m.date || "") + (m.heure || "")).join(",").length;
-    if (!force && sig === faSig) return;
-    faSig = sig;
-    const auj = new Date(), d = new Date(auj.getFullYear(), auj.getMonth() + faDecal, 1);
-    const pref = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const groupes = new Map();
-    l0.filter(m => m && String(m.date || "").startsWith(pref)).forEach(m => {
-      const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
-      if (!groupes.has(k)) groupes.set(k, []);
-      groupes.get(k).push(m);
-    });
-    const liste = [...groupes.values()].sort((a, b) => (a[0].date + (a[0].heure || "")).localeCompare(b[0].date + (b[0].heure || "")));
-    const carte = faCarte;
-    z.innerHTML = `<h2 class="fa-mois">${MOIS_L2[d.getMonth()]} ${d.getFullYear()}</h2>
-      <div class="fa-nav"><button type="button" data-fa-mois="-1">${FL_G}Mois précédent</button><button type="button" data-fa-mois="1">Mois suivant${FL_D}</button></div>
-      ${liste.length ? `<div class="fa-liste">${liste.map(carte).join("")}</div>`
-        : `<p class="fa-vide">Aucun plateau ni brassage ce mois-ci.<br>Les dates sont ajoutées par le club dans l'espace dirigeants, onglet Foot animation.</p>`}`;
-  }
   document.addEventListener("click", ev => {
-    const n = ev.target.closest && ev.target.closest("[data-fa-mois]");
-    if (n){ faDecal += +n.dataset.faMois; rendreAnimation(true); return; }
     if (ev.target.closest && ev.target.closest("[data-fa-pin]")) return;          // l'épingle ouvre le plan, pas la fiche
     const c = ev.target.closest && ev.target.closest("[data-fa]");
     if (c && typeof window.ouvrirFiche === "function") window.ouvrirFiche(c.dataset.fa);
@@ -135,14 +111,15 @@
     const c = ev.target.closest && ev.target.closest("article[data-fa]");
     if (c && typeof window.ouvrirFiche === "function"){ ev.preventDefault(); window.ouvrirFiche(c.dataset.fa); }
   });
-  function suivreAnimation(){
-    clearInterval(faTimer);
-    if (location.hash !== "#animation") return;
-    rendreAnimation(true);
-    faTimer = setInterval(() => rendreAnimation(false), 2500);                      // les plateaux arrivent après l'ouverture
+  /* ---------- anciennes adresses : « Foot d'animation » → Équipes ; « Résultats » → Matchs, au dernier week-end joué ---------- */
+  const MW = { resultats: 0 };                       // moment de l'arrivée par « Résultats »
+  function rediriger(){
+    const h = location.hash, base = location.pathname + location.search;
+    if (h === "#animation"){ location.replace(base + "#equipes"); return; }
+    if (h === "#resultats"){ MW.resultats = Date.now(); location.replace(base + "#calendrier"); }
   }
-  window.addEventListener("hashchange", suivreAnimation);
-  suivreAnimation();
+  window.addEventListener("hashchange", rediriger);
+  rediriger();
 
 
   /* =====================================================================
@@ -153,7 +130,7 @@
   const esc2 = H;
   const nous = () => { try { return C().nomCourt || "Pierrelatte"; } catch(e){ return "Pierrelatte"; } };
   const eqDe2 = m => { try { return eqDe(m); } catch(e){ return String(m.equipe || ""); } };
-  const nomNous = m => { const k = String(eqDe2(m)).match(/(\d+)\s*$/); return nous() + (k && k[1] !== "1" ? " " + k[1] : ""); };
+  const nomNous = m => { const k = String(eqDe2(m)).match(/^(?:seniors?|v[ée]t[ée]rans?|f[ée]minines?|U\d{1,2}\s*·)\s*(\d+)$/i); return nous() + (k && k[1] !== "1" ? " " + k[1] : ""); };
   const advNom = m => String(m.adv || "Adversaire").replace(/\s+\d+$/, "");
   const trouve = id => (S.matchs || []).find(x => x.id === id) || (S.matchsAnimation || []).find(x => x.id === id);
   const estCoupe = m => { try { return COUPE(m); } catch(e){ return /coupe/i.test(String(m.comp || "")); } };
@@ -197,10 +174,11 @@
     const a = `<div class="mc-eq">${blasonDe(m.adv)}<b>${H(String(m.adv || "Adversaire").trim())}</b></div>`;
     return m.dom ? [n, a] : [a, n];
   };
-  function carteMatch(m){
+  function carteMatch(m){ return carteMatchLab(m, m ? etiquette(m) : ""); }
+  function carteMatchLab(m, lab){
     if (!m) return "";
     const [g, d] = cotes(m);
-    return `<button type="button" class="mc" data-fiche="${H(m.id)}"><span class="mc-label">${H(etiquette(m))}</span>${g}
+    return `<button type="button" class="mc" data-fiche="${H(m.id)}"><span class="mc-label">${H(lab)}</span>${g}
       <div class="mc-centre"><small>${H(dateCourte(m))}</small><b>${scoreDe(m)}</b></div>${d}</button>`;
   }
   window.carteResultat = carteMatch;      // résultats, accueil, espace joueur : la même carte partout
@@ -360,6 +338,109 @@
     const c = t.closest("#eqp [data-fiche]");
     if (c) window.ouvrirFiche(c.dataset.fiche);
   });
+
+  /* ---------- MATCHS : tous les matchs d'un week-end, toutes catégories, du premier au dernier ---------- */
+  /* un « week-end » va du mercredi au mardi suivant (les matchs en semaine restent avec leur week-end) ; il est désigné par son samedi */
+  const JOURS_L = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const isoJ = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const dJ = iso => new Date(iso + "T12:00:00");
+  const plusJ = (iso, n) => { const d = dJ(iso); d.setDate(d.getDate() + n); return isoJ(d); };
+  const samediDe = iso => { const d = dJ(iso), w = d.getDay(); d.setDate(d.getDate() + (w >= 3 ? 6 - w : -(w + 1))); return isoJ(d); };
+  const jourNum = d => d.getDate() === 1 ? "1er" : String(d.getDate());
+  const CAL = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 17h2M11 17h2"/></svg>`;
+  /* les plateaux des équipes actuelles du foot animation (pas les anciennes fiches : U13 en brassage, « U8 · U9 » d'avant…) */
+  const plateauActuel = m => /^pl-/.test(String(m.id || "")) && (typeof CATS_AN === "undefined" || CATS_AN.some(c => c[0] === m.equipe));
+  function duWeekend(sam){
+    const de = plusJ(sam, -3), a = plusJ(sam, 3), dans = m => m && /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || "")) && m.date >= de && m.date <= a;
+    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)) };
+  }
+  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length; };
+  /* par défaut : le week-end en cours ; pendant une trêve, le prochain qui a des matchs */
+  function samediCourant(){
+    const s0 = samediDe(auj());
+    if (nbDu(s0)) return s0;
+    for (let n = 1; n <= 16; n++) if (nbDu(plusJ(s0, 7 * n))) return plusJ(s0, 7 * n);
+    for (let n = 1; n <= 16; n++) if (nbDu(plusJ(s0, -7 * n))) return plusJ(s0, -7 * n);
+    return s0;
+  }
+  /* arrivé par « Résultats » : le dernier week-end où un match a été joué */
+  function samediResultats(){
+    const a = auj(), l = (S.matchs || []).filter(m => joue(m) && String(m.date || "") <= a).map(m => m.date).sort();
+    return l.length ? samediDe(l[l.length - 1]) : samediCourant();
+  }
+  /* l'étiquette de la carte : l'équipe d'abord, sauf si la compétition dit déjà la catégorie (« U13 D1 », « Coupe U15 Gilbert Pestre »…) */
+  function labelSemaine(m){
+    const eq = eqDe2(m), e = etiquette(m), cat = (String(eq).match(/^(U\d{1,2})(?!\d)/i) || [])[1];
+    if (cat && new RegExp("(^|[^a-z0-9])" + cat + "(?!\\d)", "i").test(String(m.comp || ""))) return e;
+    return `${eq} · ${e}`;
+  }
+  const ordreEq = m => { try { return ordreOnglet(eqDe2(m)); } catch(e){ return String(eqDe2(m)); } };
+  let mw = { sam: null, auto: "courant" };            // auto : le week-end suit les données tant qu'on n'a rien choisi
+  let mwSig = "";
+  function rendreSemaine(force){
+    const z = document.getElementById("mw-zone"); if (!z) return;
+    if (mw.auto) mw.sam = mw.auto === "resultats" ? samediResultats() : samediCourant();
+    if (!mw.sam) mw.sam = samediDe(auj());
+    const { ms, pls } = duWeekend(mw.sam);
+    const jours = new Map(), ajoute = (date, heure, ordre, html) => { if (!jours.has(date)) jours.set(date, []); jours.get(date).push({ h: heure || "99:99", ordre, html }); };
+    ms.forEach(m => ajoute(m.date, m.heure, ordreEq(m), carteMatchLab(m, labelSemaine(m))));
+    const gr = new Map();
+    pls.forEach(m => { const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
+      if (!gr.has(k)) gr.set(k, []); gr.get(k).push(m); });
+    [...gr.values()].forEach(g => ajoute(g[0].date, g[0].heure, "~" + ordreEq(g[0]), faCarte(g)));
+    const s = dJ(mw.sam), d = dJ(plusJ(mw.sam, 1)), an = s.getFullYear() !== new Date().getFullYear() ? " " + s.getFullYear() : "";
+    const titre = s.getMonth() === d.getMonth() ? `Week-end du ${jourNum(s)} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`
+      : `Week-end du ${jourNum(s)} ${MOIS_L2[s.getMonth()]} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`;
+    const nbP = gr.size;
+    const compte = ms.length || nbP ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : ""].filter(Boolean).join(" et ") + " · toutes catégories"
+      : "Aucun match ce week-end";
+    const ici = mw.sam === samediDe(auj());
+    const corps = [...jours.keys()].sort().map(j => {
+      const l = jours.get(j).sort((a, b) => a.h.localeCompare(b.h) || String(a.ordre).localeCompare(String(b.ordre)));
+      const dj = dJ(j), nom = JOURS_L[dj.getDay()];
+      return `<h3 class="mw-jour">${nom.charAt(0).toUpperCase() + nom.slice(1)} ${jourNum(dj)} ${MOIS_L2[dj.getMonth()]}</h3><div class="mc-liste">${l.map(x => x.html).join("")}</div>`;
+    }).join("");
+    const html = `<h2 class="fa-mois mw-titre">${H(titre)}</h2>
+      <div class="mw-nav">
+        <button type="button" class="mw-fl" data-mw="-1" aria-label="Week-end précédent">${FL_G}</button>
+        <button type="button" class="mw-cal" data-mw-cal aria-label="Choisir le week-end dans le calendrier">${CAL}<span>Calendrier</span></button>
+        <button type="button" class="mw-fl" data-mw="1" aria-label="Week-end suivant">${FL_D}</button></div>
+      <label class="mw-dp" hidden>Choisir un week-end<input type="hidden" data-mw-date data-dp="1" data-dp-requis="1" value="${H(mw.sam)}"></label>
+      <p class="mw-info">${H(compte)}${ici ? "" : ` · <button type="button" class="mw-auj" data-mw-auj>Revenir à ce week-end</button>`}</p>
+      ${corps || `<p class="fa-vide">Aucun match ni plateau ce week-end.<br>Touche les flèches ou le calendrier pour changer de week-end.</p>`}`;
+    if (!force && (html === mwSig || document.getElementById("dp-zone"))) return;   // rien de changé, ou le calendrier est ouvert : on attend
+    mwSig = html; z.innerHTML = html;
+  }
+  /* changer de week-end : flèches, calendrier, retour à ce week-end ; une carte ouvre la page du match ou du plateau */
+  document.addEventListener("click", ev => {
+    const t = ev.target.closest ? ev.target : null; if (!t || !t.closest("#mw-zone")) return;
+    const f = t.closest("[data-mw]");
+    if (f){ mw = { sam: plusJ(mw.sam || samediDe(auj()), 7 * +f.dataset.mw), auto: false }; rendreSemaine(true); return; }
+    if (t.closest("[data-mw-auj]")){ mw = { sam: null, auto: "courant" }; rendreSemaine(true); return; }
+    if (t.closest("[data-mw-cal]")){
+      const i = document.querySelector("#mw-zone [data-mw-date]");
+      if (i && typeof dpOuvrir === "function") dpOuvrir(i);
+      return;
+    }
+    const c = t.closest("[data-fiche]");
+    if (c) window.ouvrirFiche(c.dataset.fiche);
+  });
+  document.addEventListener("change", ev => {
+    const i = ev.target.closest && ev.target.closest("#mw-zone [data-mw-date]"); if (!i || !/^\d{4}-\d{2}-\d{2}$/.test(i.value)) return;
+    mw = { sam: samediDe(i.value), auto: false }; rendreSemaine(true);
+  });
+  /* redessiné à chaque arrivée de données (scores, nouveaux matchs) ; à chaque ouverture de l'onglet, on repart du week-end en cours */
+  const avantRM = window.rendreMatchs;
+  if (typeof avantRM === "function") window.rendreMatchs = function(){
+    try { return avantRM.apply(this, arguments); } finally { try { rendreSemaine(); } catch(e){ console.warn("matchs du week-end", e); } }
+  };
+  function ouvrirSemaine(){
+    if (location.hash !== "#calendrier") return;
+    mw = { sam: null, auto: Date.now() - MW.resultats < 3000 ? "resultats" : "courant" };
+    rendreSemaine(true);
+  }
+  window.addEventListener("hashchange", ouvrirSemaine);
+  if (location.hash === "#calendrier") ouvrirSemaine(); else rendreSemaine(true);
 
   /* ---------- PAGE D'UN MATCH : résumé, classement, infos ---------- */
   const cle = min => { const p = String(min || "").match(/(\d+)(?:\s*\+\s*(\d+))?/); return p ? +p[1] + (p[2] ? +p[2] / 100 : 0) : 999; };

@@ -1,9 +1,9 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build5.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <output.html> [--test]
+Usage: python3 build6.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
-  appli.js : <script> added at the end of <body> (intro, club tabs, foot d'animation page, match events)
+  appli.js : <script> added at the end of <body> (intro, club tabs, Matchs of the weekend, teams, match events)
 --test : runs offline with the built-in data (API set to "") and skips the intro unless the URL has ?intro.
 """
 import datetime
@@ -118,7 +118,7 @@ CLUB = """<section class="club-tete" id="club-tete" aria-label="ASF Pierrelatte"
   <a class="club-blason" href="#accueil" aria-label="Accueil du club"><span data-blason></span></a>
   <p class="club-nom">Atom'Sports Football Pierrelatte</p>
   <nav class="club-onglets" id="club-onglets" aria-label="Rubriques du club">
-    <a href="#accueil" data-o="accueil">Accueil</a><a href="#club" data-o="club">Le club</a><a href="#equipes" data-o="equipes">Équipes</a><a href="#calendrier" data-o="matchs">Matchs</a><a href="#animation" data-o="animation">Foot d'animation</a><a href="#compos" data-o="compos">Compos</a><a href="#photos" data-o="photos">Photos</a><a href="#inscriptions" data-o="inscriptions">Inscriptions</a><a href="#partenaires" data-o="partenaires">Partenaires</a><a href="#contact" data-o="contact">Contact</a>
+    <a href="#accueil" data-o="accueil">Accueil</a><a href="#club" data-o="club">Le club</a><a href="#equipes" data-o="equipes">Équipes</a><a href="#calendrier" data-o="matchs">Matchs</a><a href="#compos" data-o="compos">Compos</a><a href="#photos" data-o="photos">Photos</a><a href="#inscriptions" data-o="inscriptions">Inscriptions</a><a href="#partenaires" data-o="partenaires">Partenaires</a><a href="#contact" data-o="contact">Contact</a>
   </nav>
 </section>"""
 html = sub_once("</header>\n\n<main>", "</header>\n" + CLUB + "\n\n<main>", html, "club-tete")
@@ -194,13 +194,11 @@ cs = html.index('<div class="page" id="p-club">')
 ce = html.index('<div class="page" id="p-equipes">')
 html = html[:cs] + CLUB_PAGE + html[ce:]
 
-# 9) MATCHS: one selector for calendar, results, standings and tournaments
-SEG = ('<nav class="seg-matchs" aria-label="Matchs"><a href="#calendrier">Calendrier</a><a href="#resultats">Résultats</a>'
-       '<a href="#classement">Classement</a><a href="#tournois">Tournois</a></nav>')
-for pid in ("p-calendrier", "p-resultats", "p-classement"):
-    html = sub_once(f'<div class="page" id="{pid}">\n', f'<div class="page" id="{pid}">\n  {SEG}\n', html, pid)
-html = sub_once('<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n',
-                '<h1>Tournois</h1><p>Tirages, résultats et classements en direct de nos tournois.</p></div></div>\n  ' + SEG + "\n", html, "seg-tournois")
+# 9) MATCHS: every match of the weekend, all categories, filled by appli.js (the per-team calendar stays in the page, hidden)
+html = sub_once('<div class="page" id="p-calendrier">\n',
+                '<div class="page" id="p-calendrier">\n  <section class="bloc mw-bloc"><div class="wrap" id="mw-zone"></div></section>\n', html, "mw-zone")
+html = sub_once('["Calendrier", "#calendrier"], ["Résultats", "#resultats"], ', '["Tous les matchs", "#calendrier"], ', html, "nav-matchs")
+html = sub_once('<a href="#resultats">Résultats</a><a href="#classement">Classement</a>', '<a href="#calendrier">Matchs</a><a href="#classement">Classement</a>', html, "plus-matchs")
 
 # 9b) ÉQUIPES: the app's list (filled by appli.js); one page per team (#equipe/<name>)
 html = sub_once('<div class="diapo" id="diapo-equipes"></div>', '<div class="eqa" id="eq-appli"></div>\n    <div class="diapo" id="diapo-equipes"></div>', html, "eq-appli")
@@ -208,13 +206,27 @@ html = sub_once('<div class="page" id="p-photos">', '<div class="page" id="p-equ
 html = sub_once('const p = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil";',
                 'const p = PAGES.includes(location.hash.slice(1).split("/")[0]) ? location.hash.slice(1).split("/")[0] : "accueil";', html, "route")
 
-# 10) FOOT D'ANIMATION: a page of its own (filled by appli.js), known by the router and the menu
-html = sub_once('<div class="page" id="p-photos">',
-                '<div class="page" id="p-animation">\n  <section class="bloc"><div class="wrap" id="fa-zone"></div></section>\n</div>\n\n<div class="page" id="p-photos">',
-                html, "p-animation")
-html = sub_once('const PAGES = ["portail",', 'const PAGES = ["animation","equipe","portail",', html, "pages")
-html = sub_once('["Compos", "#compos"], ["Tournois", "#tournois"]]]',
-                '["Compos", "#compos"], ["Tournois", "#tournois"], ["Foot d\'animation", "#animation"]]]', html, "nav-public")
+# 10) the router knows the team pages (#equipe/<name>)
+html = sub_once('const PAGES = ["portail",', 'const PAGES = ["equipe","portail",', html, "pages")
+
+# 10b) FOOT ANIMATION: the U13 teams now play championship (FFF results) and U8 · U9 keeps Promotion, Espoir, Bourgeon only
+html = sub_once('const ONGLETS_ANIM_CAL = ["U6 · U7", "U8 · U9", "U8 · U9 Promotion", "U8 · U9 Espoir", "U8 · U9 Bourgeon", "U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons", "U13 · équipe 3", "U13 · équipe 4"];',
+                'const ONGLETS_ANIM_CAL = ["U6 · U7", "U8 · U9 Promotion", "U8 · U9 Espoir", "U8 · U9 Bourgeon", "U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons"];', html, "onglets-anim-cal")
+html = sub_once('const ONGLETS_ANIM_RES = ["U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons", "U13 · équipe 3", "U13 · équipe 4"];',
+                'const ONGLETS_ANIM_RES = ["U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons"];', html, "onglets-anim-res")
+html = sub_once('const CATS_AN = [["U6 · U7", "Plateau"], ["U8 · U9", "Plateau"], ["U8 · U9 Promotion", "Plateau"],',
+                'const CATS_AN = [["U6 · U7", "Plateau"], ["U8 · U9 Promotion", "Plateau"],', html, "cats-an-u89")
+html = sub_once(', ["U10 · U11 Bourgeons", "Plateau", true], ["U13 · ÉQUIPE 3", "Brassage", true], ["U13 · ÉQUIPE 4", "Brassage", true]];',
+                ', ["U10 · U11 Bourgeons", "Plateau", true]];', html, "cats-an-u13")
+html = sub_once('  ["U13 · ÉQUIPE 3", "U13 · ÉQUIPE 4"].forEach(e => { if (!eqs.includes(e)) eqs.push(e); });\n', '', html, "classement-u13")
+html = sub_once("if (age === 13) lab = eq ? `U13 · ÉQUIPE ${+eq || eq}` : null;",
+                "if (age === 13) return false;                                  // les U13 jouent en championnat : résultats de la FFF", html, "fal-u13")
+html = sub_once('w.jours.includes(m.date) && /U1[013]/i.test(m.equipe || "")', 'w.jours.includes(m.date) && /U1[01]/i.test(m.equipe || "")', html, "scores-u13")
+html = sub_once('<h3 class="club-titre">Foot animation · U10-U11 et U13</h3>', '<h3 class="club-titre">Foot animation · U10-U11</h3>', html, "scores-titre")
+html = sub_once('.filter(m => /^pl-/.test(m.id) && /U1[013]/i.test(m.equipe || ""))', '.filter(m => /^pl-/.test(m.id) && /U1[01]/i.test(m.equipe || ""))', html, "resultats-u13")
+html = sub_once("Les scores se saisissent pour les U10 · U11 et les deux équipes U13 ;", "Les scores se saisissent pour les U10 · U11 ;", html, "texte-scores-1")
+html = sub_once("Les scores se mettent seulement pour les U10 · U11 et les U13 ;", "Les scores se mettent seulement pour les U10 · U11 ;", html, "texte-scores-2")
+html = sub_once('"Mon équipe","Plateaux et brassages : dates, adversaires et résultats"]', '"Mon équipe","Plateaux : dates, adversaires et résultats"]', html, "texte-onglet-anim")
 
 # 11) floating bottom bar with app-style outline icons (same links, ids and labels)
 ts = html.index('<nav class="tabbar" aria-label="Navigation mobile">')
