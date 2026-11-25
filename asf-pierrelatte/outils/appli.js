@@ -48,7 +48,7 @@
   }
 
   /* ---------- onglets du club : l'onglet de la page ouverte, bien en vue ---------- */
-  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", equipe: "equipes", legal: "", confidentialite: "", espaces: "" };
+  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", tournoi: "matchs", equipe: "equipes", legal: "", confidentialite: "", espaces: "" };
   function majOnglets(){
     const h = (location.hash.slice(1) || "accueil").split(/[?/]/)[0];
     const o = h in ONGLET_DE ? ONGLET_DE[h] : h;
@@ -58,9 +58,9 @@
       nav.querySelectorAll("a").forEach(a => { const on = a.dataset.o === o; a.classList.toggle("actif", on); if (on) actif = a; a.setAttribute("aria-current", on ? "page" : "false"); });
       if (actif && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.clientWidth) / 2, behavior: "smooth" });
     }
-    // barre du bas : « Matchs » reste allumé sur classement et tournois
+    // barre du bas : « Matchs » reste allumé sur classement, tournois et la page d'un tournoi
     const m = document.querySelector('.tabbar a[data-p="calendrier"]');
-    if (m && ["resultats", "classement", "tournois", "animation"].includes(h)) m.classList.add("actif");
+    if (m && ["resultats", "classement", "tournois", "tournoi", "animation"].includes(h)) m.classList.add("actif");
   }
   window.addEventListener("hashchange", () => setTimeout(majOnglets, 0));
   majOnglets();
@@ -352,9 +352,10 @@
   const plateauActuel = m => /^pl-/.test(String(m.id || "")) && (typeof CATS_AN === "undefined" || CATS_AN.some(c => c[0] === m.equipe));
   function duWeekend(sam){
     const de = plusJ(sam, -3), a = plusJ(sam, 3), dans = m => m && /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || "")) && m.date >= de && m.date <= a;
-    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)) };
+    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)),
+      trs: window.ASF_TOURNOI ? (S.tournois || []).filter(t => t && t.publie && dans(t)) : [] };      // les tournois du club en ligne
   }
-  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length; };
+  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length + x.trs.length; };
   /* par défaut : le week-end en cours ; pendant une trêve, le prochain qui a des matchs */
   function samediCourant(){
     const s0 = samediDe(auj());
@@ -381,18 +382,20 @@
     const z = document.getElementById("mw-zone"); if (!z) return;
     if (mw.auto) mw.sam = mw.auto === "resultats" ? samediResultats() : samediCourant();
     if (!mw.sam) mw.sam = samediDe(auj());
-    const { ms, pls } = duWeekend(mw.sam);
+    const { ms, pls, trs } = duWeekend(mw.sam);
     const jours = new Map(), ajoute = (date, heure, ordre, html) => { if (!jours.has(date)) jours.set(date, []); jours.get(date).push({ h: heure || "99:99", ordre, html }); };
     ms.forEach(m => ajoute(m.date, m.heure, ordreEq(m), carteMatchLab(m, labelSemaine(m))));
     const gr = new Map();
     pls.forEach(m => { const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
       if (!gr.has(k)) gr.set(k, []); gr.get(k).push(m); });
     [...gr.values()].forEach(g => ajoute(g[0].date, g[0].heure, "~" + ordreEq(g[0]), faCarte(g)));
+    trs.forEach(t => ajoute(t.date, "00:00", "!", window.ASF_TOURNOI.carte(t)));          // un tournoi : en tête de sa journée
     const s = dJ(mw.sam), d = dJ(plusJ(mw.sam, 1)), an = s.getFullYear() !== new Date().getFullYear() ? " " + s.getFullYear() : "";
     const titre = s.getMonth() === d.getMonth() ? `Week-end du ${jourNum(s)} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`
       : `Week-end du ${jourNum(s)} ${MOIS_L2[s.getMonth()]} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`;
     const nbP = gr.size;
-    const compte = ms.length || nbP ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : ""].filter(Boolean).join(" et ") + " · toutes catégories"
+    const compte = ms.length || nbP || trs.length ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : "",
+        trs.length ? `${trs.length} tournoi${trs.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " et $1") + " · toutes catégories"
       : "Aucun match ce week-end";
     const ici = mw.sam === samediDe(auj());
     const corps = [...jours.keys()].sort().map(j => {

@@ -1,9 +1,10 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build6.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <output.html> [--test]
+Usage: python3 build7.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <tournoi.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
   appli.js : <script> added at the end of <body> (intro, club tabs, Matchs of the weekend, teams, match events)
+  tournoi.js : <script> added after it (tournament spectator pages #tournoi/<id>, QR code, poster)
 --test : runs offline with the built-in data (API set to "") and skips the intro unless the URL has ?intro.
 """
 import datetime
@@ -12,13 +13,14 @@ import hashlib
 import re
 import sys
 
-src, tete_path, tard_path, js_path, faits_path, favori_path, out = sys.argv[1:8]
+src, tete_path, tard_path, js_path, faits_path, favori_path, tournoi_path, out = sys.argv[1:9]
 test = "--test" in sys.argv
 html = open(src, encoding="utf-8").read()
 tete = open(tete_path, encoding="utf-8").read().strip()
 tard = open(tard_path, encoding="utf-8").read().strip()
 appli = open(js_path, encoding="utf-8").read().strip()
 faits = open(faits_path, encoding="utf-8").read().strip()
+tournoi = open(tournoi_path, encoding="utf-8").read().strip()
 
 # the « Faits de match ASF » bookmark: one line (no // comments allowed), injected as a JS string in the faits module
 favori = open(favori_path, encoding="utf-8").read()
@@ -202,12 +204,12 @@ html = sub_once('<a href="#resultats">Résultats</a><a href="#classement">Classe
 
 # 9b) ÉQUIPES: the app's list (filled by appli.js); one page per team (#equipe/<name>)
 html = sub_once('<div class="diapo" id="diapo-equipes"></div>', '<div class="eqa" id="eq-appli"></div>\n    <div class="diapo" id="diapo-equipes"></div>', html, "eq-appli")
-html = sub_once('<div class="page" id="p-photos">', '<div class="page" id="p-equipe"><div id="eqp"></div></div>\n\n<div class="page" id="p-photos">', html, "p-equipe")
+html = sub_once('<div class="page" id="p-photos">', '<div class="page" id="p-equipe"><div id="eqp"></div></div>\n\n<div class="page" id="p-tournoi"><div id="trn"></div></div>\n\n<div class="page" id="p-photos">', html, "p-equipe")
 html = sub_once('const p = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil";',
                 'const p = PAGES.includes(location.hash.slice(1).split("/")[0]) ? location.hash.slice(1).split("/")[0] : "accueil";', html, "route")
 
 # 10) the router knows the team pages (#equipe/<name>)
-html = sub_once('const PAGES = ["portail",', 'const PAGES = ["equipe","portail",', html, "pages")
+html = sub_once('const PAGES = ["portail",', 'const PAGES = ["equipe","tournoi","portail",', html, "pages")
 
 # 10b) FOOT ANIMATION: the U13 teams now play championship (FFF results) and U8 · U9 keeps Promotion, Espoir, Bourgeon only
 html = sub_once('const ONGLETS_ANIM_CAL = ["U6 · U7", "U8 · U9", "U8 · U9 Promotion", "U8 · U9 Espoir", "U8 · U9 Bourgeon", "U10 · U11 Avenir", "U10 · U11 Espoir", "U10 · U11 Bourgeons", "U13 · équipe 3", "U13 · équipe 4"];',
@@ -227,6 +229,12 @@ html = sub_once('.filter(m => /^pl-/.test(m.id) && /U1[013]/i.test(m.equipe || "
 html = sub_once("Les scores se saisissent pour les U10 · U11 et les deux équipes U13 ;", "Les scores se saisissent pour les U10 · U11 ;", html, "texte-scores-1")
 html = sub_once("Les scores se mettent seulement pour les U10 · U11 et les U13 ;", "Les scores se mettent seulement pour les U10 · U11 ;", html, "texte-scores-2")
 html = sub_once('"Mon équipe","Plateaux et brassages : dates, adversaires et résultats"]', '"Mon équipe","Plateaux : dates, adversaires et résultats"]', html, "texte-onglet-anim")
+
+# 10c) TOURNAMENTS: online as soon as they are created (spectator page and QR code ready); « Retirer du site » still hides one
+html = sub_once('matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: false, cree: Date.now() };',
+                'matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: true, cree: Date.now() };', html, "tournoi-en-ligne")
+html = sub_once('S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé.");',
+                'S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé et en ligne : sa page spectateurs et son QR code sont prêts.");', html, "tournoi-cree")
 
 # 11) floating bottom bar with app-style outline icons (same links, ids and labels)
 ts = html.index('<nav class="tabbar" aria-label="Navigation mobile">')
@@ -258,7 +266,7 @@ html = html[:ss] + html[ss:se].replace("#7FB0FF", "#C9B07F").replace("#CFAE78", 
 
 # 14) late stylesheet + small script, after every module
 last_body = html.rindex("</body>")  # the page's own closing tag (others live inside JS templates)
-html = html[:last_body] + '<style id="appli-tard">\n' + tard + "\n</style>\n" + appli + "\n" + faits + "\n" + html[last_body:]
+html = html[:last_body] + '<style id="appli-tard">\n' + tard + "\n</style>\n" + appli + "\n" + faits + "\n" + tournoi + "\n" + html[last_body:]
 
 # 15) new version stamp, so open pages and installed apps show the "mise à jour" banner
 stamp = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]

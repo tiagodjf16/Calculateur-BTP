@@ -1057,5 +1057,121 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 .mw-dp{display:none!important}                    /* champ caché du calendrier : il donne seulement son titre à la fenêtre */
 #mw-zone .fa-vide{margin-top:22px}
 @media (max-width:480px){ .mw-nav{grid-template-columns:64px minmax(0,1fr) 64px} .mw-jour{font-size:19px;margin-top:24px} }
+/* ---------- TOURNOIS : la page des spectateurs (#tournoi/…), la liste, le QR code ---------- */
+body:has(#p-tournoi.visible) .club-tete,body:has(#p-tournoi.visible) .top{display:none!important}
+#p-tournoi{position:relative;isolation:isolate;overflow-x:clip;padding-top:0}
+#p-tournoi::before{content:"";position:absolute;left:0;right:0;top:0;height:380px;z-index:-1;pointer-events:none;
+  background:radial-gradient(460px 280px at 50% 0,rgba(208,46,38,.14),transparent 70%),linear-gradient(162deg,transparent 0 46%,rgba(255,255,255,.07) 46% calc(46% + 1px),transparent calc(46% + 1px))}
+.trn-tete{row-gap:12px}
+.trn-tete .eqp-titre{font-size:clamp(36px,6.4vw,56px)!important;overflow-wrap:anywhere}
+.trn-tete > button.hexa-b{justify-self:end}
+.trn-meta{grid-column:1/-1;margin:0;text-align:center;font:500 16px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-pin{display:inline-grid;place-items:center;width:30px;height:30px;margin-left:4px;vertical-align:middle;border-radius:50%;background:var(--f-red)}
+.trn-pin svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2}
+.trn-ligne{grid-column:1/-1;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
+.trn-etat{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:30px;background:var(--f-panel-3);color:#fff;
+  font:700 12.5px var(--f-ui);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.trn-etat.direct{background:var(--f-red)}
+.trn-etat.direct i{width:9px;height:9px;border-radius:50%;background:#fff;animation:trnPouls 1.4s ease-in-out infinite}
+.trn-etat.fini{background:#0E2A52;color:var(--f-gold)}
+@keyframes trnPouls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.65)}}
+.trn-compte{font:500 15px var(--f-ui);color:var(--f-txt-3)}
+.trn-barre{grid-column:1/-1;justify-self:center;width:min(460px,100%);height:6px;border-radius:6px;background:var(--f-panel-3);overflow:hidden}
+.trn-barre i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--f-red),#E5392F);transition:width .6s ease}
+.trn-tete.fini .trn-barre i{background:linear-gradient(90deg,#B39A68,var(--f-gold))}
+.trn-auto{grid-column:1/-1;margin:0;text-align:center;font:500 13.5px var(--f-ui);color:var(--f-txt-3)}
+.trn-champion{grid-column:1/-1;justify-self:center;display:flex;align-items:center;gap:12px;margin-top:4px;padding:10px 24px 10px 16px;border-radius:40px;
+  background:linear-gradient(90deg,#2E2510,#4A3D1B);border:1px solid var(--f-gold);color:#fff;max-width:100%}
+.trn-champion > span[aria-hidden]{font-size:26px}
+.trn-champion .t-logo{width:40px;height:40px}
+.trn-champion small{display:block;font:700 11.5px var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--f-gold)}
+.trn-champion b{display:block;font:400 28px/1.05 var(--f-titre);letter-spacing:.02em;overflow-wrap:anywhere}
+.trn-tete .eqp-club{margin-top:4px}
+.trn-tete .eqp-club b{font-size:clamp(18px,4.4vw,26px)}
+.trn-tete .eqp-club .cl-blason{width:clamp(28px,7.5vw,40px);height:clamp(28px,7.5vw,40px);padding:3px}
+.trn-tete .eqp-club svg{width:20px;height:20px}
+@media (max-width:620px){ .trn-tete{row-gap:10px} .trn-meta{font-size:15px} .trn-champion{padding:8px 18px 8px 12px} .trn-champion b{font-size:24px} .trn-champion > span[aria-hidden]{font-size:22px} }
+.trn-corps{padding-top:8px;padding-bottom:24px}
+.trn-sec{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:26px 0 12px;font:700 19px var(--f-ui)!important;letter-spacing:.01em;text-transform:uppercase;color:var(--f-txt)}
+.trn-sec small{font:500 14px var(--f-ui);text-transform:none;color:var(--f-txt-3)}
+.trn-sec em{padding:4px 10px;border-radius:20px;background:var(--f-red);color:#fff;font:700 11px var(--f-ui);font-style:normal;letter-spacing:.08em}
+.trn-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+@media (max-width:420px){ .trn-grille{grid-template-columns:minmax(0,1fr)} }
+/* un match : les deux équipes l'une sous l'autre, le score à droite */
+.trn-m{display:grid;gap:9px;padding:12px 16px 13px;background:linear-gradient(180deg,#06182D,#09203C);border-radius:6px;color:#fff}
+.trn-m-tag{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:16px;font:700 12px var(--f-ui);letter-spacing:.07em;text-transform:uppercase;color:#8F9BB0}
+.trn-m-tag em{font-style:normal;color:var(--f-gold)}
+.trn-m-tag em.neuf{color:#fff;background:var(--f-red);padding:2px 8px;border-radius:12px}
+.trn-m-l{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:12px;font:600 16px var(--f-ui);color:#E4EAF2}
+.trn-m-l > span:not(.t-logo){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.01em}
+.trn-m-l b{min-width:30px;text-align:right;font:700 26px/1 var(--f-ui);color:#fff}
+.trn-m-l.g > span:not(.t-logo){color:#fff;font-weight:800}
+.trn-m-l.p,.trn-m-l.p b{color:#8F9BB0}
+.trn-m .t-logo,.trn-cl .t-logo,.trn-vainqueur .t-logo,.trn-champion .t-logo{width:34px;height:34px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;
+  flex:none;font:800 14px var(--f-ui);color:#06192F}
+.trn-m .t-logo img,.trn-cl .t-logo img,.trn-vainqueur .t-logo img,.trn-champion .t-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.trn-m-note{margin:0;font:600 13.5px var(--f-ui);color:var(--f-gold)}
+.trn-m.exempt{opacity:.8}
+.trn-m.nouveau{animation:trnNouveau 2.6s ease-out}
+@keyframes trnNouveau{0%{box-shadow:0 0 0 2px var(--f-gold);background:#3A2E12}100%{box-shadow:0 0 0 0 rgba(201,176,127,0)}}
+/* classement d'une poule */
+.trn-cl{background:var(--f-panel);border-radius:6px;overflow:hidden}
+.trn-cl-l{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) 34px 30px 30px 30px 46px 46px;align-items:center;gap:6px;min-height:56px;padding:0 14px;
+  border-bottom:1px solid #0C2545;font:500 16px var(--f-ui);color:#E4EAF2}
+.trn-cl-l > span{text-align:center}
+.trn-cl-l .eq{display:flex;align-items:center;gap:12px;min-width:0;text-align:left}
+.trn-cl-l .eq b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 15.5px var(--f-ui);text-transform:uppercase}
+.trn-cl-l .rg{font-weight:700;color:#fff}
+.trn-cl-l .pts{font-weight:800;color:#fff}
+.trn-cl-t{min-height:44px;border-bottom:2px solid #0C2545;font:600 13.5px var(--f-ui);color:#8F9BB0}
+.trn-cl-t .pts{color:var(--f-gold)}
+.trn-cl-l.q::before,.trn-cl-l.r::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 3px 3px 0;background:#18B26B}
+.trn-cl-l.r::before{background:var(--f-gold)}
+.trn-cl-l:last-child{border-bottom:0}
+@media (max-width:520px){ .trn-cl-l{grid-template-columns:26px minmax(0,1fr) 30px 42px 40px;padding:0 10px} .trn-cl-l .gnp{display:none} .trn-cl-l .eq{gap:9px} .trn-cl .t-logo{width:30px;height:30px} }
+.trn-legende{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:14px 2px 0;font:500 14px var(--f-ui);color:var(--f-txt-3)}
+.trn-legende span{display:inline-block;width:14px;height:14px;border-radius:3px;background:#18B26B;margin-left:6px}
+.trn-legende span:first-child{margin-left:0}
+.trn-legende span.r{background:var(--f-gold)}
+/* phase finale : un tour par colonne, le vainqueur au bout */
+.trn-tableau{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(270px,1fr);gap:16px;overflow-x:auto;padding:6px 2px 14px;scroll-snap-type:x proximity}
+.trn-tour{display:flex;flex-direction:column;scroll-snap-align:start}
+.trn-tour h4{margin:0 0 12px;font:700 15px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--f-gold);text-align:center}
+.trn-tour-l{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
+.trn-tour .trn-m-tag:empty{display:none}
+.trn-coupe{justify-content:center}
+.trn-vainqueur{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px 16px;border-radius:8px;
+  background:linear-gradient(180deg,#2E2510,#4A3D1B);border:1px solid var(--f-gold);text-align:center}
+.trn-trophee{font-size:44px}
+.trn-vainqueur .t-logo{width:64px;height:64px}
+.trn-vainqueur b{font:400 30px/1.05 var(--f-titre);letter-spacing:.02em;color:#fff}
+/* la liste des tournois du site */
+.trn-liste{display:grid;gap:12px;max-width:900px;margin:0 auto}
+.trn-carte{display:grid;grid-template-columns:52px minmax(0,1fr) auto 22px;align-items:center;gap:14px;padding:16px 18px;background:var(--f-panel-2);border-radius:6px;color:#fff;
+  text-decoration:none;transition:background .15s}
+.trn-carte:hover{background:var(--f-panel-3)}
+.trn-carte-ico{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#0E2A52;font-size:26px}
+.trn-carte-t{display:grid;gap:4px;min-width:0}
+.trn-carte-t b{font:400 28px/1.05 var(--f-titre);letter-spacing:.01em}
+.trn-carte-t small{font:500 14.5px var(--f-ui);color:var(--f-txt-2)}
+.trn-carte-t small.trn-carte-v{color:var(--f-gold);font-weight:700}
+.trn-carte > svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2}
+@media (max-width:520px){ .trn-carte{grid-template-columns:44px minmax(0,1fr) 18px;padding:14px} .trn-carte-ico{width:44px;height:44px;font-size:22px}
+  .trn-carte .trn-etat{grid-column:2;grid-row:2;justify-self:start} .trn-carte > svg{grid-column:3;grid-row:1/3} }
+/* QR code : la fenêtre « Partager » et la carte de l'espace club */
+.trn-qr-modale .modale-corps{text-align:center}
+.trn-qr{width:min(300px,78vw);margin:14px auto 6px;padding:10px;background:#fff;border-radius:14px}
+.trn-qr svg,.trn-qr-mini svg{display:block;width:100%;height:auto}
+.trn-qr-txt{margin:10px 0 6px;font:500 15px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-qr-lien{margin:6px 0 10px;font:500 14px var(--f-ui);color:var(--f-txt-3);word-break:break-all}
+.trn-qr-lien a{color:inherit}
+.trn-qr-carte{display:grid;grid-template-columns:150px minmax(0,1fr);gap:18px;align-items:center;margin:0 0 18px;padding:18px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(208,46,38,.16),rgba(8,31,57,.9));border:1px solid rgba(201,176,127,.45)}
+.trn-qr-mini{padding:8px;background:#fff;border-radius:10px}
+.trn-qr-info h3{margin:0 0 6px;font:800 20px var(--f-ui)!important;color:#fff}
+.trn-qr-info p{margin:0 0 8px;font:500 15px/1.45 var(--f-ui);color:#D0D9E1}
+.trn-qr-info p b{color:#fff}
+.trn-qr-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+@media (max-width:560px){ .trn-qr-carte{grid-template-columns:1fr;justify-items:center;text-align:center} .trn-qr-mini{width:190px} .trn-qr-btns{justify-content:center} }
 
 /*/HABILLAGE-CSS*/

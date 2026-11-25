@@ -22,7 +22,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#030E1C">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="1d75aa76e76a">
+<meta name="asf-version" content="dfa642878326">
 <meta name="asf-version-date" content="2026-11-25">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -3237,6 +3237,122 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 .mw-dp{display:none!important}                    /* champ caché du calendrier : il donne seulement son titre à la fenêtre */
 #mw-zone .fa-vide{margin-top:22px}
 @media (max-width:480px){ .mw-nav{grid-template-columns:64px minmax(0,1fr) 64px} .mw-jour{font-size:19px;margin-top:24px} }
+/* ---------- TOURNOIS : la page des spectateurs (#tournoi/…), la liste, le QR code ---------- */
+body:has(#p-tournoi.visible) .club-tete,body:has(#p-tournoi.visible) .top{display:none!important}
+#p-tournoi{position:relative;isolation:isolate;overflow-x:clip;padding-top:0}
+#p-tournoi::before{content:"";position:absolute;left:0;right:0;top:0;height:380px;z-index:-1;pointer-events:none;
+  background:radial-gradient(460px 280px at 50% 0,rgba(208,46,38,.14),transparent 70%),linear-gradient(162deg,transparent 0 46%,rgba(255,255,255,.07) 46% calc(46% + 1px),transparent calc(46% + 1px))}
+.trn-tete{row-gap:12px}
+.trn-tete .eqp-titre{font-size:clamp(36px,6.4vw,56px)!important;overflow-wrap:anywhere}
+.trn-tete > button.hexa-b{justify-self:end}
+.trn-meta{grid-column:1/-1;margin:0;text-align:center;font:500 16px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-pin{display:inline-grid;place-items:center;width:30px;height:30px;margin-left:4px;vertical-align:middle;border-radius:50%;background:var(--f-red)}
+.trn-pin svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2}
+.trn-ligne{grid-column:1/-1;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
+.trn-etat{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:30px;background:var(--f-panel-3);color:#fff;
+  font:700 12.5px var(--f-ui);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.trn-etat.direct{background:var(--f-red)}
+.trn-etat.direct i{width:9px;height:9px;border-radius:50%;background:#fff;animation:trnPouls 1.4s ease-in-out infinite}
+.trn-etat.fini{background:#0E2A52;color:var(--f-gold)}
+@keyframes trnPouls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.65)}}
+.trn-compte{font:500 15px var(--f-ui);color:var(--f-txt-3)}
+.trn-barre{grid-column:1/-1;justify-self:center;width:min(460px,100%);height:6px;border-radius:6px;background:var(--f-panel-3);overflow:hidden}
+.trn-barre i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--f-red),#E5392F);transition:width .6s ease}
+.trn-tete.fini .trn-barre i{background:linear-gradient(90deg,#B39A68,var(--f-gold))}
+.trn-auto{grid-column:1/-1;margin:0;text-align:center;font:500 13.5px var(--f-ui);color:var(--f-txt-3)}
+.trn-champion{grid-column:1/-1;justify-self:center;display:flex;align-items:center;gap:12px;margin-top:4px;padding:10px 24px 10px 16px;border-radius:40px;
+  background:linear-gradient(90deg,#2E2510,#4A3D1B);border:1px solid var(--f-gold);color:#fff;max-width:100%}
+.trn-champion > span[aria-hidden]{font-size:26px}
+.trn-champion .t-logo{width:40px;height:40px}
+.trn-champion small{display:block;font:700 11.5px var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--f-gold)}
+.trn-champion b{display:block;font:400 28px/1.05 var(--f-titre);letter-spacing:.02em;overflow-wrap:anywhere}
+.trn-tete .eqp-club{margin-top:4px}
+.trn-tete .eqp-club b{font-size:clamp(18px,4.4vw,26px)}
+.trn-tete .eqp-club .cl-blason{width:clamp(28px,7.5vw,40px);height:clamp(28px,7.5vw,40px);padding:3px}
+.trn-tete .eqp-club svg{width:20px;height:20px}
+@media (max-width:620px){ .trn-tete{row-gap:10px} .trn-meta{font-size:15px} .trn-champion{padding:8px 18px 8px 12px} .trn-champion b{font-size:24px} .trn-champion > span[aria-hidden]{font-size:22px} }
+.trn-corps{padding-top:8px;padding-bottom:24px}
+.trn-sec{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:26px 0 12px;font:700 19px var(--f-ui)!important;letter-spacing:.01em;text-transform:uppercase;color:var(--f-txt)}
+.trn-sec small{font:500 14px var(--f-ui);text-transform:none;color:var(--f-txt-3)}
+.trn-sec em{padding:4px 10px;border-radius:20px;background:var(--f-red);color:#fff;font:700 11px var(--f-ui);font-style:normal;letter-spacing:.08em}
+.trn-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+@media (max-width:420px){ .trn-grille{grid-template-columns:minmax(0,1fr)} }
+/* un match : les deux équipes l'une sous l'autre, le score à droite */
+.trn-m{display:grid;gap:9px;padding:12px 16px 13px;background:linear-gradient(180deg,#06182D,#09203C);border-radius:6px;color:#fff}
+.trn-m-tag{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:16px;font:700 12px var(--f-ui);letter-spacing:.07em;text-transform:uppercase;color:#8F9BB0}
+.trn-m-tag em{font-style:normal;color:var(--f-gold)}
+.trn-m-tag em.neuf{color:#fff;background:var(--f-red);padding:2px 8px;border-radius:12px}
+.trn-m-l{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:12px;font:600 16px var(--f-ui);color:#E4EAF2}
+.trn-m-l > span:not(.t-logo){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.01em}
+.trn-m-l b{min-width:30px;text-align:right;font:700 26px/1 var(--f-ui);color:#fff}
+.trn-m-l.g > span:not(.t-logo){color:#fff;font-weight:800}
+.trn-m-l.p,.trn-m-l.p b{color:#8F9BB0}
+.trn-m .t-logo,.trn-cl .t-logo,.trn-vainqueur .t-logo,.trn-champion .t-logo{width:34px;height:34px;border-radius:50%;background:#fff;display:inline-grid;place-items:center;overflow:hidden;
+  flex:none;font:800 14px var(--f-ui);color:#06192F}
+.trn-m .t-logo img,.trn-cl .t-logo img,.trn-vainqueur .t-logo img,.trn-champion .t-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.trn-m-note{margin:0;font:600 13.5px var(--f-ui);color:var(--f-gold)}
+.trn-m.exempt{opacity:.8}
+.trn-m.nouveau{animation:trnNouveau 2.6s ease-out}
+@keyframes trnNouveau{0%{box-shadow:0 0 0 2px var(--f-gold);background:#3A2E12}100%{box-shadow:0 0 0 0 rgba(201,176,127,0)}}
+/* classement d'une poule */
+.trn-cl{background:var(--f-panel);border-radius:6px;overflow:hidden}
+.trn-cl-l{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) 34px 30px 30px 30px 46px 46px;align-items:center;gap:6px;min-height:56px;padding:0 14px;
+  border-bottom:1px solid #0C2545;font:500 16px var(--f-ui);color:#E4EAF2}
+.trn-cl-l > span{text-align:center}
+.trn-cl-l .eq{display:flex;align-items:center;gap:12px;min-width:0;text-align:left}
+.trn-cl-l .eq b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 15.5px var(--f-ui);text-transform:uppercase}
+.trn-cl-l .rg{font-weight:700;color:#fff}
+.trn-cl-l .pts{font-weight:800;color:#fff}
+.trn-cl-t{min-height:44px;border-bottom:2px solid #0C2545;font:600 13.5px var(--f-ui);color:#8F9BB0}
+.trn-cl-t .pts{color:var(--f-gold)}
+.trn-cl-l.q::before,.trn-cl-l.r::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 3px 3px 0;background:#18B26B}
+.trn-cl-l.r::before{background:var(--f-gold)}
+.trn-cl-l:last-child{border-bottom:0}
+@media (max-width:520px){ .trn-cl-l{grid-template-columns:26px minmax(0,1fr) 30px 42px 40px;padding:0 10px} .trn-cl-l .gnp{display:none} .trn-cl-l .eq{gap:9px} .trn-cl .t-logo{width:30px;height:30px} }
+.trn-legende{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:14px 2px 0;font:500 14px var(--f-ui);color:var(--f-txt-3)}
+.trn-legende span{display:inline-block;width:14px;height:14px;border-radius:3px;background:#18B26B;margin-left:6px}
+.trn-legende span:first-child{margin-left:0}
+.trn-legende span.r{background:var(--f-gold)}
+/* phase finale : un tour par colonne, le vainqueur au bout */
+.trn-tableau{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(270px,1fr);gap:16px;overflow-x:auto;padding:6px 2px 14px;scroll-snap-type:x proximity}
+.trn-tour{display:flex;flex-direction:column;scroll-snap-align:start}
+.trn-tour h4{margin:0 0 12px;font:700 15px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--f-gold);text-align:center}
+.trn-tour-l{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
+.trn-tour .trn-m-tag:empty{display:none}
+.trn-coupe{justify-content:center}
+.trn-vainqueur{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px 16px;border-radius:8px;
+  background:linear-gradient(180deg,#2E2510,#4A3D1B);border:1px solid var(--f-gold);text-align:center}
+.trn-trophee{font-size:44px}
+.trn-vainqueur .t-logo{width:64px;height:64px}
+.trn-vainqueur b{font:400 30px/1.05 var(--f-titre);letter-spacing:.02em;color:#fff}
+/* la liste des tournois du site */
+.trn-liste{display:grid;gap:12px;max-width:900px;margin:0 auto}
+.trn-carte{display:grid;grid-template-columns:52px minmax(0,1fr) auto 22px;align-items:center;gap:14px;padding:16px 18px;background:var(--f-panel-2);border-radius:6px;color:#fff;
+  text-decoration:none;transition:background .15s}
+.trn-carte:hover{background:var(--f-panel-3)}
+.trn-carte-ico{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#0E2A52;font-size:26px}
+.trn-carte-t{display:grid;gap:4px;min-width:0}
+.trn-carte-t b{font:400 28px/1.05 var(--f-titre);letter-spacing:.01em}
+.trn-carte-t small{font:500 14.5px var(--f-ui);color:var(--f-txt-2)}
+.trn-carte-t small.trn-carte-v{color:var(--f-gold);font-weight:700}
+.trn-carte > svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2}
+@media (max-width:520px){ .trn-carte{grid-template-columns:44px minmax(0,1fr) 18px;padding:14px} .trn-carte-ico{width:44px;height:44px;font-size:22px}
+  .trn-carte .trn-etat{grid-column:2;grid-row:2;justify-self:start} .trn-carte > svg{grid-column:3;grid-row:1/3} }
+/* QR code : la fenêtre « Partager » et la carte de l'espace club */
+.trn-qr-modale .modale-corps{text-align:center}
+.trn-qr{width:min(300px,78vw);margin:14px auto 6px;padding:10px;background:#fff;border-radius:14px}
+.trn-qr svg,.trn-qr-mini svg{display:block;width:100%;height:auto}
+.trn-qr-txt{margin:10px 0 6px;font:500 15px/1.45 var(--f-ui);color:var(--f-txt-2)}
+.trn-qr-lien{margin:6px 0 10px;font:500 14px var(--f-ui);color:var(--f-txt-3);word-break:break-all}
+.trn-qr-lien a{color:inherit}
+.trn-qr-carte{display:grid;grid-template-columns:150px minmax(0,1fr);gap:18px;align-items:center;margin:0 0 18px;padding:18px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(208,46,38,.16),rgba(8,31,57,.9));border:1px solid rgba(201,176,127,.45)}
+.trn-qr-mini{padding:8px;background:#fff;border-radius:10px}
+.trn-qr-info h3{margin:0 0 6px;font:800 20px var(--f-ui)!important;color:#fff}
+.trn-qr-info p{margin:0 0 8px;font:500 15px/1.45 var(--f-ui);color:#D0D9E1}
+.trn-qr-info p b{color:#fff}
+.trn-qr-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+@media (max-width:560px){ .trn-qr-carte{grid-template-columns:1fr;justify-items:center;text-align:center} .trn-qr-mini{width:190px} .trn-qr-btns{justify-content:center} }
 
 /*/HABILLAGE-CSS*/
 </style>
@@ -3417,6 +3533,8 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 </div>
 
 <div class="page" id="p-equipe"><div id="eqp"></div></div>
+
+<div class="page" id="p-tournoi"><div id="trn"></div></div>
 
 <div class="page" id="p-photos">
   <div class="titre-page"><div class="wrap"><h1>Photos</h1><p>Les images des derniers matchs, publiées par le club.</p></div></div>
@@ -7601,8 +7719,8 @@ function lancerTirage(){
 async function validerTirage(){
   const T = S.ui.tirage;
   const doc = { nom: T.nom.trim(), cat: T.cat, date: T.date, lieu: T.lieu, qualif: +T.qualif, repechage: +T.repechage || 0, poules: T.poules,
-    matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: false, cree: Date.now() };
-  const ok = await ecrire(() => S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé.");
+    matchs: T.poules.flatMap((p,i) => genererPoule(p,i)), publie: true, cree: Date.now() };
+  const ok = await ecrire(() => S.db.doc("tournois/" + T.id).set(doc), "Tournoi créé et en ligne : sa page spectateurs et son QR code sont prêts.");
   if (ok){ S.ui.tirage = null; S.ui.nouveauT = null; S.ui.tournoi = T.id; S.tournois = [...S.tournois.filter(t => t.id !== T.id), { id: T.id, ...doc }]; rendrePanneau(); }
 }
 let tSave = Promise.resolve();
@@ -10065,7 +10183,7 @@ document.addEventListener("submit", async ev => {
 /* ============================================================
    NAVIGATION, THÈME, DÉMARRAGE
    ============================================================ */
-const PAGES = ["equipe","portail","connexion","espaces","joueur","photos","legal","confidentialite","accueil","club","equipes","calendrier","resultats","classement","compos","tournois","inscriptions","partenaires","contact","espace"];
+const PAGES = ["equipe","tournoi","portail","connexion","espaces","joueur","photos","legal","confidentialite","accueil","club","equipes","calendrier","resultats","classement","compos","tournois","inscriptions","partenaires","contact","espace"];
 function route(){
   const p = PAGES.includes(location.hash.slice(1).split("/")[0]) ? location.hash.slice(1).split("/")[0] : "accueil";   // on arrive sur l'accueil visiteur
   // sur le site en ligne, les espaces membres demandent d'être connecté
@@ -22854,7 +22972,7 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   }
 
   /* ---------- onglets du club : l'onglet de la page ouverte, bien en vue ---------- */
-  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", equipe: "equipes", legal: "", confidentialite: "", espaces: "" };
+  const ONGLET_DE = { resultats: "matchs", classement: "matchs", calendrier: "matchs", tournois: "matchs", tournoi: "matchs", equipe: "equipes", legal: "", confidentialite: "", espaces: "" };
   function majOnglets(){
     const h = (location.hash.slice(1) || "accueil").split(/[?/]/)[0];
     const o = h in ONGLET_DE ? ONGLET_DE[h] : h;
@@ -22864,9 +22982,9 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
       nav.querySelectorAll("a").forEach(a => { const on = a.dataset.o === o; a.classList.toggle("actif", on); if (on) actif = a; a.setAttribute("aria-current", on ? "page" : "false"); });
       if (actif && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.clientWidth) / 2, behavior: "smooth" });
     }
-    // barre du bas : « Matchs » reste allumé sur classement et tournois
+    // barre du bas : « Matchs » reste allumé sur classement, tournois et la page d'un tournoi
     const m = document.querySelector('.tabbar a[data-p="calendrier"]');
-    if (m && ["resultats", "classement", "tournois", "animation"].includes(h)) m.classList.add("actif");
+    if (m && ["resultats", "classement", "tournois", "tournoi", "animation"].includes(h)) m.classList.add("actif");
   }
   window.addEventListener("hashchange", () => setTimeout(majOnglets, 0));
   majOnglets();
@@ -23158,9 +23276,10 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const plateauActuel = m => /^pl-/.test(String(m.id || "")) && (typeof CATS_AN === "undefined" || CATS_AN.some(c => c[0] === m.equipe));
   function duWeekend(sam){
     const de = plusJ(sam, -3), a = plusJ(sam, 3), dans = m => m && /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || "")) && m.date >= de && m.date <= a;
-    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)) };
+    return { ms: (S.matchs || []).filter(dans), pls: (S.matchsAnimation || []).filter(m => dans(m) && plateauActuel(m)),
+      trs: window.ASF_TOURNOI ? (S.tournois || []).filter(t => t && t.publie && dans(t)) : [] };      // les tournois du club en ligne
   }
-  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length; };
+  const nbDu = sam => { const x = duWeekend(sam); return x.ms.length + x.pls.length + x.trs.length; };
   /* par défaut : le week-end en cours ; pendant une trêve, le prochain qui a des matchs */
   function samediCourant(){
     const s0 = samediDe(auj());
@@ -23187,18 +23306,20 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     const z = document.getElementById("mw-zone"); if (!z) return;
     if (mw.auto) mw.sam = mw.auto === "resultats" ? samediResultats() : samediCourant();
     if (!mw.sam) mw.sam = samediDe(auj());
-    const { ms, pls } = duWeekend(mw.sam);
+    const { ms, pls, trs } = duWeekend(mw.sam);
     const jours = new Map(), ajoute = (date, heure, ordre, html) => { if (!jours.has(date)) jours.set(date, []); jours.get(date).push({ h: heure || "99:99", ordre, html }); };
     ms.forEach(m => ajoute(m.date, m.heure, ordreEq(m), carteMatchLab(m, labelSemaine(m))));
     const gr = new Map();
     pls.forEach(m => { const k = (m.fal && m.fal.cle) || [m.date, m.heure || "", m.adresse || "", m.dom ? "dom" : (m.adv || "")].join("|");
       if (!gr.has(k)) gr.set(k, []); gr.get(k).push(m); });
     [...gr.values()].forEach(g => ajoute(g[0].date, g[0].heure, "~" + ordreEq(g[0]), faCarte(g)));
+    trs.forEach(t => ajoute(t.date, "00:00", "!", window.ASF_TOURNOI.carte(t)));          // un tournoi : en tête de sa journée
     const s = dJ(mw.sam), d = dJ(plusJ(mw.sam, 1)), an = s.getFullYear() !== new Date().getFullYear() ? " " + s.getFullYear() : "";
     const titre = s.getMonth() === d.getMonth() ? `Week-end du ${jourNum(s)} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`
       : `Week-end du ${jourNum(s)} ${MOIS_L2[s.getMonth()]} au ${jourNum(d)} ${MOIS_L2[d.getMonth()]}${an}`;
     const nbP = gr.size;
-    const compte = ms.length || nbP ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : ""].filter(Boolean).join(" et ") + " · toutes catégories"
+    const compte = ms.length || nbP || trs.length ? [ms.length ? `${ms.length} match${ms.length > 1 ? "s" : ""}` : "", nbP ? `${nbP} plateau${nbP > 1 ? "x" : ""}` : "",
+        trs.length ? `${trs.length} tournoi${trs.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " et $1") + " · toutes catégories"
       : "Aucun match ce week-end";
     const ici = mw.sam === samediDe(auj());
     const corps = [...jours.keys()].sort().map(j => {
@@ -23708,6 +23829,441 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   css.id = "faits-fff-css";
   css.textContent = `.faits-carte .faits-nt{margin:8px 0 2px 18px;display:grid;gap:4px;font:400 14px/1.4 var(--f-ui,inherit);color:var(--f-txt-2,inherit)}`;
   document.head.appendChild(css);
+})();
+</script>
+<script id="tournoi-direct-js">
+/* =====================================================================
+   TOURNOIS EN DIRECT : la page des spectateurs, son QR code, l'affiche à imprimer
+   - chaque tournoi a sa page (#tournoi/<id>) : les matchs et leurs scores, le classement des poules, la phase finale et le
+     vainqueur ; elle se met à jour toute seule dès qu'un score est validé dans l'espace club (le site relit ses données
+     toutes les 30 secondes), sans recharger la page ; les scores qui viennent d'arriver s'éclairent un instant ;
+   - espace club › Matchs et plateaux › Tournois › Gérer : le QR code de cette page, l'affiche A4 à imprimer, le QR code
+     en image, le lien à copier ; un tournoi créé est mis en ligne tout de suite (« Retirer du site » le cache) ;
+   - page Tournois du site : un tournoi par carte (en direct, à venir, terminé), qui ouvre sa page.
+   Ajouté sans modifier le script de l'application.
+   ===================================================================== */
+(function(){
+  "use strict";
+  if (typeof S === "undefined" || typeof window.rendreTournois !== "function") return;
+  /* ---------- QR code (norme ISO 18004) : octets, correction M, versions 1 à 10, masque choisi au plus lisible ---------- */
+  const QR = (() => {
+    // correction M : [codes de correction par bloc, nombre de blocs], versions 1 à 10
+    const ECC_M = [null, [10, 1], [16, 1], [26, 1], [18, 2], [24, 2], [16, 4], [18, 4], [22, 4], [22, 5], [26, 5]];
+    const mult = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--){ z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z & 0xFF; };
+    function diviseur(deg){
+      const r = new Array(deg).fill(0); r[deg - 1] = 1; let racine = 1;
+      for (let i = 0; i < deg; i++){
+        for (let j = 0; j < deg; j++){ r[j] = mult(r[j], racine); if (j + 1 < deg) r[j] ^= r[j + 1]; }
+        racine = mult(racine, 0x02);
+      }
+      return r;
+    }
+    function reste(data, div){
+      const r = new Array(div.length).fill(0);
+      data.forEach(b => { const f = b ^ r.shift(); r.push(0); div.forEach((c, i) => { r[i] ^= mult(c, f); }); });
+      return r;
+    }
+    const modulesBruts = v => { let r = (16 * v + 128) * v + 64; if (v >= 2){ const n = Math.floor(v / 7) + 2; r -= (25 * n - 10) * n - 55; if (v >= 7) r -= 36; } return r; };
+    const capacite = v => Math.floor(modulesBruts(v) / 8) - ECC_M[v][0] * ECC_M[v][1];       // octets de données
+    function alignements(v){
+      if (v === 1) return [];
+      const n = Math.floor(v / 7) + 2, taille = v * 4 + 17, pas = Math.ceil((v * 4 + 4) / (n * 2 - 2)) * 2, l = [6];
+      for (let p = taille - 7; l.length < n; p -= pas) l.splice(1, 0, p);
+      return l;
+    }
+    function matrice(texte){
+      const octets = [...new TextEncoder().encode(String(texte))];
+      let v = 1; while (v <= 10 && 4 + (v < 10 ? 8 : 16) + octets.length * 8 > capacite(v) * 8) v++;
+      if (v > 10) throw new Error("texte trop long pour le QR code");
+      // 1. les bits : mode octets, longueur, données, fin, remplissage
+      const bits = [], ajout = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+      ajout(4, 4); ajout(octets.length, v < 10 ? 8 : 16); octets.forEach(o => ajout(o, 8));
+      const cap = capacite(v) * 8;
+      ajout(0, Math.min(4, cap - bits.length)); ajout(0, (8 - bits.length % 8) % 8);
+      for (let p = 0xEC; bits.length < cap; p ^= 0xEC ^ 0x11) ajout(p, 8);
+      const data = []; for (let i = 0; i < bits.length; i += 8) data.push(parseInt(bits.slice(i, i + 8).join(""), 2));
+      // 2. correction d'erreurs par blocs, puis entrelacement
+      const [ecl, nb] = ECC_M[v], bruts = Math.floor(modulesBruts(v) / 8), courts = nb - bruts % nb, lgCourt = Math.floor(bruts / nb), div = diviseur(ecl);
+      const blocs = []; let k = 0;
+      for (let i = 0; i < nb; i++){
+        const d = data.slice(k, k + lgCourt - ecl + (i < courts ? 0 : 1)); k += d.length;
+        const c = reste(d, div); if (i < courts) d.push(0);
+        blocs.push(d.concat(c));
+      }
+      const tout = [];
+      for (let i = 0; i < blocs[0].length; i++) blocs.forEach((b, j) => { if (i !== lgCourt - ecl || j >= courts) tout.push(b[i]); });
+      // 3. la grille : motifs fixes, puis les données en zigzag
+      const n = v * 4 + 17, m = Array.from({ length: n }, () => new Array(n).fill(false)), fixe = Array.from({ length: n }, () => new Array(n).fill(false));
+      const pose = (x, y, noir) => { m[y][x] = noir; fixe[y][x] = true; };
+      for (let i = 0; i < n; i++){ pose(6, i, i % 2 === 0); pose(i, 6, i % 2 === 0); }
+      const repere = (cx, cy) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++){ const d = Math.max(Math.abs(dx), Math.abs(dy)), x = cx + dx, y = cy + dy;
+        if (x >= 0 && x < n && y >= 0 && y < n) pose(x, y, d !== 2 && d !== 4); } };
+      repere(3, 3); repere(n - 4, 3); repere(3, n - 4);
+      const al = alignements(v);
+      al.forEach((a, i) => al.forEach((b, j) => { if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) return;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) pose(a + dx, b + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1); }));
+      const format = masque => {                         // correction M (00) + masque, BCH, xor 0x5412
+        const d = masque; let r = d; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537);
+        const b = ((d << 10) | r) ^ 0x5412, bit = i => ((b >>> i) & 1) === 1;
+        for (let i = 0; i <= 5; i++) pose(8, i, bit(i));
+        pose(8, 7, bit(6)); pose(8, 8, bit(7)); pose(7, 8, bit(8));
+        for (let i = 9; i < 15; i++) pose(14 - i, 8, bit(i));
+        for (let i = 0; i < 8; i++) pose(n - 1 - i, 8, bit(i));
+        for (let i = 8; i < 15; i++) pose(8, n - 15 + i, bit(i));
+        pose(8, n - 8, true);
+      };
+      format(0);
+      if (v >= 7){
+        let r = v; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >>> 11) * 0x1F25);
+        const b = (v << 12) | r;
+        for (let i = 0; i < 18; i++){ const noir = ((b >>> i) & 1) === 1, a = n - 11 + i % 3, c = Math.floor(i / 3); pose(a, c, noir); pose(c, a, noir); }
+      }
+      let i = 0;
+      for (let droite = n - 1; droite >= 1; droite -= 2){
+        if (droite === 6) droite = 5;
+        for (let vert = 0; vert < n; vert++) for (let j = 0; j < 2; j++){
+          const x = droite - j, haut = ((droite + 1) & 2) === 0, y = haut ? n - 1 - vert : vert;
+          if (!fixe[y][x] && i < tout.length * 8){ m[y][x] = ((tout[i >>> 3] >>> (7 - (i & 7))) & 1) === 1; i++; }
+        }
+      }
+      // 4. le masque le plus lisible (règles de pénalité de la norme)
+      const MASQUES = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+        (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0,
+        (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+      const appliquer = k => { for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!fixe[y][x] && MASQUES[k](x, y)) m[y][x] = !m[y][x]; };
+      function penalite(){
+        let p = 0, noirs = 0;
+        const lignes = [...m.map(l => l.slice()), ...m[0].map((_, x) => m.map(l => l[x]))];
+        lignes.forEach(l => {
+          let run = 1;
+          for (let x = 1; x <= l.length; x++){ if (x < l.length && l[x] === l[x - 1]) run++; else { if (run >= 5) p += 3 + run - 5; run = 1; } }
+          const s = l.map(b => b ? "1" : "0").join("");
+          for (const motif of ["10111010000", "00001011101"]) for (let k = s.indexOf(motif); k >= 0; k = s.indexOf(motif, k + 1)) p += 40;
+        });
+        for (let y = 0; y < n - 1; y++) for (let x = 0; x < n - 1; x++){ const c = m[y][x]; if (c === m[y][x + 1] && c === m[y + 1][x] && c === m[y + 1][x + 1]) p += 3; }
+        m.forEach(l => l.forEach(b => { if (b) noirs++; }));
+        p += Math.floor(Math.abs(noirs * 20 - n * n * 10) / (n * n)) * 10;
+        return p;
+      }
+      let meilleur = 0, pMin = Infinity;
+      for (let k = 0; k < 8; k++){ appliquer(k); format(k); const p = penalite(); if (p < pMin){ pMin = p; meilleur = k; } appliquer(k); }
+      appliquer(meilleur); format(meilleur);
+      return m;
+    }
+    /* image SVG nette à toutes les tailles (marge blanche de 4 modules, exigée par les lecteurs) */
+    function svg(texte, opts){
+      const o = opts || {}, m = matrice(texte), n = m.length, q = 4, t = n + q * 2;
+      let d = "";
+      m.forEach((l, y) => l.forEach((b, x) => { if (b) d += `M${x + q} ${y + q}h1v1h-1z`; }));
+      return `<svg class="${o.classe || "qr"}" viewBox="0 0 ${t} ${t}" shape-rendering="crispEdges" role="img" aria-label="${o.label || "QR code"}"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="${o.couleur || "#06192F"}"/></svg>`;
+    }
+    /* dans un canevas (affiche, image à télécharger) : x, y, côté en pixels, marge comprise */
+    function dessiner(ctx, texte, x, y, cote, couleur){
+      const m = matrice(texte), n = m.length, q = 4, t = n + q * 2, u = cote / t;
+      ctx.fillStyle = "#fff"; ctx.fillRect(x, y, cote, cote);
+      ctx.fillStyle = couleur || "#06192F";
+      m.forEach((l, j) => l.forEach((b, i) => { if (b) ctx.fillRect(Math.floor(x + (i + q) * u), Math.floor(y + (j + q) * u), Math.ceil(u), Math.ceil(u)); }));
+    }
+    return { matrice, svg, dessiner };
+  })();
+  window.ASF_QR = QR;
+
+  const H = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const auj = () => { try { return aujourdhui(); } catch(e){ return new Date().toISOString().slice(0, 10); } };
+  const dateL = d => { try { return d ? dateLongue(d) : ""; } catch(e){ return d || ""; } };
+  const logo = n => { try { return logoEquipeT(n); } catch(e){ return `<span class="t-logo">${H(String(n || "?").charAt(0).toUpperCase())}</span>`; } };
+  const clPoule = (t, i) => { try { return classementPoule(t, i); } catch(e){ return []; } };
+  const gagnant = m => { try { return vainqueur(m); } catch(e){ return null; } };
+  const repe = t => { try { return repeches(t).map(e => e.nom); } catch(e){ return []; } };
+  const pts = e => { try { return points(e); } catch(x){ return (+e.g || 0) * 3 + (+e.n || 0); } };
+  const membre = () => { try { return !!peutCoacher(); } catch(e){ return false; } };
+  const dire = (t, err) => { try { toast(t, err); } catch(e){} };
+  const LETTRE = i => "ABCDEFGH".charAt(i) || String(i + 1);
+  const aScore = m => typeof m.sa === "number" && typeof m.sb === "number";
+  const matchsDe = t => Array.isArray(t.matchs) ? t.matchs : [];
+  const poulesDe = t => Array.isArray(t.poules) ? t.poules : [];
+  const maj1 = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const nomFichier = s => String(s || "tournoi").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tournoi";
+  /* l'adresse de la page d'un tournoi (celle du QR code) */
+  const BASE = () => /^https?:$/.test(location.protocol) ? location.origin + location.pathname : "https://asf-pierrelatte.fr/";
+  const lienDe = t => BASE() + "#tournoi/" + encodeURIComponent(t.id);
+  const idDuHash = () => { const r = location.hash.match(/^#tournoi\/([^/?#]+)/); try { return r ? decodeURIComponent(r[1]) : ""; } catch(e){ return ""; } };
+  const RETOUR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`;
+  const CHEV = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
+  const ICO_QR = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg>`;
+  const PIN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
+
+  /* ---------- où en est le tournoi : à venir, en direct, terminé ---------- */
+  function etat(t){
+    const ms = matchsDe(t).filter(m => !m.exempt), joues = ms.filter(aScore).length, total = ms.length;
+    const ko = matchsDe(t).some(m => m.phase !== "poule");
+    let ch = null; try { ch = champion(t); } catch(e){}
+    if (!ch && !(+t.qualif > 0) && poulesDe(t).length === 1 && total && joues === total) ch = (clPoule(t, 0)[0] || {}).nom || null;
+    const fini = !!ch || (total > 0 && joues === total && !(+t.qualif > 0 && !ko));
+    const a = auj(), d = String(t.date || "");
+    const k = fini ? "fini" : d && d > a ? "avenir" : d && d < a ? (joues ? "fini" : "avenir") : (d === a || joues ? "direct" : "avenir");
+    return { k, joues, total, ch, ko };
+  }
+  const ETAT_L = { direct: "En direct", avenir: "À venir", fini: "Terminé" };
+  const pastille = e => `<span class="trn-etat ${e.k}">${e.k === "direct" ? "<i></i>" : ""}${ETAT_L[e.k]}</span>`;
+  const compte = e => `${e.joues} match${e.joues > 1 ? "s" : ""} joué${e.joues > 1 ? "s" : ""} sur ${e.total}`;
+  const metaDe = t => [t.cat, maj1(dateL(t.date)), t.lieu].filter(Boolean).map(H).join(" · ");
+  const visible = t => !!t && (!!t.publie || membre());
+
+  /* ---------- une carte de match : les deux équipes, leur score, le vainqueur en blanc ---------- */
+  const ST = { id: "", onglet: "matchs", sig: "", vus: {} };
+  function carteM(t, m, tag){
+    if (m.exempt) return `<div class="trn-m exempt">${tag ? `<span class="trn-m-tag">${H(tag)}</span>` : ""}
+      <div class="trn-m-l g">${logo(m.a)}<span>${H(m.a)}</span><b></b></div><p class="trn-m-note">Qualifiée d'office pour le tour suivant</p></div>`;
+    const j = aScore(m), w = j ? gagnant(m) : null, cle = t.id + "|" + m.id, sc = j ? `${m.sa}-${m.sb}-${m.tab || ""}` : "";
+    const nouveau = j && ST.vus[cle] !== undefined && ST.vus[cle] !== sc;
+    ST.vus[cle] = sc;
+    const ligne = (n, s) => `<div class="trn-m-l${w ? (w === n ? " g" : " p") : ""}">${n ? logo(n) : `<span class="t-logo">?</span>`}<span>${H(n || "À déterminer")}</span><b>${j ? s : ""}</b></div>`;
+    return `<div class="trn-m${j ? " joue" : ""}${nouveau ? " nouveau" : ""}">
+      <span class="trn-m-tag">${H(tag || "")}${j ? (nouveau ? `<em class="neuf">Nouveau score</em>` : "") : `<em>À jouer</em>`}</span>
+      ${ligne(m.a, m.sa)}${ligne(m.b, m.sb)}${j && m.tab && m.sa === m.sb ? `<p class="trn-m-note">${H(m.tab)} gagne aux tirs au but</p>` : ""}</div>`;
+  }
+
+  /* ---------- onglet Matchs : les tours de poule, puis la phase finale ---------- */
+  function ongletMatchs(t){
+    const ms = matchsDe(t), poule = ms.filter(m => m.phase === "poule");
+    const tours = [...new Set(poule.map(m => +m.journee || 1))].sort((a, b) => a - b);
+    const secs = tours.map(j => ({ titre: tours.length > 1 ? `Tour ${j}` : "Matchs de poule",
+      l: poule.filter(m => (+m.journee || 1) === j).sort((a, b) => (a.poule || 0) - (b.poule || 0)), tag: m => `Poule ${LETTRE(m.poule || 0)}` }));
+    const ko = ms.filter(m => m.phase !== "poule");
+    [...new Set(ko.map(m => m.tour))].sort((a, b) => a - b).forEach(n => { const l = ko.filter(m => m.tour === n); secs.push({ titre: l[0].phase, l, tag: () => l[0].phase }); });
+    if (!secs.length) return `<p class="fa-vide">Les matchs s'afficheront ici après le tirage au sort.</p>`;
+    const enCours = secs.findIndex(s => s.l.some(m => !m.exempt && !aScore(m)));
+    return secs.map((s, i) => `<h3 class="trn-sec">${H(s.titre)}${i === enCours && ST.etat === "direct" ? `<em>En cours</em>` : ""}</h3>
+      <div class="trn-grille">${s.l.map(m => carteM(t, m, s.tag(m))).join("")}</div>`).join("");
+  }
+
+  /* ---------- onglet Classement : une table par poule (qualifiés en vert, repêchés en doré) ---------- */
+  function ongletClassement(t){
+    const Q = +t.qualif || 0, rep = repe(t), P = poulesDe(t);
+    if (!P.length) return `<p class="fa-vide">Le classement s'affichera après le tirage au sort.</p>`;
+    const diff = e => { const d = (+e.bp || 0) - (+e.bc || 0); return (d > 0 ? "+" : "") + d; };
+    return P.map((p, i) => {
+      const l = clPoule(t, i), ms = matchsDe(t).filter(m => m.phase === "poule" && m.poule === i);
+      return `<section class="trn-poule"><h3 class="trn-sec">Poule ${LETTRE(i)}<small>${ms.filter(aScore).length} / ${ms.length} matchs joués</small></h3>
+        <div class="trn-cl"><div class="trn-cl-l trn-cl-t"><span></span><span></span><span>J</span><span class="gnp">G</span><span class="gnp">N</span><span class="gnp">P</span><span>Diff</span><span class="pts">Pts</span></div>
+        ${l.map((e, r) => `<div class="trn-cl-l${r < Q ? " q" : rep.includes(e.nom) ? " r" : ""}"><span class="rg">${r + 1}</span><span class="eq">${logo(e.nom)}<b>${H(e.nom)}</b></span>
+          <span>${e.j}</span><span class="gnp">${e.g}</span><span class="gnp">${e.n}</span><span class="gnp">${e.p}</span><span>${diff(e)}</span><span class="pts">${pts(e)}</span></div>`).join("")}</div></section>`;
+    }).join("") + (Q ? `<p class="trn-legende"><span class="q"></span>${Q > 1 ? `Les ${Q} premiers sont qualifiés` : "Le premier est qualifié"} pour la phase finale${+t.repechage ? `<span class="r"></span>${+t.repechage > 1 ? `Les ${+t.repechage} meilleurs ${Q + 1}es sont repêchés` : `Le meilleur ${Q + 1}e est repêché`}` : ""}</p>`
+      : `<p class="trn-legende">3 points la victoire, 1 le match nul ; à égalité, la différence de buts départage.</p>`);
+  }
+
+  /* ---------- onglet Phase finale : le tableau, tour par tour, jusqu'au vainqueur ---------- */
+  function ongletFinale(t, e){
+    const ko = matchsDe(t).filter(m => m.phase !== "poule"), Q = +t.qualif || 0, R = +t.repechage || 0;
+    if (!ko.length){
+      const n = Q * poulesDe(t).length + R;
+      return `<p class="fa-vide">${Q ? `La phase finale commencera après les poules : ${Q > 1 ? `les ${Q} premiers` : "le premier"} de chaque poule${R ? ` et ${R} repêché${R > 1 ? "s" : ""}` : ""}, soit ${n} équipe${n > 1 ? "s" : ""}.`
+        : "Ce tournoi n'a pas de phase finale : le classement des poules donne le vainqueur."}</p>`;
+    }
+    const tours = [...new Set(ko.map(m => m.tour))].sort((a, b) => a - b);
+    return `<div class="trn-tableau">${tours.map(n => { const l = ko.filter(m => m.tour === n);
+        return `<div class="trn-tour"><h4>${H(l[0].phase)}</h4><div class="trn-tour-l">${l.map(m => carteM(t, m, "")).join("")}</div></div>`; }).join("")}
+      ${e.ch ? `<div class="trn-tour trn-coupe"><h4>Vainqueur</h4><div class="trn-vainqueur"><span class="trn-trophee" aria-hidden="true">🏆</span>${logo(e.ch)}<b>${H(e.ch)}</b></div></div>` : ""}</div>`;
+  }
+
+  /* ---------- la page d'un tournoi ---------- */
+  function rendrePage(force){
+    const z = document.getElementById("trn"); if (!z) return;
+    const id = idDuHash(); if (!id) return;
+    if (ST.id !== id){ ST.id = id; ST.onglet = "matchs"; ST.sig = ""; }
+    const t = (S.tournois || []).find(x => x.id === id);
+    if (!t || !visible(t)){
+      const msg = !S.pret ? "Chargement du tournoi…" : "Ce tournoi n'est pas (ou plus) en ligne.";
+      const html = `<div class="eqp-tete trn-tete"><a class="hexa-b" href="#tournois" aria-label="Tous les tournois">${RETOUR}</a><h1 class="eqp-titre">Tournoi</h1></div>
+        <div class="wrap trn-corps"><p class="fa-vide">${msg}${S.pret ? `<br><a class="lien" href="#tournois">Voir les tournois du club</a>` : ""}</p></div>`;
+      if (html !== ST.sig){ ST.sig = html; z.innerHTML = html; }
+      return;
+    }
+    const e = etat(t); ST.etat = e.k;
+    const ko = e.ko || +t.qualif > 0;
+    if (ST.onglet === "finale" && !ko) ST.onglet = "matchs";
+    const sig = JSON.stringify([t, ST.onglet, e.k]);
+    if (!force && sig === ST.sig) return;
+    ST.sig = sig;
+    const pct = e.total ? Math.round(e.joues / e.total * 100) : 0;
+    const ONGS = [["matchs", "Matchs"], ["classement", "Classement"], ...(ko ? [["finale", "Phase finale"]] : [])];
+    const corps = ST.onglet === "classement" ? ongletClassement(t) : ST.onglet === "finale" ? ongletFinale(t, e) : ongletMatchs(t);
+    const q = t.lieu ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.lieu)}` : "";
+    z.innerHTML = `<div class="eqp-tete trn-tete ${e.k}">
+        <a class="hexa-b" href="#tournois" aria-label="Tous les tournois">${RETOUR}</a>
+        <h1 class="eqp-titre">${H(t.nom || "Tournoi")}</h1>
+        <button type="button" class="hexa-b" data-trn-partager aria-label="Partager la page du tournoi (QR code)">${ICO_QR}</button>
+        <p class="trn-meta">${metaDe(t)}${q ? ` <a class="trn-pin" href="${q}" target="_blank" rel="noopener" aria-label="Voir le lieu sur le plan">${PIN}</a>` : ""}</p>
+        <div class="trn-ligne">${pastille(e)}${e.total ? `<span class="trn-compte">${compte(e)}</span>` : ""}</div>
+        ${e.total ? `<div class="trn-barre" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ""}
+        ${e.ch ? `<div class="trn-champion"><span aria-hidden="true">🏆</span>${logo(e.ch)}<div><small>Vainqueur</small><b>${H(e.ch)}</b></div></div>` : ""}
+        ${e.k === "direct" ? `<p class="trn-auto">Les scores arrivent tout seuls, sans recharger la page.</p>` : ""}
+        <a class="eqp-club" href="#accueil"><span class="cl-blason"><img src="${typeof LOGO_SRC !== "undefined" ? LOGO_SRC : ""}" alt=""></span><b>Atom'Sports Football Pierrelatte</b>${CHEV}</a></div>
+      <nav class="club-onglets eqp-onglets" aria-label="${H(t.nom || "Tournoi")}">${ONGS.map(([k, l]) => `<button type="button" class="${ST.onglet === k ? "actif" : ""}" data-trno="${k}">${l}</button>`).join("")}</nav>
+      <div class="wrap trn-corps">${corps}</div>`;
+  }
+
+  /* ---------- la page Tournois du site : une carte par tournoi ---------- */
+  function rendreListe(){
+    const z = document.getElementById("liste-tournois"); if (!z) return;
+    const l = (S.tournois || []).filter(t => t && t.publie);
+    if (!l.length) return;                                     // le message « Aucun tournoi en cours » de l'application reste
+    const rang = { direct: 0, avenir: 1, fini: 2 };
+    const ls = l.map(t => ({ t, e: etat(t) })).sort((a, b) => rang[a.e.k] - rang[b.e.k]
+      || (a.e.k === "avenir" ? String(a.t.date || "").localeCompare(String(b.t.date || "")) : String(b.t.date || "").localeCompare(String(a.t.date || ""))));
+    z.innerHTML = `<div class="trn-liste">${ls.map(({ t, e }) => carteTournoi(t, e)).join("")}</div>`;
+  }
+  function carteTournoi(t, e){
+    e = e || etat(t);
+    return `<a class="trn-carte ${e.k}" href="#tournoi/${encodeURIComponent(t.id)}">
+        <span class="trn-carte-ico" aria-hidden="true">🏆</span>
+        <span class="trn-carte-t"><b>${H(t.nom || "Tournoi")}</b><small>${metaDe(t)}</small>
+          ${e.ch ? `<small class="trn-carte-v">Vainqueur : ${H(e.ch)}</small>` : e.total && e.joues ? `<small>${compte(e)}</small>` : ""}</span>
+        ${pastille(e)}${CHEV}</a>`;
+  }
+  window.ASF_TOURNOI = { carte: t => carteTournoi(t), lien: lienDe };      // l'onglet Matchs montre le tournoi de son week-end
+
+  /* ---------- partager : le QR code de la page, le lien ---------- */
+  function copier(txt){
+    const fini = ok => dire(ok ? "Lien copié : colle-le où tu veux (message, réseaux…)." : "Copie impossible : appuie longuement sur le lien pour le copier.", !ok);
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(() => fini(true), () => fini(vieuxCopier(txt)));
+    else fini(vieuxCopier(txt));
+  }
+  function vieuxCopier(txt){
+    const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;left:-9999px;top:0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length);
+    let ok = false; try { ok = document.execCommand("copy"); } catch(e){} ta.remove(); return ok;
+  }
+  function ouvrirPartage(t){
+    if (typeof zoneModale !== "function") return;
+    const url = lienDe(t);
+    zoneModale().innerHTML = `<div class="modale-fond trn-qr-fond"><div class="modale trn-qr-modale" role="dialog" aria-label="Suivre ${H(t.nom)} en direct" data-trn-t="${H(t.id)}">
+      <div class="modale-tete"><div><b>Suivre le tournoi en direct</b><small>${H(t.nom || "")}</small></div><button type="button" class="modale-x" data-stage-fermer aria-label="Fermer">×</button></div>
+      <div class="modale-corps"><div class="trn-qr">${QR.svg(url, { label: "QR code de la page du tournoi" })}</div>
+        <p class="trn-qr-txt">Fais scanner ce QR code avec l'appareil photo d'un téléphone : la page du tournoi s'ouvre, avec les scores en direct.</p>
+        <p class="trn-qr-lien">${H(url)}</p></div>
+      <div class="modale-pied">${navigator.share ? `<button type="button" class="btn bleu" data-trn-a="partager">Partager le lien</button>` : ""}
+        <button type="button" class="btn ${navigator.share ? "contour" : "bleu"}" data-trn-a="copier">Copier le lien</button></div></div></div>`;
+    document.body.classList.add("modale-ouverte");
+  }
+
+  /* ---------- images : le QR code seul, et l'affiche A4 à imprimer ---------- */
+  function enregistrer(blob, nom){
+    if (!blob){ dire("Image impossible à fabriquer sur cet appareil.", true); return; }
+    try { if (window.ASFP_AFF && typeof ASFP_AFF.enregistrerImage === "function") return ASFP_AFF.enregistrerImage(blob, nom); } catch(e){}
+    try { S.downloads.save({ filename: nom, data: blob }); } catch(e){ dire("Téléchargement impossible.", true); }
+  }
+  const chargerImage = src => new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+  async function polices(){ try { await Promise.all(['400 120px "Bebas Neue"', '700 40px "Barlow"', '500 40px "Barlow"'].map(f => document.fonts.load(f))); } catch(e){} }
+  function imageQR(t){
+    const c = document.createElement("canvas"); c.width = c.height = 1200;
+    QR.dessiner(c.getContext("2d"), lienDe(t), 0, 0, 1200, "#000");
+    c.toBlob(b => enregistrer(b, `qr-code-${nomFichier(t.nom)}.png`), "image/png");
+  }
+  /* texte sur une ou deux lignes, la police réduite jusqu'à ce qu'il tienne */
+  function titreAjuste(x, txt, cx, y, larg, taille, min){
+    const mots = String(txt).toUpperCase().split(/\s+/).filter(Boolean);
+    for (let s = taille; s >= min; s -= 4){
+      x.font = `400 ${s}px "Bebas Neue","Arial Narrow",Arial,sans-serif`;
+      if (x.measureText(mots.join(" ")).width <= larg){ x.fillText(mots.join(" "), cx, y + s); return y + s; }
+      for (let k = 1; k < mots.length; k++){
+        const a = mots.slice(0, k).join(" "), b = mots.slice(k).join(" ");
+        if (x.measureText(a).width <= larg && x.measureText(b).width <= larg){ x.fillText(a, cx, y + s); x.fillText(b, cx, y + s * 2); return y + s * 2; }
+      }
+    }
+    x.font = `400 ${min}px "Bebas Neue","Arial Narrow",Arial,sans-serif`; x.fillText(mots.join(" "), cx, y + min, larg); return y + min;
+  }
+  async function affiche(t){
+    await polices();
+    const W = 1240, HT = 1754, c = document.createElement("canvas"); c.width = W; c.height = HT;
+    const x = c.getContext("2d"); x.textAlign = "center"; x.textBaseline = "alphabetic";
+    const g = x.createLinearGradient(0, 0, W * .4, HT); g.addColorStop(0, "#030E1C"); g.addColorStop(1, "#0B2747");
+    x.fillStyle = g; x.fillRect(0, 0, W, HT);
+    const halo = x.createRadialGradient(W / 2, 0, 20, W / 2, 0, 760); halo.addColorStop(0, "rgba(208,46,38,.30)"); halo.addColorStop(1, "rgba(208,46,38,0)");
+    x.fillStyle = halo; x.fillRect(0, 0, W, 800);
+    x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 2; x.beginPath(); x.moveTo(0, 560); x.lineTo(W, 180); x.stroke();
+    // le blason du club
+    x.fillStyle = "#fff"; x.beginPath(); x.arc(W / 2, 190, 118, 0, Math.PI * 2); x.fill();
+    const img = typeof LOGO_SRC !== "undefined" ? await chargerImage(LOGO_SRC) : null;
+    if (img) x.drawImage(img, W / 2 - 102, 88, 204, 204);
+    x.fillStyle = "#C9B07F"; x.font = '700 34px "Barlow",Arial,sans-serif'; x.fillText("ATOM'SPORTS FOOTBALL PIERRELATTE", W / 2, 374);
+    // le tournoi
+    x.fillStyle = "#fff";
+    let y = titreAjuste(x, t.nom || "Tournoi", W / 2, 392, W - 140, 150, 74);
+    const meta = [t.cat, maj1(dateL(t.date)), t.lieu].filter(Boolean).join("  ·  ");
+    x.fillStyle = "#D0D9E1"; x.font = '500 38px "Barlow",Arial,sans-serif'; x.fillText(meta, W / 2, y + 62, W - 140);
+    x.fillStyle = "#D02E26"; x.fillRect(W / 2 - 50, y + 96, 100, 8);
+    // le QR code, dans son cadre blanc
+    const qy = y + 150, cote = Math.min(720, HT - 330 - qy), qx = (W - cote) / 2;          // le QR code prend la place qui reste
+    x.fillStyle = "#fff"; x.beginPath();
+    if (x.roundRect) x.roundRect(qx - 24, qy - 24, cote + 48, cote + 48, 34); else x.rect(qx - 24, qy - 24, cote + 48, cote + 48);
+    x.fill();
+    QR.dessiner(x, lienDe(t), qx, qy, cote, "#06192F");
+    x.fillStyle = "#fff"; x.font = '400 86px "Bebas Neue","Arial Narrow",Arial,sans-serif'; x.fillText("SCANNEZ POUR SUIVRE LES SCORES", W / 2, qy + cote + 130, W - 100);
+    x.fillStyle = "#D02E26"; x.font = '400 86px "Bebas Neue","Arial Narrow",Arial,sans-serif'; x.fillText("EN DIRECT", W / 2, qy + cote + 218);
+    x.fillStyle = "#8F9BB0"; x.font = '500 30px "Barlow",Arial,sans-serif'; x.fillText("Matchs, classements et phase finale, mis à jour à chaque score", W / 2, qy + cote + 276, W - 100);
+    c.toBlob(b => enregistrer(b, `affiche-${nomFichier(t.nom)}.png`), "image/png");
+  }
+
+  /* ---------- espace club : la carte « Page des spectateurs » dans « Gérer » un tournoi ---------- */
+  function carteAdmin(t){
+    const url = lienDe(t);
+    return `<section class="trn-qr-carte" data-trn-t="${H(t.id)}">
+      <div class="trn-qr-mini" aria-hidden="true">${QR.svg(url)}</div>
+      <div class="trn-qr-info">
+        <h3>📱 Page des spectateurs</h3>
+        <p>${t.publie ? "<b>En ligne.</b> Les spectateurs scannent ce QR code et suivent le tournoi en direct : chaque score que tu valides s'affiche tout seul sur leur téléphone (30 secondes au plus)."
+          : "<b>Pas encore en ligne.</b> Mets le tournoi sur le site : le QR code ouvrira sa page, avec les scores en direct."}</p>
+        <p class="trn-qr-lien"><a href="#tournoi/${encodeURIComponent(t.id)}" target="_blank" rel="noopener">${H(url)}</a></p>
+        <div class="trn-qr-btns">
+          ${t.publie ? "" : `<button type="button" class="btn bleu" data-a="toggle-tournoi">Mettre en ligne</button>`}
+          <button type="button" class="btn ${t.publie ? "bleu" : "contour"}" data-trn-a="affiche">🖨️ Affiche à imprimer</button>
+          <button type="button" class="btn contour" data-trn-a="qr-png">⬇️ QR code en image</button>
+          <button type="button" class="btn contour" data-trn-a="copier">🔗 Copier le lien</button>
+        </div>
+      </div></section>`;
+  }
+  const avantPT = window.panTournois;
+  if (typeof avantPT === "function" && typeof ONG !== "undefined") window.panTournois = function(){
+    const h = avantPT.apply(this, arguments);
+    const t = S.ui && !S.ui.tirage && S.ui.tournoi && (S.tournois || []).find(x => x.id === S.ui.tournoi);
+    if (!t) return h;
+    return ONG.transformer(h, r => {
+      const tpl = document.createElement("template"); tpl.innerHTML = carteAdmin(t);
+      const tete = r.querySelector(".ong-tn-tete");
+      if (tete) tete.after(tpl.content); else r.prepend(tpl.content);
+    });
+  };
+
+  /* ---------- actions ---------- */
+  document.addEventListener("click", ev => {
+    const el = ev.target.closest ? ev.target : null; if (!el) return;
+    const o = el.closest("#trn [data-trno]");
+    if (o){ ST.onglet = o.dataset.trno; rendrePage(true); return; }
+    const tid = () => { const c = el.closest("[data-trn-t]"); return c ? c.dataset.trnT : (S.ui && S.ui.tournoi) || idDuHash(); };
+    const tDe = id => (S.tournois || []).find(x => x.id === id);
+    if (el.closest("[data-trn-partager]")){ const t = tDe(idDuHash()); if (t) ouvrirPartage(t); return; }
+    if (el.matches(".trn-qr-fond")){ try { fermerModale(); } catch(e){} return; }
+    const a = el.closest("[data-trn-a]"); if (!a) return;
+    const t = tDe(tid()); if (!t) return;
+    ev.preventDefault();
+    const k = a.dataset.trnA;
+    if (k === "copier") copier(lienDe(t));
+    if (k === "partager" && navigator.share) navigator.share({ title: t.nom || "Tournoi", text: `${t.nom || "Tournoi"} : les scores en direct`, url: lienDe(t) }).catch(() => {});
+    if (k === "qr-png") imageQR(t);
+    if (k === "affiche"){ a.disabled = true; affiche(t).finally(() => { a.disabled = false; }); }
+  });
+
+  /* ---------- redessiner : à chaque arrivée de données, et en ouvrant la page d'un tournoi ---------- */
+  const avantRT = window.rendreTournois;
+  window.rendreTournois = function(){
+    try { return avantRT.apply(this, arguments); }
+    finally { try { rendreListe(); if (/^#tournoi\//.test(location.hash)) rendrePage(); } catch(err){ console.warn("tournois", err); } }
+  };
+  window.addEventListener("hashchange", () => { if (/^#tournoi\//.test(location.hash)) rendrePage(true); else if (location.hash === "#tournois") rendreListe(); });
+  rendreListe();
+  if (/^#tournoi\//.test(location.hash)) rendrePage(true);
 })();
 </script>
 </body>
