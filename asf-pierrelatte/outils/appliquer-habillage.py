@@ -1,22 +1,32 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build4.py <original.html> <tete.css> <tard.css> <appli.js> <output.html> [--test]
+Usage: python3 build5.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
   appli.js : <script> added at the end of <body> (intro, club tabs, foot d'animation page, match events)
 --test : runs offline with the built-in data (API set to "") and skips the intro unless the URL has ?intro.
 """
 import datetime
+import json
 import hashlib
 import re
 import sys
 
-src, tete_path, tard_path, js_path, out = sys.argv[1:6]
+src, tete_path, tard_path, js_path, faits_path, favori_path, out = sys.argv[1:8]
 test = "--test" in sys.argv
 html = open(src, encoding="utf-8").read()
 tete = open(tete_path, encoding="utf-8").read().strip()
 tard = open(tard_path, encoding="utf-8").read().strip()
 appli = open(js_path, encoding="utf-8").read().strip()
+faits = open(faits_path, encoding="utf-8").read().strip()
+
+# the « Faits de match ASF » bookmark: one line (no // comments allowed), injected as a JS string in the faits module
+favori = open(favori_path, encoding="utf-8").read()
+favori = re.sub(r"^\s*/\*[\s\S]*?\*/\s*", "", favori)
+favori = "".join(l.strip() for l in favori.splitlines() if l.strip())
+assert "</script" not in favori.lower()
+assert faits.count('/*CODE-FAVORI-FAITS*/""') == 1
+faits = faits.replace('/*CODE-FAVORI-FAITS*/""', '/*CODE-FAVORI-FAITS*/' + json.dumps(favori).replace("</", "<\\/"))
 
 
 def sub_once(old, new, text, label):
@@ -236,7 +246,7 @@ html = html[:ss] + html[ss:se].replace("#7FB0FF", "#C9B07F").replace("#CFAE78", 
 
 # 14) late stylesheet + small script, after every module
 last_body = html.rindex("</body>")  # the page's own closing tag (others live inside JS templates)
-html = html[:last_body] + '<style id="appli-tard">\n' + tard + "\n</style>\n" + appli + "\n" + html[last_body:]
+html = html[:last_body] + '<style id="appli-tard">\n' + tard + "\n</style>\n" + appli + "\n" + faits + "\n" + html[last_body:]
 
 # 15) new version stamp, so open pages and installed apps show the "mise à jour" banner
 stamp = hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]

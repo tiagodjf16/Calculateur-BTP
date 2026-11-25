@@ -1035,5 +1035,7 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 .stf-ecrire svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.5}
 @media (max-width:480px){ .stf-ecrire span{display:none} }
 @media (max-width:480px){ .inst b{font-size:15.5px} .inst span{font-size:14px} .inst{column-gap:12px} .inst > svg{width:32px;height:32px} .install{padding:4px 16px} }
+.fr-note{margin:14px 6px 2px;text-align:center;font:500 13.5px/1.4 var(--f-ui);color:var(--f-txt-3)}
+.mx .fm-resume .fr-titre{margin-top:16px}
 
 /*/HABILLAGE-CSS*/

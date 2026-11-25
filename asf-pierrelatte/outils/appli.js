@@ -166,11 +166,12 @@
   const ENVELOPPE = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 7l9 6 9-6"/></svg>`;
   /* noms des joueurs affichés au public : « Prénom N. », comme dans l'appli */
   const court = n => {
-    const s = String(n || "").trim(); if (!s) return "";
-    if (!/\s/.test(s)) return s;                                         // un seul mot : on le garde tel quel
+    const t = String(n || "").trim(); if (!t) return "";
+    const x = t.match(/^(.*?)\s*(\((?:pen\.|csc)\))?$/i), s = x[1], suite = x[2] ? " " + x[2] : "";   // « (pen.) », « (csc) » gardés à la fin
+    if (!/\s/.test(s) || /\s\p{Lu}\.$/u.test(s)) return s + suite;      // un seul mot, ou déjà « Prénom N. » (noms venus de la FFF)
     let p = "", f = "";
-    try { [p, f] = decoupeNom(s); } catch(e){ const x = s.split(/\s+/); p = x[0]; f = x.slice(1).join(" "); }
-    p = p || s; return f ? `${p} ${f.trim().charAt(0).toUpperCase()}.` : p;
+    try { [p, f] = decoupeNom(s); } catch(e){ const y = s.split(/\s+/); p = y[0]; f = y.slice(1).join(" "); }
+    p = p || s; return (f ? `${p} ${f.trim().charAt(0).toUpperCase()}.` : p) + suite;
   };
   const initiales = n => { let p = "", f = ""; try { [p, f] = decoupeNom(String(n || "")); } catch(e){ [p, f] = String(n || "").split(/\s+/); }
     return ((p || "").charAt(0) + (f || "").trim().charAt(0)).toUpperCase() || "?"; };
@@ -383,25 +384,34 @@
     return `<div class="fr-ligne"><div class="fr-ev ${gauche ? "g" : "d"}"><span class="fr-ico" title="${LIB[f.t] || ""}">${ICO[f.t] || ""}</span>${txt}</div>
       <span class="fr-min">${minTxt(f.min) || "–"}</span></div>`;
   }
+  /* buteurs saisis par le coach sans minute (« Buteurs et passeurs ») */
+  function blocButeurs(m){
+    const st = (Array.isArray(m.stats) ? m.stats : []).filter(s => s && (+s.buts || +s.passes));
+    if (!st.length) return "";
+    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${H(court(s.nom))}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
+    const passeurs = st.filter(s => +s.passes).map(s => `<span>${H(court(s.nom))}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
+    return `${buteurs ? `<p class="fr-titre">Buteurs ${H(nous())}</p><div class="fr-sans-min">${buteurs}</div>` : ""}
+      ${passeurs ? `<p class="fr-titre">Passes décisives</p><div class="fr-sans-min">${passeurs}</div>` : ""}`;
+  }
   function resumeHtml(m){
     const faits = (Array.isArray(m.faits) ? m.faits : []).filter(f => f && LIB[f.t]);
     if (faits.length){
       const l = [...faits].sort((a, b) => cle(a.min) - cle(b.min));
       const avant = l.filter(f => cle(f.min) <= 45.99), apres = l.filter(f => cle(f.min) > 45.99);
       const fin = joue(m) ? `<div class="fr-ligne"><span class="fr-repere">Fin du match</span></div>` : "";
+      // la FFF ne donne les buteurs que s'ils sont notés sur la feuille de match : on le dit, et on montre ceux du coach
+      const butsNous = l.filter(f => f.t === "but" && f.c === "nous").length, butsEux = l.filter(f => f.t === "but" && f.c === "eux").length;
+      const manque = joue(m) && (m.bp > butsNous || m.bc > butsEux);
+      const coach = !butsNous ? blocButeurs(m) : "";
       return `<section class="fm-resume" aria-label="Résumé du match">
         <div class="fr-ligne"><span class="fr-repere">Début du match</span></div>
         ${avant.map(f => evenement(f, m)).join("")}
         ${avant.length && apres.length ? `<div class="fr-ligne"><span class="fr-repere mt">Mi-temps</span></div>` : ""}
-        ${apres.map(f => evenement(f, m)).join("")}${fin}</section>`;
+        ${apres.map(f => evenement(f, m)).join("")}${fin}
+        ${coach}${manque && !coach ? `<p class="fr-note">Buteurs pas tous renseignés sur la feuille de match.</p>` : ""}</section>`;
     }
-    const st = (Array.isArray(m.stats) ? m.stats : []).filter(s => s && (+s.buts || +s.passes));
-    if (!st.length) return "";
-    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${H(court(s.nom))}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
-    const passeurs = st.filter(s => +s.passes).map(s => `<span>${H(court(s.nom))}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
-    return `<section class="fm-resume" aria-label="Buteurs et passeurs"><p class="fr-titre">Buteurs ${H(nous())}</p>
-      ${buteurs ? `<div class="fr-sans-min">${buteurs}</div>` : ""}
-      ${passeurs ? `<p class="fr-titre">Passes décisives</p><div class="fr-sans-min">${passeurs}</div>` : ""}</section>`;
+    const b = blocButeurs(m);
+    return b ? `<section class="fm-resume" aria-label="Buteurs et passeurs">${b}</section>` : "";
   }
   const peutSaisir = m => {
     try {

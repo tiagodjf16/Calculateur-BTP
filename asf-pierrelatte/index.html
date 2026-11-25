@@ -22,7 +22,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#030E1C">
 <meta name="color-scheme" content="dark light">
-<meta name="asf-version" content="bb159efee388">
+<meta name="asf-version" content="04dfc39ec606">
 <meta name="asf-version-date" content="2026-11-25">
 <script>if(/SamsungBrowser\//.test(navigator.userAgent))document.documentElement.classList.add("samsung")</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -3215,6 +3215,8 @@ body:has(#p-equipe.visible) .club-tete,body:has(#p-equipe.visible) .top{display:
 .stf-ecrire svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.5}
 @media (max-width:480px){ .stf-ecrire span{display:none} }
 @media (max-width:480px){ .inst b{font-size:15.5px} .inst span{font-size:14px} .inst{column-gap:12px} .inst > svg{width:32px;height:32px} .install{padding:4px 16px} }
+.fr-note{margin:14px 6px 2px;text-align:center;font:500 13.5px/1.4 var(--f-ui);color:var(--f-txt-3)}
+.mx .fm-resume .fr-titre{margin-top:16px}
 
 /*/HABILLAGE-CSS*/
 </style>
@@ -22958,11 +22960,12 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
   const ENVELOPPE = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 7l9 6 9-6"/></svg>`;
   /* noms des joueurs affichés au public : « Prénom N. », comme dans l'appli */
   const court = n => {
-    const s = String(n || "").trim(); if (!s) return "";
-    if (!/\s/.test(s)) return s;                                         // un seul mot : on le garde tel quel
+    const t = String(n || "").trim(); if (!t) return "";
+    const x = t.match(/^(.*?)\s*(\((?:pen\.|csc)\))?$/i), s = x[1], suite = x[2] ? " " + x[2] : "";   // « (pen.) », « (csc) » gardés à la fin
+    if (!/\s/.test(s) || /\s\p{Lu}\.$/u.test(s)) return s + suite;      // un seul mot, ou déjà « Prénom N. » (noms venus de la FFF)
     let p = "", f = "";
-    try { [p, f] = decoupeNom(s); } catch(e){ const x = s.split(/\s+/); p = x[0]; f = x.slice(1).join(" "); }
-    p = p || s; return f ? `${p} ${f.trim().charAt(0).toUpperCase()}.` : p;
+    try { [p, f] = decoupeNom(s); } catch(e){ const y = s.split(/\s+/); p = y[0]; f = y.slice(1).join(" "); }
+    p = p || s; return (f ? `${p} ${f.trim().charAt(0).toUpperCase()}.` : p) + suite;
   };
   const initiales = n => { let p = "", f = ""; try { [p, f] = decoupeNom(String(n || "")); } catch(e){ [p, f] = String(n || "").split(/\s+/); }
     return ((p || "").charAt(0) + (f || "").trim().charAt(0)).toUpperCase() || "?"; };
@@ -23175,25 +23178,34 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     return `<div class="fr-ligne"><div class="fr-ev ${gauche ? "g" : "d"}"><span class="fr-ico" title="${LIB[f.t] || ""}">${ICO[f.t] || ""}</span>${txt}</div>
       <span class="fr-min">${minTxt(f.min) || "–"}</span></div>`;
   }
+  /* buteurs saisis par le coach sans minute (« Buteurs et passeurs ») */
+  function blocButeurs(m){
+    const st = (Array.isArray(m.stats) ? m.stats : []).filter(s => s && (+s.buts || +s.passes));
+    if (!st.length) return "";
+    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${H(court(s.nom))}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
+    const passeurs = st.filter(s => +s.passes).map(s => `<span>${H(court(s.nom))}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
+    return `${buteurs ? `<p class="fr-titre">Buteurs ${H(nous())}</p><div class="fr-sans-min">${buteurs}</div>` : ""}
+      ${passeurs ? `<p class="fr-titre">Passes décisives</p><div class="fr-sans-min">${passeurs}</div>` : ""}`;
+  }
   function resumeHtml(m){
     const faits = (Array.isArray(m.faits) ? m.faits : []).filter(f => f && LIB[f.t]);
     if (faits.length){
       const l = [...faits].sort((a, b) => cle(a.min) - cle(b.min));
       const avant = l.filter(f => cle(f.min) <= 45.99), apres = l.filter(f => cle(f.min) > 45.99);
       const fin = joue(m) ? `<div class="fr-ligne"><span class="fr-repere">Fin du match</span></div>` : "";
+      // la FFF ne donne les buteurs que s'ils sont notés sur la feuille de match : on le dit, et on montre ceux du coach
+      const butsNous = l.filter(f => f.t === "but" && f.c === "nous").length, butsEux = l.filter(f => f.t === "but" && f.c === "eux").length;
+      const manque = joue(m) && (m.bp > butsNous || m.bc > butsEux);
+      const coach = !butsNous ? blocButeurs(m) : "";
       return `<section class="fm-resume" aria-label="Résumé du match">
         <div class="fr-ligne"><span class="fr-repere">Début du match</span></div>
         ${avant.map(f => evenement(f, m)).join("")}
         ${avant.length && apres.length ? `<div class="fr-ligne"><span class="fr-repere mt">Mi-temps</span></div>` : ""}
-        ${apres.map(f => evenement(f, m)).join("")}${fin}</section>`;
+        ${apres.map(f => evenement(f, m)).join("")}${fin}
+        ${coach}${manque && !coach ? `<p class="fr-note">Buteurs pas tous renseignés sur la feuille de match.</p>` : ""}</section>`;
     }
-    const st = (Array.isArray(m.stats) ? m.stats : []).filter(s => s && (+s.buts || +s.passes));
-    if (!st.length) return "";
-    const buteurs = st.filter(s => +s.buts).map(s => `<span>${ICO.but}${H(court(s.nom))}${+s.buts > 1 ? ` ×${+s.buts}` : ""}</span>`).join("");
-    const passeurs = st.filter(s => +s.passes).map(s => `<span>${H(court(s.nom))}${+s.passes > 1 ? ` ×${+s.passes}` : ""}</span>`).join("");
-    return `<section class="fm-resume" aria-label="Buteurs et passeurs"><p class="fr-titre">Buteurs ${H(nous())}</p>
-      ${buteurs ? `<div class="fr-sans-min">${buteurs}</div>` : ""}
-      ${passeurs ? `<p class="fr-titre">Passes décisives</p><div class="fr-sans-min">${passeurs}</div>` : ""}</section>`;
+    const b = blocButeurs(m);
+    return b ? `<section class="fm-resume" aria-label="Buteurs et passeurs">${b}</section>` : "";
   }
   const peutSaisir = m => {
     try {
@@ -23355,6 +23367,249 @@ body.sur-espace .ong-pli-t > small{display:block;font:500 13.5px/1.35 var(--f-ui
     try { pageMatch(id); } catch(e){ console.warn("fiche", e); }
     return r;
   };
+})();
+</script>
+<script id="faits-fff-js">
+/* =====================================================================
+   FAITS DE MATCH DE LA FFF (buts, cartons, remplacements)
+   - Le favori « ⚽ Faits de match ASF » lit sur epreuves.fff.fr les matchs joués du club et leur détail
+     (« momentsForts »), puis ouvre le site avec ces données dans l'adresse (#faits=…).
+   - Le site les garde de côté ; un coach ou le bureau touche « Ranger les faits de match » (onglet Foot animation,
+     sous « Plateaux de la FFF ») : chaque match de la FFF est retrouvé sur le site (numéro FFF déjà connu, sinon
+     même jour, domicile/extérieur, adversaire, heure, score) et son résumé est rempli.
+   - Ce que les coachs ont saisi est gardé (les faits venus de la FFF portent src: "fff" ; un fait saisi à la main
+     n'est retiré que s'il est déjà dans ceux de la FFF, à une minute près). Les buteurs de l'espace joueur ne sont
+     calculés depuis la FFF que si le coach n'en a pas saisi pour ce match.
+   - Une adresse fabriquée ailleurs ne peut rien écrire toute seule : il faut le bouton d'un coach ou du bureau.
+   Ajouté sans modifier le script de l'application.
+   ===================================================================== */
+(function(){
+  "use strict";
+  if (typeof S === "undefined" || typeof window.panAnimation !== "function" || typeof ONG === "undefined") return;
+  const CODE = /*CODE-FAVORI-FAITS*/"(async () => {const CL = \"2177\", SITE = \"https://asf-pierrelatte.fr\", PAGE = \"https://epreuves.fff.fr/animation-loisir/cdg/125/club/2177\";if (!/(^|\\.)epreuves\\.fff\\.fr$/.test(location.hostname)) { if (confirm(\"Ce favori s'utilise sur le site de la FFF (epreuves.fff.fr). L'ouvrir maintenant ?\")) location.href = PAGE; return; }const T = x => String(x == null ? \"\" : x).replace(/\\s+/g, \" \").trim();const box = document.createElement(\"div\");box.style.cssText = \"position:fixed;z-index:2147483647;left:12px;right:12px;bottom:12px;padding:14px 16px;border-radius:14px;background:#0F2257;color:#fff;font:600 16px/1.4 system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.45)\";document.body.appendChild(box);const dire = t => { box.textContent = \"\u26bd ASF Pierrelatte \u00b7 \" + t; };dire(\"lecture des matchs sur la FFF\u2026\");let jeton = \"\";try { const s = document.getElementById(\"ng-state\") || document.querySelector('script[type=\"application/json\"]'), m = s && s.textContent.match(/\"token\"\\s*:\\s*\"([^\"]{10,})\"/); if (m) jeton = m[1]; } catch (x) {}const lire = async u => {const h = { Accept: \"application/ld+json, application/json\" };let r = await fetch(u, { headers: h, credentials: \"include\" });if ((r.status === 401 || r.status === 403) && jeton) { h[\"X-Competition\"] = jeton; r = await fetch(u, { headers: h, credentials: \"include\" }); }if (!r.ok) throw new Error(\"r\u00e9ponse \" + r.status);return r.json();};const pause = n => new Promise(r => setTimeout(r, n));const n = new Date(), an = n.getMonth() >= 7 ? n.getFullYear() : n.getFullYear() - 1, KS = \"asf-faits-saison-\" + an;let premier = false; try { premier = !localStorage.getItem(KS); } catch (x) {}const debut = premier ? new Date(an, 7, 1) : new Date(n.getFullYear(), n.getMonth() - 1, 1);const mois = []; for (let d = new Date(debut); d <= n; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) mois.push(new Date(d));const borne = (d, fin) => { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, \"0\"); return fin ? y + \"-\" + m + \"-\" + String(new Date(y, d.getMonth() + 1, 0).getDate()).padStart(2, \"0\") + \"T23:59:59+00:00\" : y + \"-\" + m + \"-01T00:00:00+00:00\"; };const liste = [], erreurs = [];for (const d of mois) {const nomMois = d.toLocaleDateString(\"fr-FR\", { month: \"long\" });dire(\"liste des matchs de \" + nomMois + \"\u2026\");try {for (let p = 1; p <= 10; p++) {const q = \"clNo=\" + CL + \"&dateDebut=\" + encodeURIComponent(borne(d)) + \"&dateFin=\" + encodeURIComponent(borne(d, 1)) + \"&itemsPerPage=20&pagination=true&page=\" + p;let j; try { j = await lire(\"/api/data//matches?\" + q); } catch (x) { j = await lire(\"/api/data/matches?\" + q); }const l = j[\"hydra:member\"] || j.member || [];l.forEach(e => liste.push(e && (e.donneesFormatees || e)));if (l.length < 20) break;await pause(150);}} catch (x) { erreurs.push(nomMois + \" (\" + x.message + \")\"); }}const auj = Date.now();const joues = [...new Map(liste.filter(d => d && d.maNo && (d.joue === true || /jou/i.test(T(d.maStatutLib))) && !/non/i.test(T(d.maStatutLib)) && !(Date.parse(d.date) > auj)).map(d => [T(d.maNo), d])).values()];if (!joues.length) {dire(erreurs.length ? \"la FFF n'a pas r\u00e9pondu (\" + erreurs.join(\", \") + \"). Recharge la page de la FFF, puis touche \u00e0 nouveau le favori.\" : \"aucun match jou\u00e9 trouv\u00e9 sur cette p\u00e9riode.\");setTimeout(() => box.remove(), 9000); return;}const nom = p => p ? T([p.prenom, p.nom].filter(Boolean).join(\" \")) : \"\";const out = []; let k = 0;for (const d0 of joues) {dire(\"lecture des matchs jou\u00e9s\u2026 \" + (++k) + \"/\" + joues.length);try {const j = await lire(\"/api/data/matches/\" + T(d0.maNo)), d = j.donneesFormatees || j, r = d.recevant || {}, v = d.visiteur || {};const ici = T(r.club && r.club.clNo) === CL ? \"r\" : T(v.club && v.club.clNo) === CL ? \"v\" : \"\";if (!ici) continue;const nous = ici === \"r\" ? r : v, eux = ici === \"r\" ? v : r, st = d.stade || {}, cp = d.competition || {}, jo = d.journee || {};out.push({ no: T(d.maNo), d: T(d.date), cp: T((cp.donneesFormatees || cp).nom), tr: T(jo.tourNom || (jo.pjNo ? \"Journ\u00e9e \" + jo.pjNo : \"\")),dom: ici === \"r\", nq: T(nous.club && nous.club.nom), eq: T(nous.equipe && nous.equipe.id), adv: T(eux.club && eux.club.nom), bn: nous.buts, ba: eux.buts,st: ici === \"v\" ? [T(st.nom), [].concat(st.adresse || []).map(T).filter(Boolean).join(\", \")].filter(Boolean).join(\", \").slice(0, 160) : \"\",m: (d.momentsForts || []).slice(0, 60).map(x => [T(x.type).slice(0, 30), +x.minute || 0, +x.minuteProlongation || 0, x.clubType === (ici === \"r\" ? \"recevant\" : \"visiteur\") ? \"n\" : \"a\", nom(x.joueur).slice(0, 60), nom(x.remplacant).slice(0, 60)]) });} catch (x) { erreurs.push(\"match \" + T(d0.maNo) + \" (\" + x.message + \")\"); }await pause(150);}if (!out.length) { dire(\"la FFF n'a pas donn\u00e9 le d\u00e9tail des matchs. Recharge la page de la FFF, puis touche \u00e0 nouveau le favori.\"); setTimeout(() => box.remove(), 9000); return; }try { localStorage.setItem(KS, \"1\"); } catch (x) {}dire(out.length + \" match(s) lu(s) : ouverture du site du club\u2026\");location.href = SITE + \"/?faits=1#faits=\" + encodeURIComponent(JSON.stringify({ type: \"asf-faits\", v: 1, lu: new Date().toISOString(), saison: premier, erreurs: erreurs.slice(0, 20), matchs: out }));})();";
+  const LIEN = "javascript:" + encodeURIComponent(CODE + "void 0");
+  const PAGE_FFF = "https://epreuves.fff.fr/animation-loisir/cdg/125/club/2177";
+  const e = ONG.e;
+  const lire = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch(err){ return null; } };
+  const garder = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(err){} };
+  const niv = () => { try { return typeof niveau === "function" ? niveau() : null; } catch(err){ return null; } };
+  const peutEcrire = () => ["bureau", "entraineur"].includes(niv());
+  const dire = (t, err) => { try { toast(t, err); } catch(x){} };
+  const ATTENTE = "asfp-faits-attente", DERNIER = "asfp-faits-dernier", BILAN = "asfp-faits-bilan", ATTENTE_MAX = 3 * 3600e3;
+  const propre = (s, n) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n || 120);
+  const nombre = v => (v === null || v === undefined || v === "" || !Number.isFinite(+v)) ? null : +v;
+
+  /* ---------- réception : l'adresse #faits=… ouverte par le favori ; gardée jusqu'au rangement ---------- */
+  const valide = d => d && d.type === "asf-faits" && d.v >= 1 && Array.isArray(d.matchs);
+  const nettoyer = d => ({ lu: propre(d.lu, 40), recu: Date.now(), saison: !!d.saison,
+    erreurs: (Array.isArray(d.erreurs) ? d.erreurs : []).slice(0, 20).map(x => propre(x, 80)),
+    matchs: d.matchs.slice(0, 400).filter(x => x && propre(x.no, 20) && /^\d{4}-\d{2}-\d{2}/.test(propre(x.d, 40))).map(x => ({
+      no: propre(x.no, 20), d: propre(x.d, 40), cp: propre(x.cp, 80), tr: propre(x.tr, 40), dom: !!x.dom,
+      nq: propre(x.nq, 80), eq: propre(x.eq, 40), adv: propre(x.adv, 80), bn: nombre(x.bn), ba: nombre(x.ba), st: propre(x.st, 160),
+      m: (Array.isArray(x.m) ? x.m : []).slice(0, 60).filter(Array.isArray).map(a => [propre(a[0], 30), Math.max(0, Math.min(200, +a[1] || 0)),
+        Math.max(0, Math.min(30, +a[2] || 0)), a[3] === "n" ? "n" : "a", propre(a[4], 60), propre(a[5], 60)]) })) });
+  const enAttente = () => { const p = lire(ATTENTE); if (p && Date.now() - (+p.recu || 0) > ATTENTE_MAX){ garder(ATTENTE, null); return null; } return p; };
+  function ouvrirOnglet(n, prevenir){
+    if (typeof rendreEspace !== "function" || !S.ui){ if (n < 100) setTimeout(() => ouvrirOnglet(n + 1, prevenir), 200); return; }
+    const p = enAttente(); if (!p) return;
+    S.ui.ongPli = S.ui.ongPli || {}; S.ui.ongPli["faits-fff"] = true;
+    if (peutEcrire() && S.db && S.pret){
+      S.ui.onglet = "animation"; try { rendreEspace(); } catch(err){}
+      dire(`${p.matchs.length} match${p.matchs.length > 1 ? "s" : ""} reçu${p.matchs.length > 1 ? "s" : ""} de la FFF : touche « Ranger les faits de match ».`);
+    } else if (n < 100) setTimeout(() => ouvrirOnglet(n + 1, prevenir), 300);
+    else if (prevenir) dire("Faits de match reçus de la FFF : connecte-toi (coach ou bureau), puis ouvre Matchs et plateaux › Foot animation.");
+  }
+  (function recevoir(){
+    const h = location.hash || "";
+    if (!h.startsWith("#faits=")) return;
+    let d = null;
+    try { d = JSON.parse(decodeURIComponent(h.slice(7))); } catch(err){ d = null; }
+    history.replaceState(null, "", location.pathname + "?faits=1#espace");
+    setTimeout(() => { try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch(err){} }, 0);
+    if (!valide(d)){ setTimeout(() => dire("Envoi de la FFF illisible : recommence avec le favori.", true), 1500); return; }
+    const p = nettoyer(d);
+    garder(ATTENTE, p); garder(DERNIER, p);
+    setTimeout(() => ouvrirOnglet(0, true), 0);
+  })();
+  if (location.hash === "#espace" && enAttente()) setTimeout(() => ouvrirOnglet(0, false), 0);   // reçu avant la connexion
+
+  /* ---------- retrouver sur le site un match de la FFF ---------- */
+  const VIDES = new Set(["fc","f","c","as","a","s","us","u","es","e","sc","o","ol","football","foot","club","sport","sports","sp","av","ent","et","de","du","des",
+    "la","le","les","d","l","st","saint","ste","cs","js","rc","ac","fcf","fr","atom","asf","pierrelatte","olympique","union","association","avenir","entente"]);
+  const mots = s => (typeof slug === "function" ? slug(s) : String(s || "").toLowerCase()).split("-").filter(w => w && !/^\d+$/.test(w) && !VIDES.has(w));
+  const ressemble = (a, b) => {
+    const x = [...new Set(mots(a))], y = [...new Set(mots(b))]; if (!x.length || !y.length) return 0;
+    const ok = x.filter(w => y.some(v => v === w || (v.length > 3 && w.length > 3 && (v.startsWith(w) || w.startsWith(v)))));
+    return ok.length / Math.min(x.length, y.length);
+  };
+  const numEq = s => { const m = String(s || "").match(/(\d+)\s*$/); return m ? +m[1] : 1; };
+  const eqDe2 = m => { try { return eqDe(m); } catch(err){ return String(m.equipe || ""); } };
+  const joue2 = m => typeof m.bp === "number" && typeof m.bc === "number";
+  function trouver(x, pris){
+    const l = (S.matchs || []).filter(m => !/^pl-/.test(String(m.id || "")));
+    const direct = l.find(m => String(m.fffNo || "") === x.no || new RegExp("(^|\\D)" + x.no + "(\\D|$)").test(String(m.id || "")));
+    if (direct) return direct;
+    const jour = x.d.slice(0, 10), heure = x.d.slice(11, 16);
+    let best = null, bestS = 0;
+    for (const m of l){
+      if (m.date !== jour || pris.has(m.id)) continue;
+      if (typeof m.dom === "boolean" && m.dom !== x.dom) continue;
+      let s = ressemble(m.adv, x.adv) * 10;
+      if (m.heure && m.heure === heure) s += 2;
+      if (joue2(m) && x.bn !== null && m.bp === x.bn && m.bc === x.ba) s += 4;
+      if (numEq(x.nq) === numEq(eqDe2(m))) s += 1;
+      if (m.comp && x.cp && ressemble(m.comp, x.cp) >= .5) s += 1;
+      if (s > bestS){ best = m; bestS = s; }
+    }
+    return bestS >= 5 ? best : null;
+  }
+
+  /* ---------- les faits de la FFF au format du site ---------- */
+  const typeDe = t => {
+    t = String(t || "").toLowerCase();
+    if (/rouge/.test(t)) return "rouge";
+    if (/jaune|avertissement/.test(t)) return "jaune";
+    if (/rempla/.test(t)) return "rempl";
+    if (/tir.?au.?but|seance/.test(t)) return "";                     // séance de tirs au but : pas dans le résumé
+    if (/but|goal|penalty|pénalty|csc/.test(t)) return "but";
+    return null;                                                       // inconnu : signalé dans le bilan
+  };
+  function faitsDe(x, inconnus){
+    const out = [];
+    x.m.forEach(([type, mn, plus, cote, j, j2]) => {
+      const t = typeDe(type);
+      if (t === null){ inconnus.add(type || "(vide)"); return; }
+      if (!t) return;
+      const f = { t, min: String(mn) + (plus ? "+" + plus : ""), c: cote === "n" ? "nous" : "eux", src: "fff" };
+      let nj = j;
+      if (t === "but" && /csc|contre/i.test(type)) nj = (nj ? nj + " " : "") + "(csc)";
+      if (t === "but" && /penalty|pénalty/i.test(type)) nj = (nj ? nj + " " : "") + "(pen.)";
+      if (nj) f.j = nj;
+      if (t === "rempl" && j2) f.j2 = j2;
+      out.push(f);
+    });
+    return out;
+  }
+  const cleMin = f => { const p = String(f.min || "").match(/(\d+)(?:\+(\d+))?/); return p ? +p[1] + (p[2] ? +p[2] / 100 : 0) : 999; };
+  function fusion(avant, fff){
+    const manuels = (Array.isArray(avant) ? avant : []).filter(f => f && f.src !== "fff");
+    const garde = manuels.filter(f => !fff.some(g => g.t === f.t && g.c === f.c && Math.abs(cleMin(g) - cleMin(f)) <= 1));
+    return [...fff, ...garde].sort((a, b) => cleMin(a) - cleMin(b));
+  }
+  function statsDe(m, faits){
+    const actuelles = (Array.isArray(m.stats) ? m.stats : []).filter(Boolean);
+    if (actuelles.some(s => s.src !== "fff" && (+s.buts || +s.passes))) return null;     // le coach a saisi les buteurs : on n'y touche pas
+    const tot = {};
+    faits.filter(f => f.src === "fff" && f.t === "but" && f.c === "nous" && f.j && !/\(csc\)/.test(f.j))
+      .forEach(f => { const n = f.j.replace(/\s*\(pen\.\)$/, ""); (tot[n] = tot[n] || { nom: n, buts: 0, passes: 0, src: "fff" }).buts++; });
+    const l = Object.values(tot);
+    return l.length || actuelles.length ? l : null;
+  }
+
+  /* ---------- ranger ---------- */
+  async function ranger(p){
+    if (!peutEcrire()){ dire("Connecte-toi avec un compte coach ou bureau.", true); return null; }
+    const autor = (() => { try { return equipesAutorisees(); } catch(err){ return []; } })();
+    const bureauOk = (() => { try { return peutBureau(); } catch(err){ return false; } })();
+    const permis = m => bureauOk || !autor.length || autor.includes(m.equipe) || autor.includes(eqDe2(m));
+    const pris = new Set(), inconnus = new Set();
+    const b = { fait: new Date().toISOString(), lu: p.lu, total: p.matchs.length, maj: 0, sans: 0, nonTrouves: [], refuses: 0, erreurs: 0, inconnus: [] };
+    for (const x of p.matchs){
+      const m = trouver(x, pris);
+      if (!m){ b.nonTrouves.push(`${x.d.slice(8, 10)}/${x.d.slice(5, 7)} · ${x.dom ? x.nq + " – " + x.adv : x.adv + " – " + x.nq}${x.cp ? " (" + x.cp + ")" : ""}`); continue; }
+      pris.add(m.id);
+      if (!permis(m)){ b.refuses++; continue; }
+      const fff = faitsDe(x, inconnus);
+      if (!fff.length) b.sans++;
+      const maj = { fffNo: x.no };
+      if (fff.length){ maj.faits = fusion(m.faits, fff); const st = statsDe(m, maj.faits); if (st) maj.stats = st; }
+      if (!m.dom && x.st && !m.adresse) maj.adresse = x.st;
+      const avant = JSON.stringify([m.faits || [], m.stats || [], m.adresse || "", m.fffNo || ""]);
+      const apres = JSON.stringify([maj.faits || m.faits || [], maj.stats || m.stats || [], maj.adresse || m.adresse || "", x.no]);
+      if (avant === apres) continue;
+      try { await S.db.doc("matchs/" + m.id).update(maj); Object.assign(m, maj); if (fff.length) b.maj++; }
+      catch(err){ b.erreurs++; }
+    }
+    b.inconnus = [...inconnus].slice(0, 10);
+    b.nonTrouves = b.nonTrouves.slice(0, 60);
+    garder(BILAN, b);
+    try { await S.db.doc("site/faits-import").set(b); } catch(err){}
+    return b;
+  }
+  const pl = (n, s, p) => n + " " + (n > 1 ? (p || s + "s") : s);
+  const phrase = b => [b.maj ? `${pl(b.maj, "match")} mis à jour` : "aucun nouveau fait de match",
+    b.sans ? `${pl(b.sans, "match")} sans buts, cartons ni remplacements à la FFF` : "",
+    b.nonTrouves.length ? `${pl(b.nonTrouves.length, "match")} de la FFF pas trouvé${b.nonTrouves.length > 1 ? "s" : ""} sur le site` : "",
+    b.refuses ? `${pl(b.refuses, "match")} d'autres équipes que les tiennes` : "",
+    b.erreurs ? `${pl(b.erreurs, "erreur")} d'enregistrement` : ""].filter(Boolean).join(" · ") + ".";
+
+  /* ---------- la carte, dans l'onglet Foot animation, sous « Plateaux de la FFF » ---------- */
+  (function suivre(){
+    if (!S.db){ setTimeout(suivre, 500); return; }
+    try { S.db.doc("site/faits-import").onSnapshot(d => { S.faitsBilan = d.exists ? d.data() : null; }); } catch(err){}
+  })();
+  const dateTxt = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) + " à " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
+  function carte(){
+    const att = enAttente(), loc = lire(BILAN), part = S.faitsBilan && S.faitsBilan.fait ? S.faitsBilan : null;
+    const b = loc && (!part || String(loc.fait) >= String(part.fait)) ? loc : part;
+    const recu = att ? `<div class="fal-recu"><b>📬 ${pl(att.matchs.length, "match")} reçu${att.matchs.length > 1 ? "s" : ""} de la FFF${att.lu ? " (" + e(dateTxt(att.lu)) + ")" : ""}</b>
+        ${peutEcrire() ? `<button type="button" class="btn bleu" data-faits-a="ranger">Ranger les faits de match</button>` : `<span class="fal-mini">Connecte-toi (coach ou bureau) pour les ranger.</span>`}
+        <button type="button" class="fal-lien" data-faits-a="oublier">Ignorer cet envoi</button></div>` : "";
+    const etat = b ? `Dernier rangement : <b>${e(dateTxt(b.fait))}</b>. ${e(phrase(b))}` : "Aucun fait de match reçu de la FFF pour l'instant.";
+    const inconnus = b && b.inconnus && b.inconnus.length ? `<p class="fal-mini">Faits que le site ne connaît pas encore : ${e(b.inconnus.join(", "))}.</p>` : "";
+    const nt = b && b.nonTrouves && b.nonTrouves.length ? `<details class="fal-equipes"><summary>Matchs de la FFF pas trouvés sur le site (${b.nonTrouves.length})</summary>
+        <ul class="faits-nt">${b.nonTrouves.map(t => `<li>${e(t)}</li>`).join("")}</ul></details>` : "";
+    const corps = `${recu}<p class="fal-etat">${etat}</p>${inconnus}${nt}
+      <ol class="fal-etapes">
+        <li><b>Une seule fois : ajoute le favori.</b><br>
+          <span class="fal-mini"><b>Ordinateur</b> : fais glisser ce bouton dans la barre de favoris (Ctrl + Maj + B pour l'afficher) :</span>
+          <a class="btn bleu petit fal-favori" href="${e(LIEN)}" title="Fais glisser ce bouton dans ta barre de favoris">⚽ Faits de match ASF</a><br>
+          <span class="fal-mini"><b>iPhone / Android</b> : <button type="button" class="fal-lien" data-faits-a="copier">copie le code du favori</button>, ajoute n'importe quelle page à tes favoris (signets),
+          puis modifie ce favori : nom « Faits de match ASF », adresse = colle le code.</span></li>
+        <li><b>Après les matchs du week-end :</b> ouvre <a href="${e(PAGE_FFF)}" target="_blank" rel="noopener">la page du club sur la FFF</a>, puis touche le favori « Faits de match ASF ».
+          La première fois, il lit toute la saison ; ensuite, les deux derniers mois.</li>
+        <li>Le favori ouvre le site du club : touche <b>« Ranger les faits de match »</b>. Buts, cartons et remplacements arrivent dans le résumé de chaque match ;
+          ce que les coachs ont saisi est gardé.</li>
+      </ol>
+      <p class="fal-mini">La FFF ne donne les buteurs que s'ils ont été notés sur la feuille de match. Sinon, le coach peut les ajouter dans la page du match (« Saisir les faits de match ») : le favori ne les efface pas.</p>
+      ${!att && lire(DERNIER) && peutEcrire() ? `<button type="button" class="btn contour petit" data-faits-a="reranger">Ranger à nouveau le dernier envoi</button>` : ""}`;
+    const sous = att ? "Des matchs attendent d'être rangés" : b ? "Dernier rangement : " + e(dateTxt(b.fait)) : "Buts, cartons et remplacements des matchs, depuis la FFF";
+    return ONG.pli("faits-fff", `<b>⚽ Faits de match de la FFF</b><small>${sous}</small>`, corps, !b || !!att, "📋")
+      .replace('class="pli ong-pli"', 'class="pli ong-pli fal-carte faits-carte"');
+  }
+  const avant = window.panAnimation;
+  window.panAnimation = function(){
+    const h = avant.apply(this, arguments);
+    return ONG.transformer(h, r => {
+      const t = document.createElement("template"); t.innerHTML = carte();
+      const fal = r.querySelector(".fal-carte:not(.faits-carte)");
+      if (fal) fal.after(t.content);
+      else { const choix = r.querySelector(".ong-anim-choix"); if (choix) choix.before(t.content); else r.prepend(t.content); }
+    });
+  };
+  document.addEventListener("click", async ev => {
+    const b = ev.target.closest && ev.target.closest("[data-faits-a]"); if (!b) return;
+    ev.preventDefault();
+    const a = b.dataset.faitsA;
+    if (a === "copier"){
+      try { await navigator.clipboard.writeText(LIEN); dire("Code du favori copié : colle-le comme adresse du favori."); }
+      catch(err){ window.prompt("Copie ce code, puis colle-le comme adresse du favori :", LIEN); }
+      return;
+    }
+    if (a === "oublier"){ garder(ATTENTE, null); try { rendrePanneau(); } catch(err){} return; }
+    if (a === "ranger" || a === "reranger"){
+      const p = a === "ranger" ? enAttente() : lire(DERNIER);
+      if (!p){ dire("Aucun envoi en attente : utilise le favori sur la page de la FFF.", true); return; }
+      b.disabled = true; b.textContent = "Rangement…";
+      const r = await ranger(p);
+      if (r){ if (a === "ranger") garder(ATTENTE, null); dire(phrase(r)); }
+      try { rendrePanneau(); } catch(err){}
+    }
+  });
+  const css = document.createElement("style");
+  css.id = "faits-fff-css";
+  css.textContent = `.faits-carte .faits-nt{margin:8px 0 2px 18px;display:grid;gap:4px;font:400 14px/1.4 var(--f-ui,inherit);color:var(--f-txt-2,inherit)}`;
+  document.head.appendChild(css);
 })();
 </script>
 </body>
