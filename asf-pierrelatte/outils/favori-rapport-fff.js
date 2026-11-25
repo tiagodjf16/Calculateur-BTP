@@ -84,9 +84,9 @@
         if (!garder.test(a.name)) n.removeAttribute(a.name);
         else if (/href/i.test(a.name)) n.setAttribute(a.name, sansJeton(a.value));
       }));
-      html = masqueTexte(racine.outerHTML.replace(/\s{2,}/g, " ")).slice(0, 400000);
+      html = masqueTexte(racine.outerHTML.replace(/\s{2,}/g, " ")).slice(0, 200000);
     } catch (e) { html = "(illisible)"; }
-    const rapport = { v: 2, quand: new Date().toISOString(), page: sansJeton(location.href), titre: document.title, jeton: jeton ? "présent (non inclus)" : "absent",
+    const rapport = { v: 3, quand: new Date().toISOString(), page: sansJeton(location.href), titre: document.title, jeton: jeton ? "présent (non inclus)" : "absent",
       liens, appels, routes: [...routes], ngState: ng, texte, html };
     const json = JSON.stringify(rapport, null, 1);
     box.textContent = "";
@@ -96,16 +96,39 @@
     const bouton = (txt, fn, fond) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; b.onclick = fn;
       b.style.cssText = "margin:10px 8px 0 0;padding:11px 14px;border:0;border-radius:10px;background:" + (fond || "#D02E26") + ";color:#fff;font:700 15px system-ui,-apple-system,sans-serif;cursor:pointer";
       box.appendChild(b); return b; };
-    const nom = "rapport-fff-" + new Date().toISOString().slice(0, 10) + ".json";
-    bouton("📤 Enregistrer le rapport", async () => {
-      const f = new File([json], nom, { type: "application/json" });
-      try { if (navigator.canShare && navigator.canShare({ files: [f] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) { await navigator.share({ files: [f], title: nom }); return; } }
-      catch (e) { if (e && e.name === "AbortError") return; }
-      const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = nom; document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    /* trois façons de le récupérer, chacune lancée directement par le toucher (l'iPhone refuse sinon) */
+    const nom = "rapport-fff-" + new Date().toISOString().slice(0, 10) + ".txt";
+    const info = document.createElement("div");
+    info.style.cssText = "margin-top:10px;font:500 14px/1.4 system-ui,-apple-system,sans-serif;color:#DCE5FA";
+    const montrer = t => { info.textContent = t; };
+    bouton("📤 Partager", () => {
+      const f = new File([json], nom, { type: "text/plain" });
+      if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: [f] }))) { montrer("Partage impossible ici : touche « ⬇️ Télécharger » ou « 📋 Copier »."); return; }
+      navigator.share({ files: [f], title: nom })
+        .then(() => montrer("✔ C'est fait. Envoie maintenant ce fichier dans la conversation."))
+        .catch(e => { if (!(e && e.name === "AbortError")) montrer("Le partage n'a pas marché : touche « ⬇️ Télécharger » ou « 📋 Copier »."); });
+      montrer("Choisis « Enregistrer dans Fichiers », puis envoie le fichier dans la conversation.");
     });
-    bouton("📋 Copier", async () => { try { await navigator.clipboard.writeText(json); alert("Rapport copié : colle-le dans un message."); } catch (e) { alert("Copie impossible : utilise « Enregistrer le rapport »."); } }, "#2B3F6B");
+    const lien = document.createElement("a");
+    lien.textContent = "⬇️ Télécharger"; lien.download = nom;
+    lien.href = URL.createObjectURL(new Blob([json], { type: "text/plain" }));
+    lien.style.cssText = "display:inline-block;margin:10px 8px 0 0;padding:11px 14px;border-radius:10px;background:#2B3F6B;color:#fff;text-decoration:none;font:700 15px system-ui,-apple-system,sans-serif";
+    lien.onclick = () => montrer("Le fichier va dans Fichiers › Téléchargements : envoie-le ensuite dans la conversation.");
+    box.appendChild(lien);
+    bouton("📋 Copier", () => {
+      const ta = document.createElement("textarea");
+      ta.value = json; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, json.length);
+      let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      ta.remove();
+      if (ok) { montrer("✔ Copié : colle-le dans un message de la conversation."); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json)
+        .then(() => montrer("✔ Copié : colle-le dans un message de la conversation."), () => montrer("Copie impossible : touche « 📤 Partager » ou « ⬇️ Télécharger »."));
+      else montrer("Copie impossible : touche « 📤 Partager » ou « ⬇️ Télécharger ».");
+    }, "#2B3F6B");
     bouton("✕", () => box.remove(), "#33415C");
+    box.appendChild(info);
+    montrer("Touche « 📤 Partager » puis « Enregistrer dans Fichiers ». Si ça ne marche pas : « ⬇️ Télécharger » ou « 📋 Copier ».");
   } catch (e) {
     dire("le rapport n'a pas pu être fait (" + String((e && e.message) || e) + ").");
     setTimeout(() => box.remove(), 8000);
