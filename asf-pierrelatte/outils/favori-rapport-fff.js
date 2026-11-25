@@ -5,7 +5,7 @@
    sont retirés du rapport. Pas de commentaire « // » : le code est mis sur une seule ligne. */
 (async () => {
   const ID = "asf-rapport";
-  if (!/(^|\.)fff\.fr$/.test(location.hostname)) { alert("Ce favori s'utilise sur le site de la FFF (epreuves.fff.fr) : ouvre d'abord un match de Pierrelatte, puis touche-le."); return; }
+  if (!/(^|\.)fff\.fr$/.test(location.hostname)) { alert("Ce favori s'utilise sur le site de la FFF (www.fff.fr ou epreuves.fff.fr) : ouvre d'abord un match de Pierrelatte, puis touche-le."); return; }
   const ancien = document.getElementById(ID); if (ancien) ancien.remove();
   const box = document.createElement("div"); box.id = ID;
   box.style.cssText = "position:fixed;z-index:2147483647;left:12px;right:12px;bottom:12px;padding:14px 16px;border-radius:14px;background:#0F2257;color:#fff;font:600 16px/1.4 system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.45)";
@@ -74,8 +74,20 @@
     }
     const liens = [...new Set([...document.querySelectorAll("a[href]")].map(a => a.href).filter(h => /fff\.fr/.test(h) && /match|rencontre|feuille|competition|equipe/i.test(h)).map(sansJeton))].slice(0, 60);
     const texte = masqueTexte((document.body.innerText || "").replace(/\n{3,}/g, "\n\n")).slice(0, 20000);
-    const rapport = { v: 1, quand: new Date().toISOString(), page: sansJeton(location.href), titre: document.title, jeton: jeton ? "présent (non inclus)" : "absent",
-      liens, appels, routes: [...routes], ngState: ng, texte };
+    let html = "";
+    try {
+      const racine = (document.querySelector("main") || document.body).cloneNode(true);
+      racine.querySelectorAll("script,style,noscript,iframe,link,meta,source,video,canvas,form,input,textarea,select,#" + ID).forEach(n => n.remove());
+      racine.querySelectorAll("svg").forEach(s => [...s.children].forEach(c => { if (!/^(use|title)$/i.test(c.tagName)) c.remove(); }));
+      const garder = /^(class|id|data-[\w-]+|href|xlink:href|title|alt|aria-label|role|datetime)$/i;
+      [racine, ...racine.querySelectorAll("*")].forEach(n => [...n.attributes].forEach(a => {
+        if (!garder.test(a.name)) n.removeAttribute(a.name);
+        else if (/href/i.test(a.name)) n.setAttribute(a.name, sansJeton(a.value));
+      }));
+      html = masqueTexte(racine.outerHTML.replace(/\s{2,}/g, " ")).slice(0, 400000);
+    } catch (e) { html = "(illisible)"; }
+    const rapport = { v: 2, quand: new Date().toISOString(), page: sansJeton(location.href), titre: document.title, jeton: jeton ? "présent (non inclus)" : "absent",
+      liens, appels, routes: [...routes], ngState: ng, texte, html };
     const json = JSON.stringify(rapport, null, 1);
     box.textContent = "";
     const p = document.createElement("div");
