@@ -11,7 +11,9 @@
      chrono tourne sur le téléphone de l'organisateur ; les spectateurs voient le match « En cours », sa minute et son score,
      « Coup d'envoi », « But ! » ; un match oublié « en cours » se termine tout seul quand le suivant commence sur son
      terrain, et n'apparaît plus « en cours » aux spectateurs passé son temps ; avant chaque enregistrement, le tournoi est
-     relu sur le serveur (deux téléphones peuvent saisir sur deux terrains) ;
+     relu sur le serveur (deux téléphones peuvent saisir sur deux terrains) ; c'est la seule saisie de « Gérer » : l'ancienne
+     (cases et « Valider » sous les poules et dans la phase finale) est retirée ; « Autres matchs à jouer » lance un match dans
+     le désordre, « Matchs terminés » corrige un score (+ / −, tirs au but en phase finale) ;
    - horaires : les matchs de poule alternent (poule A, poule B, A, B…), chaque équipe soufflant entre deux matchs si possible ;
      l'heure de chacun part de l'heure du premier match, de la durée d'un match, de la pause et du nombre de terrains
      (création du tournoi, ou carte « Horaires des matchs » dans « Gérer ») ; la phase finale suit, tour après tour ;
@@ -566,7 +568,8 @@
   function consoleDirect(t){
     const h = t.horaire || {}, N = Math.max(1, +h.terrains || 1), duree = +h.duree || 0, tous = matchsDe(t);
     const ms = tous.filter(m => !m.exempt && m.a && m.b);
-    const enCours = ms.filter(m => m.direct && !aScore(m)), aVenir = ms.filter(m => !m.direct && !aScore(m)).slice(0, Math.max(2, N));
+    const enCours = ms.filter(m => m.direct && !aScore(m)), reste = ms.filter(m => !m.direct && !aScore(m));
+    const aVenir = reste.slice(0, Math.max(2, N)), autres = reste.slice(Math.max(2, N)), finis = ms.filter(aScore).reverse();
     const poulesFinies = tous.filter(m => m.phase === "poule").every(aScore), koLance = tous.some(m => m.phase !== "poule");
     const tag = m => (m.phase === "poule" ? `Poule ${LETTRE(m.poule || 0)}` : m.phase) + terrainTxt(t, m);
     const equipe = (m, n, k) => `<div class="trn-live-eq">${logo(n)}<span>${H(n)}</span>
@@ -585,14 +588,30 @@
         <div class="trn-live-duel"><p>${logo(m.a)}<b>${H(m.a)}</b></p><p>${logo(m.b)}<b>${H(m.b)}</b></p></div>
         <button type="button" class="btn bleu trn-live-debut" data-trn-debut>▶ Début du match</button></article>`;
     const fin = !enCours.length && !aVenir.length;
+    const ligne = (m, droite) => `<div class="trn-live-r" data-trn-m="${H(m.id)}"><span class="trn-live-rh">${m.heure ? hTxt(m.heure) : ""}</span>
+        <span class="trn-live-rt"><b>${H(m.a)}</b><b>${H(m.b)}</b><small>${H(tag(m))}</small></span>${droite}</div>`;
+    const correction = m => { const c = CORR, nulKO = c.sa === c.sb && m.phase !== "poule";
+      const eqC = (n, k) => `<div class="trn-live-eq">${logo(n)}<span>${H(n)}</span>
+          <button type="button" class="trn-live-moins" data-trn-cor="${k}" data-d="-1" aria-label="Retirer un but à ${H(n)}">−</button><b>${c[k]}</b>
+          <button type="button" class="trn-live-plus" data-trn-cor="${k}" data-d="1" aria-label="Un but de plus pour ${H(n)}">+</button></div>`;
+      return `<article class="trn-live-m correction" data-trn-m="${H(m.id)}"><header><span>Corriger · ${m.heure ? hTxt(m.heure) + " · " : ""}${H(tag(m))}</span></header>
+        ${eqC(m.a, "sa")}${eqC(m.b, "sb")}
+        ${nulKO ? `<div class="trn-live-act"><span class="trn-live-tab">Égalité : qui gagne aux tirs au but ?</span>${[m.a, m.b].map(n => `<button type="button" class="btn ${c.tab === n ? "bleu" : "contour"}" data-trn-cor-tab="${H(n)}">${H(n)}</button>`).join("")}</div>` : ""}
+        <div class="trn-live-act"><button type="button" class="btn bleu trn-live-fin" data-trn-cor-ok ${nulKO && !c.tab ? "disabled" : ""}>✓ Valider la correction</button>
+          <button type="button" class="trn-live-annuler" data-trn-cor-non>Annuler</button></div></article>`; };
+    const plis = (cle, titre, html) => `<details class="trn-live-pli" data-ong-pli="${cle}" ${ONG.ouvert(cle, false) || (cle === "trn-finis" && CORR && CORR.tid === t.id) ? "open" : ""}><summary>${titre}</summary><div class="trn-live-rs">${html}</div></details>`;
     return `<section class="trn-live" data-trn-t="${H(t.id)}">
       <div class="trn-live-t"><h3>⚡ Matchs en direct</h3><p>« Début du match » au coup d'envoi, <b>+</b> à chaque but, « Fin du match » au coup de sifflet : les spectateurs suivent tout en direct, le classement se met à jour.</p></div>
       ${enCours.length ? `<p class="trn-live-sous">En cours</p><div class="trn-live-l">${enCours.map(enDirect).join("")}</div>` : ""}
       ${aVenir.length ? `<p class="trn-live-sous">À suivre</p><div class="trn-live-l">${aVenir.map(suivant).join("")}</div>` : ""}
       ${fin ? (poulesFinies && +t.qualif > 0 && !koLance ? `<p class="trn-live-fini">Toutes les poules sont jouées : lance la phase finale.</p><button type="button" class="btn bleu" data-a="lancer-finale">Lancer la phase finale</button>`
         : `<p class="trn-live-fini">${tous.length ? "Tous les matchs sont joués ✓" : "Les matchs apparaîtront ici après le tirage au sort."}</p>`) : ""}
+      ${autres.length ? plis("trn-autres", `Autres matchs à jouer <span>${autres.length}</span>`, autres.map(m => ligne(m, `<button type="button" class="btn contour petit" data-trn-debut>▶ Début</button>`)).join("")) : ""}
+      ${finis.length ? plis("trn-finis", `Matchs terminés <span>${finis.length}</span><small>corriger un score</small>`, finis.map(m => CORR && CORR.tid === t.id && CORR.mid === m.id ? correction(m)
+        : ligne(m, `<b class="trn-live-sc">${m.sa} - ${m.sb}${m.tab && m.sa === m.sb ? `<small>tab : ${H(m.tab)}</small>` : ""}</b><button type="button" class="btn contour petit" data-trn-corriger>Corriger</button>`)).join("")) : ""}
     </section>`;
   }
+  let CORR = null;                                                         // la correction en cours : { tid, mid, sa, sb, tab }
   /* ce que fait chaque bouton, sur une copie du tournoi */
   function terminer(t, m, tab, auto){
     const sa = +m.direct.sa || 0, sb = +m.direct.sb || 0;
@@ -611,6 +630,14 @@
     but: (k, v) => (t, m) => { if (!m.direct || aScore(m) || !/^s[ab]$/.test(k)) return false; m.direct[k] = Math.max(0, v); },
     fin: tab => (t, m) => { if (!m.direct || aScore(m)) return false; return terminer(t, m, tab) ? undefined : false; },
     annuler: () => (t, m) => { if (!m.direct || aScore(m)) return false; delete m.direct; },
+    corriger: (sa, sb, tab) => (t, m) => {                                // comme l'ancienne saisie : en phase finale, les tours suivants pas joués sont refaits
+      if (!aScore(m) || m.exempt) return false;
+      sa = Math.max(0, +sa || 0); sb = Math.max(0, +sb || 0);
+      if (m.phase !== "poule" && sa === sb && !tab) return false;
+      if (m.sa === sa && m.sb === sb && (m.tab || null) === (sa === sb ? tab || null : null)) return false;
+      m.sa = sa; m.sb = sb; m.tab = sa === sb ? (tab || null) : null; delete m.direct;
+      if (m.phase !== "poule"){ t.matchs = matchsDe(t).filter(x => !(x.phase !== "poule" && x.tour > m.tour && x.sa === null && x.sb === null && !x.direct)); try { avancer(t); } catch(e){} }
+    },
   };
   /* le tournoi tel qu'il est sur le serveur (un autre téléphone a pu saisir sur un autre terrain), sinon la copie du téléphone */
   async function tournoiFrais(id, copie){
@@ -647,9 +674,10 @@
       const tpl = document.createElement("template"); tpl.innerHTML = consoleDirect(t) + carteAdmin(t) + carteHoraires(t);
       const tete = r.querySelector(".ong-tn-tete");
       if (tete) tete.after(tpl.content); else r.prepend(tpl.content);
-      const N = t.horaire ? +t.horaire.terrains || 1 : 1;                       // l'heure de chaque match, sur sa ligne
-      r.querySelectorAll("#t-edit [data-m]").forEach(d => { const m = matchsDe(t).find(x => x.id === d.dataset.m); if (!m || !m.heure) return;
-        d.insertAdjacentHTML("afterbegin", `<p class="trn-h-badge">🕒 ${hTxt(m.heure)}${N > 1 && m.terrain ? ` · Terrain ${m.terrain}` : ""}</p>`); });
+      // l'ancienne saisie des scores (cases et « Valider » sous chaque poule et dans la phase finale) : remplacée par « ⚡ Matchs en direct »
+      r.querySelectorAll("#t-edit .ong-tn-matchs, #t-edit .ong-tn-sous, #t-edit .ong-tn-final").forEach(x => x.remove());
+      r.querySelectorAll("#t-edit h3.ong-titre").forEach(x => { if (/phase finale/i.test(x.textContent)) x.remove(); });
+      const aide = r.querySelector('details[data-ong-pli="tournoi-scores"]'); if (aide) aide.remove();
     });
   };
 
@@ -666,6 +694,16 @@
       const f = el.closest("[data-trn-fin]");
       if (f){ agir(tid, mid, ACTIONS.fin(f.dataset.tab || null), "Score validé : classement à jour."); return; }
       if (el.closest("[data-trn-annuler]")){ if (confirm("Annuler le début de ce match ? Son score en cours est effacé.")) agir(tid, mid, ACTIONS.annuler()); return; }
+      if (el.closest("[data-trn-corriger]")){ const t = (S.tournois || []).find(x => x.id === tid), m = t && matchsDe(t).find(x => x.id === mid);
+        if (m){ CORR = { tid, mid, sa: +m.sa || 0, sb: +m.sb || 0, tab: m.tab || null }; try { rendrePanneau(); } catch(e){} } return; }
+      if (CORR && CORR.mid === mid){
+        const c = el.closest("[data-trn-cor]");
+        if (c){ CORR[c.dataset.trnCor] = Math.max(0, (CORR[c.dataset.trnCor] || 0) + (+c.dataset.d || 0)); if (CORR.sa !== CORR.sb) CORR.tab = null; try { rendrePanneau(); } catch(e){} return; }
+        const tb = el.closest("[data-trn-cor-tab]"); if (tb){ CORR.tab = tb.dataset.trnCorTab; try { rendrePanneau(); } catch(e){} return; }
+        if (el.closest("[data-trn-cor-non]")){ CORR = null; try { rendrePanneau(); } catch(e){} return; }
+        if (el.closest("[data-trn-cor-ok]")){ const c2 = CORR; CORR = null;
+          if (agir(tid, mid, ACTIONS.corriger(c2.sa, c2.sb, c2.tab), "Score corrigé : classement à jour.") === undefined){ try { rendrePanneau(); } catch(e){} } return; }
+      }
     }
     const o = el.closest("#trn [data-trno]");
     if (o){ ST.onglet = o.dataset.trno; rendrePage(true); return; }

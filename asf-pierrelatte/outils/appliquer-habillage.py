@@ -1,6 +1,6 @@
 """Assemble the app-style (myFFF 2026-like) version of the ASF Pierrelatte site from the original upload.
 
-Usage: python3 build9.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <tournoi.js> <output.html> [--test]
+Usage: python3 build10.py <original.html> <tete.css> <tard.css> <appli.js> <faits.js> <favori-faits.js> <tournoi.js> <output.html> [--test]
   tete.css : replaces the /*HABILLAGE-CSS*/ block of the head stylesheet (public site, first paint)
   tard.css : <style> added at the end of <body>, after every module (member spaces, module overrides)
   appli.js : <script> added at the end of <body> (intro, club tabs, Matchs of the weekend, teams, match events)
