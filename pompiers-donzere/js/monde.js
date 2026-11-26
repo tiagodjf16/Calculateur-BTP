@@ -280,7 +280,8 @@ export class Monde {
     if (q === 1) cartes.push(await this.texture('data/ortho.jpg'));
     else for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) cartes.push(await this.texture(`data/ortho_${i}_${j}.jpg`));
     this.orthoLeger = q === 1 ? cartes[0] : await this.texture('data/ortho.jpg');
-    const grain = await this.texture('textures/grain_sol.jpg', { repete: true });
+    const [solFlou, solClasses, solHerbe, solBitume, solTerre] = await Promise.all([this.texture('textures/sol_flou.jpg'), this.texture('textures/sol_classes.png', { lineaire: true }),
+      this.texture('textures/sol_herbe.jpg', { repete: true }), this.texture('textures/sol_bitume.jpg', { repete: true }), this.texture('textures/sol_terre.jpg', { repete: true })]);
     const pasX = L / (n - 1), pasZ = H / (n - 1);
     const h = (i, j) => rel[clamp(j, 0, n - 1) * n + clamp(i, 0, n - 1)] / 100;
     const m = (n - 1) / q;
@@ -309,19 +310,27 @@ export class Monde {
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       // pas de reflet spéculaire sur le sol : sinon le ciel « délave » la photo aérienne en vue rasante
       const mat = new THREE.MeshPhysicalMaterial({ map: cartes[qj * q + qi], roughness: 1, metalness: 0, specularIntensity: 0 });
-      const echelle = (L / q) / 2.6;                               // le grain se répète tous les 2,6 m
+      // De près, on remplace la photo aérienne (voitures, ombres « écrasées ») par de vraies matières
+      // (herbe, bitume, terre) choisies et teintées d'après la photo ; au loin, on garde la photo.
+      const quad = new THREE.Vector4(qi / q, (q - 1 - qj) / q, 1 / q, 1 / q);
       mat.onBeforeCompile = (sh) => {
-        sh.uniforms.uGrain = { value: grain };
-        sh.uniforms.uEchelle = { value: echelle };
+        Object.assign(sh.uniforms, { uFlou: { value: solFlou }, uClasses: { value: solClasses }, uHerbe: { value: solHerbe }, uBitume: { value: solBitume },
+          uTerre: { value: solTerre }, uQuad: { value: quad }, uTaille: { value: new THREE.Vector2(L, H) } });
         sh.fragmentShader = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform sampler2D uGrain;\nuniform float uEchelle;')
+          .replace('#include <common>', '#include <common>\nuniform sampler2D uFlou, uClasses, uHerbe, uBitume, uTerre;\nuniform vec4 uQuad;\nuniform vec2 uTaille;')
           .replace('#include <map_fragment>', `#include <map_fragment>
-            float pres = 1.0 - smoothstep(25.0, 140.0, length(vViewPosition));
-            vec3 g1 = texture2D(uGrain, vMapUv * uEchelle).rgb;
-            vec3 g2 = texture2D(uGrain, vMapUv * uEchelle * 0.23).rgb;
-            // la photo aérienne est déjà éclairée par le soleil : on la ramène à une teinte de matière avant de l'éclairer
-            diffuseColor.rgb = pow(diffuseColor.rgb, vec3(1.06)) * 0.82;
-            diffuseColor.rgb *= mix(vec3(1.0), (g1 + g2) * 2.35, 0.42 * pres + 0.06);`);
+            vec2 uvG = vMapUv * uQuad.zw + uQuad.xy;
+            vec2 m = uvG * uTaille;
+            float lumi = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+            vec3 loin = diffuseColor.rgb * clamp(0.105 / max(lumi, 0.012), 1.0, 2.4) * 0.86;
+            vec3 cl = texture2D(uClasses, uvG).rgb;
+            cl /= max(cl.r + cl.g + cl.b, 0.001);
+            vec3 detail = texture2D(uHerbe, m / 3.1).rgb * texture2D(uHerbe, m / 17.0).rgb * 4.0 * cl.r
+                        + texture2D(uBitume, m / 4.3).rgb * 2.0 * cl.g
+                        + texture2D(uTerre, m / 2.7).rgb * texture2D(uTerre, m / 13.0).rgb * 4.0 * cl.b;
+            vec3 pres = texture2D(uFlou, uvG).rgb * detail * mix(vec3(0.62), vec3(0.50, 0.58, 0.40), cl.r);
+            float k = 1.0 - smoothstep(45.0, 170.0, length(vViewPosition));
+            diffuseColor.rgb = mix(loin, pres, k);`);
       };
       const maille = new THREE.Mesh(geo, mat);
       maille.receiveShadow = true;
@@ -448,60 +457,89 @@ export class Monde {
       console.warn('Arbres absents');
       return;
     }
-    const [carte, carteN] = await Promise.all([this.texture('textures/arbres.png'), this.texture('textures/arbres_n.png', { lineaire: true }).catch(() => null)]);
+    const carte = await this.texture('textures/arbres.png');
     const rnd = alea(12345);
-    const esp = info.especes;                                     // [{ u0, u1, hauteur, largeur, poids, zones }]
+    const esp = info.especes;                                     // [{ vues: [[u0, u1], [u0, u1]], hauteur, largeur, poids, zones }]
     const places = esp.map(() => []);
-    const max = this.leger ? 2500 : 9000;
+    const max = this.leger ? 3000 : 11000;
     let total = 0;
+    const libre = (x, z) => {
+      const rp = this.routeProche(x, z, 14);
+      return !(rp && rp.d < rp.r.w / 2 + 2.4) && !this.collision(x, z, 1.6);
+    };
+    const choisir = (candidats) => {
+      let s = candidats.reduce((a, k) => a + esp[k].poids, 0), t = rnd() * s;
+      for (const k of candidats) { t -= esp[k].poids; if (t <= 0) return k; }
+      return candidats[0];
+    };
     const surface = (p) => { let s = 0; for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) s += p[j] * p[i + 1] - p[i] * p[j + 1]; return Math.abs(s) / 2; };
+    // 1) bois, forêts et haies de la BD TOPO
     for (const v of this.d.vegetation) {
-      const dens = /Forêt fermée/.test(v.n) ? 1 / 55 : /Bois|Forêt ouverte/.test(v.n) ? 1 / 80 : /Haie/.test(v.n) ? 1 / 30 : /Verger/.test(v.n) ? 1 / 45 : 0;
+      const dens = /Forêt fermée/.test(v.n) ? 1 / 50 : /Bois|Forêt ouverte/.test(v.n) ? 1 / 75 : /Haie/.test(v.n) ? 1 / 28 : /Verger/.test(v.n) ? 1 / 45 : 0;
       if (!dens) continue;
       let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
       for (let i = 0; i < v.p.length; i += 2) { x0 = Math.min(x0, v.p[i]); x1 = Math.max(x1, v.p[i]); z0 = Math.min(z0, v.p[i + 1]); z1 = Math.max(z1, v.p[i + 1]); }
-      const nb = Math.min(700, Math.ceil(surface(v.p) * dens));
+      const nb = Math.min(600, Math.ceil(surface(v.p) * dens));
       const candidats = esp.map((e, k) => (new RegExp(e.zones).test(v.n) ? k : -1)).filter((k) => k >= 0);
       if (!candidats.length) continue;
-      for (let k = 0, essais = 0; k < nb && essais < nb * 6 && total < max; essais++) {
+      for (let k = 0, essais = 0; k < nb && essais < nb * 6 && total < max * 0.6; essais++) {
         const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0);
-        if (!dansPolygone(x, z, v.p)) continue;
-        const rp = this.routeProche(x, z, 14);
-        if (rp && rp.d < rp.r.w / 2 + 2.2) continue;
-        if (this.collision(x, z, 1.5)) continue;
-        places[candidats[Math.floor(rnd() * candidats.length)]].push([x, z, 0.75 + rnd() * 0.6, rnd() * Math.PI]);
+        if (!dansPolygone(x, z, v.p) || !libre(x, z)) continue;
+        places[choisir(candidats)].push([x, z, 0.75 + rnd() * 0.6, rnd() * Math.PI]);
         k++; total++;
       }
     }
-    // deux plans croisés par arbre, fusionnés par dalles de 275 m (pour n'afficher que les arbres visibles)
+    // 2) arbres des jardins, parcs et rues : là où la photo aérienne montre un feuillage
+    const img = this.orthoLeger.image, T = 1024;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = T;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, T, T);
+    const px = g.getImageData(0, 0, T, T).data;
+    const pas = this.leger ? 9 : 6.5, tous = esp.map((e, k) => k);
+    for (let z = -this.H / 2 + 20; z < this.H / 2 - 20 && total < max; z += pas) {
+      for (let x = -this.L / 2 + 20; x < this.L / 2 - 20 && total < max; x += pas) {
+        const xx = x + (rnd() - 0.5) * pas, zz = z + (rnd() - 0.5) * pas;
+        const k = (Math.floor(((zz + this.H / 2) / this.H) * T) * T + Math.floor(((xx + this.L / 2) / this.L) * T)) * 4;
+        const r = px[k], v = px[k + 1], b = px[k + 2];
+        if (v - (r + b) / 2 < 9 || r + v + b > 300 || rnd() > 0.5 || !libre(xx, zz)) continue;   // feuillage : vert et sombre
+        places[choisir(tous)].push([xx, zz, 0.55 + rnd() * 0.55, rnd() * Math.PI]);
+        total++;
+      }
+    }
+    // deux plans croisés par arbre (une photo par plan), regroupés par dalles de 275 m pour n'afficher que les arbres visibles
     const D = 275, dalles = new Map();
     esp.forEach((e, ei) => {
       for (const [x, z, s, a] of places[ei]) {
         const cle = Math.floor(x / D) + ',' + Math.floor(z / D);
-        if (!dalles.has(cle)) dalles.set(cle, { P: [], UV: [], N: [], I: [] });
-        const t = dalles.get(cle), y = this.hauteur(x, z) - 0.15, hh = e.hauteur * s, dl = (e.largeur * s) / 2;
+        if (!dalles.has(cle)) dalles.set(cle, { P: [], UV: [], N: [], I: [], C: [] });
+        const tr = 0.72 + rnd() * 0.4, tv = 0.78 + rnd() * 0.34, tb = 0.6 + rnd() * 0.35;     // teinte propre à chaque arbre
+        const t = dalles.get(cle), y = this.hauteur(x, z) - 0.12, hh = e.hauteur * s, dl = (e.largeur * s) / 2;
         for (let k = 0; k < 2; k++) {
           const ca = Math.cos(a + (k * Math.PI) / 2), sa = Math.sin(a + (k * Math.PI) / 2), b = t.P.length / 3;
+          const [u0, u1] = e.vues[k];
           t.P.push(x - ca * dl, y, z - sa * dl, x + ca * dl, y, z + sa * dl, x + ca * dl, y + hh, z + sa * dl, x - ca * dl, y + hh, z - sa * dl);
-          t.UV.push(e.u0, 0, e.u1, 0, e.u1, 1, e.u0, 1);
+          t.UV.push(u0, 0, u1, 0, u1, 1, u0, 1);
+          for (let q = 0; q < 4; q++) t.C.push(tr, tv, tb);
           // normales « gonflées » vers l'extérieur et le haut : éclairage doux, comme un volume
-          for (const [sx, sy] of [[-1, 0.25], [1, 0.25], [1, 1], [-1, 1]]) { const l = Math.hypot(sx * 0.7, sy + 0.4); t.N.push((ca * sx * 0.7) / l, (sy + 0.4) / l, (sa * sx * 0.7) / l); }
+          for (const [sx, sy] of [[-1, 0.2], [1, 0.2], [1, 1], [-1, 1]]) { const l = Math.hypot(sx * 0.7, sy + 0.45); t.N.push((ca * sx * 0.7) / l, (sy + 0.45) / l, (sa * sx * 0.7) / l); }
           t.I.push(b, b + 1, b + 2, b, b + 2, b + 3);
         }
       }
     });
-    const mat = new THREE.MeshStandardMaterial({ map: carte, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, envMapIntensity: 0.7 });
-    const ombre = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: carte, alphaTest: 0.42 });
+    const mat = new THREE.MeshStandardMaterial({ map: carte, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.92, metalness: 0, envMapIntensity: 0.6, vertexColors: true });
+    const ombre = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: carte, alphaTest: 0.45 });
     for (const t of dalles.values()) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(t.P, 3));
-      g.setAttribute('uv', new THREE.Float32BufferAttribute(t.UV, 2));
-      g.setAttribute('normal', new THREE.Float32BufferAttribute(t.N, 3));
-      g.setIndex(t.I);
-      const m = new THREE.Mesh(g, mat);
-      m.castShadow = true;
-      m.customDepthMaterial = ombre;
-      this.scene.add(m);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(t.P, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(t.UV, 2));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(t.N, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(t.C, 3));
+      geo.setIndex(t.I);
+      const maille = new THREE.Mesh(geo, mat);
+      maille.castShadow = true;
+      maille.customDepthMaterial = ombre;
+      this.scene.add(maille);
     }
     this.nbArbres = total;
   }

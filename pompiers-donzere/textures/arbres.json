@@ -1,0 +1,22 @@
+{
+ "source": "Poly Haven (CC0) : tree_small_02",
+ "especes": [
+  {
+   "nom": "tree_small_02",
+   "zones": "Bois|For\u00eat|Haie|Verger|Lande",
+   "poids": 3,
+   "hauteur": 12.49,
+   "largeur": 8.33,
+   "vues": [
+    [
+     0.0,
+     0.5
+    ],
+    [
+     0.5,
+     1.0
+    ]
+   ]
+  }
+ ]
+}

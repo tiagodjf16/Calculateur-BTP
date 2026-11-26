@@ -1,0 +1,335 @@
+[
+{
+"nom": "Mon Fleuriste",
+"type": "fleuriste",
+"metier": "Fleuriste",
+"x": -156.9,
+"z": -586.5,
+"adresse": "42 A Rue Basse Bourgade",
+"bat": 1688
+},
+{
+"nom": "Mecaservice",
+"type": "garage",
+"metier": "Garage",
+"x": -272.2,
+"z": 918.5,
+"adresse": "Zi Les Gresses 225 Rue Simone De Beauvoir",
+"bat": 97
+},
+{
+"nom": "Super U",
+"type": "supermarche",
+"metier": "Supermarché",
+"x": -77.8,
+"z": 434.5,
+"adresse": "Rn7 Lieudit Les Gresses",
+"bat": 212
+},
+{
+"nom": "Super U",
+"type": "supermarche",
+"metier": "Supermarché",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Centre Commercial 280 Avenue Jean Moulin",
+"bat": 211
+},
+{
+"nom": "Presse",
+"type": "tabac",
+"metier": "Presse",
+"x": -154.2,
+"z": -664.7,
+"adresse": "34 Basse Bourgade",
+"bat": 1726
+},
+{
+"nom": "Tabac Du Champ De Mars",
+"type": "tabac",
+"metier": "Tabac Presse",
+"x": -268.1,
+"z": -771.7,
+"adresse": "8 Place Du Champ De Mars",
+"bat": 1852
+},
+{
+"nom": "Sarl Affa Rent",
+"type": "garage",
+"metier": "Automobiles",
+"x": -205.8,
+"z": 689.9,
+"adresse": "75 Avenue Jean Moulin",
+"bat": 113
+},
+{
+"nom": "La Stefa'Line",
+"type": "tabac",
+"metier": "Tabac Presse",
+"x": -268.1,
+"z": -771.7,
+"adresse": "8 Place Du Champ De Mars",
+"bat": 1852
+},
+{
+"nom": "Chez Lulu",
+"type": "boucherie",
+"metier": "Boucherie",
+"x": -147.4,
+"z": -677.0,
+"adresse": "32 Basse Bourgade",
+"bat": 1727
+},
+{
+"nom": "Pharmacie Miel",
+"type": "pharmacie",
+"metier": "Pharmacie",
+"x": -127.5,
+"z": -666.4,
+"adresse": "25 B Rue Basse Bourgade",
+"bat": 1663
+},
+{
+"nom": "Fd Motors",
+"type": "garage",
+"metier": "Automobiles",
+"x": -166.3,
+"z": -526.7,
+"adresse": "50 Basse Bourgade",
+"bat": 1681
+},
+{
+"nom": "O'Comptoir De L'Optique",
+"type": "boutique",
+"metier": "Opticien",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Centre Commercial Rn7 Sud 280 Avenue Jean Moulin",
+"bat": 211
+},
+{
+"nom": "Pharmacie Bourret Messana",
+"type": "pharmacie",
+"metier": "Pharmacie",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Centre Commercial  Rn 7 Rte Quartier Les Gresses",
+"bat": 211
+},
+{
+"nom": "Equi'Cheval",
+"type": "boutique",
+"metier": "Sport",
+"x": -64.5,
+"z": 496.3,
+"adresse": "Centre Commercial Super U Zi Les Gresses",
+"bat": 211
+},
+{
+"nom": "Aj Auto",
+"type": "garage",
+"metier": "Automobiles",
+"x": -130.6,
+"z": 0.4,
+"adresse": "710 Avenue Jean Moulin",
+"bat": 1140
+},
+{
+"nom": "Boucherie Ameziane",
+"type": "boucherie",
+"metier": "Boucherie",
+"x": -230.7,
+"z": 895.3,
+"adresse": "Centre Commercial U Zi Les Gresses",
+"bat": 95
+},
+{
+"nom": "Le Monde Des Pizzas",
+"type": "restaurant",
+"metier": "Restauration rapide",
+"x": -122.5,
+"z": -552.0,
+"adresse": "35 Basse Bourgade",
+"bat": 2393
+},
+{
+"nom": "Le Cafe Des Sports",
+"type": "bar",
+"metier": "Bar",
+"x": -241.4,
+"z": -843.0,
+"adresse": "Place Du Champ De Mars",
+"bat": 2135
+},
+{
+"nom": "Babacan",
+"type": "restaurant",
+"metier": "Restaurant",
+"x": -143.1,
+"z": -761.3,
+"adresse": "21 Place Du Champs De Mars",
+"bat": 1922
+},
+{
+"nom": "L'Horloge Gourmande",
+"type": "hotel",
+"metier": "Hôtel",
+"x": 224.0,
+"z": -193.0,
+"adresse": "Rn 7 490 Rue De L'Enclos",
+"bat": 1221
+},
+{
+"nom": "Skyt",
+"type": "restaurant",
+"metier": "Restaurant",
+"x": -143.1,
+"z": -761.3,
+"adresse": "21 Place Du Champ De Mars",
+"bat": 1922
+},
+{
+"nom": "Le Kiosque A Pizza",
+"type": "restaurant",
+"metier": "Restauration rapide",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Parking Super U Avenue Jean Moulin",
+"bat": 211
+},
+{
+"nom": "Bistrot Gagnant",
+"type": "bar",
+"metier": "Bar",
+"x": -144.3,
+"z": -753.6,
+"adresse": "20 Place Du Champ De Mars",
+"bat": 1926
+},
+{
+"nom": "L'International Donzerois",
+"type": "restaurant",
+"metier": "Restaurant",
+"x": 242.6,
+"z": -135.6,
+"adresse": "Rue De L'Enclos",
+"bat": 1226
+},
+{
+"nom": "La Mazurka",
+"type": "restaurant",
+"metier": "Restaurant",
+"x": -263.1,
+"z": -833.8,
+"adresse": "N° 31-33 31 Grande Rue",
+"bat": 2115
+},
+{
+"nom": "Chez Stefy",
+"type": "restaurant",
+"metier": "Restauration rapide",
+"x": -1071.8,
+"z": -362.2,
+"adresse": "4 Rue Des Bateliers",
+"bat": 395
+},
+{
+"nom": "Pizzaiol Mozzarel",
+"type": "restaurant",
+"metier": "Restauration rapide",
+"x": -819.2,
+"z": -463.4,
+"adresse": "6 Rue Des Cannevelles",
+"bat": 2391
+},
+{
+"nom": "Boulangerie Florit",
+"type": "boulangerie",
+"metier": "Boulangerie Pâtisserie",
+"x": -112.9,
+"z": -395.3,
+"adresse": "55 Basse Bourgade",
+"bat": 1505
+},
+{
+"nom": "La Trad De Donzere",
+"type": "boulangerie",
+"metier": "Boulangerie Pâtisserie",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Centre Commercial Plein Sud",
+"bat": 211
+},
+{
+"nom": "Credit Agricole Mutuel Sud Rhone Alpes",
+"type": "banque",
+"metier": "Banque",
+"x": -208.4,
+"z": -783.3,
+"adresse": "13 Place Du Champ De Mars",
+"bat": 1963
+},
+{
+"nom": "Theauben",
+"type": "banque",
+"metier": "Banque",
+"x": 78.2,
+"z": 887.1,
+"adresse": "14 Avenue Jas D'Auberyne",
+"bat": 161
+},
+{
+"nom": "Distrilav",
+"type": "boutique",
+"metier": "Pressing",
+"x": -81.7,
+"z": 455.0,
+"adresse": "280 Avenue Jean Moulin",
+"bat": 211
+},
+{
+"nom": "Agc Coiffure",
+"type": "coiffure",
+"metier": "Coiffure",
+"x": -81.7,
+"z": 455.0,
+"adresse": "Centre Commercial 280 Avenue Jean Moulin",
+"bat": 211
+},
+{
+"nom": "Belle Jusquau Bout Des Ongles",
+"type": "coiffure",
+"metier": "Institut de beauté",
+"x": -167.7,
+"z": -792.1,
+"adresse": "17 Place Du Champ De Mars",
+"bat": 1954
+},
+{
+"nom": "Studio Coiff",
+"type": "coiffure",
+"metier": "Coiffure",
+"x": -114.7,
+"z": -787.4,
+"adresse": "3 Rue Basse Bourgade",
+"bat": 1983
+},
+{
+"nom": "By'So",
+"type": "coiffure",
+"metier": "Coiffure",
+"x": -147.4,
+"z": -677.0,
+"adresse": "32 Basse Bourgade",
+"bat": 1727
+},
+{
+"nom": "Le Coiffeur",
+"type": "coiffure",
+"metier": "Coiffure",
+"x": -136.7,
+"z": -758.7,
+"adresse": "16 Basse Bourgade",
+"bat": 1922
+}
+]

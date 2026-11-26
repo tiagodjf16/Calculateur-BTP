@@ -33,6 +33,7 @@ const entrees = new Entrees();
 let hud, garde;
 const jeu = { etat: 'accueil', vue: 0, temps: 0, pause: false };
 window.__jeu = { jeu, monde, vsav, scene, camera, renderer, sons, entrees };      // pour les essais automatiques
+queueMicrotask(() => { window.__jeu.cam = cam; });
 
 function etape(texte, part) {
   $('#charge-texte').textContent = texte;
@@ -105,9 +106,16 @@ function majCamera(dt) {
     cible.set(v.x, v.y, v.z);
     camera.fov = 45;
   } else {
-    const loin = jeu.vue === 1 ? 5.4 : 8.2, haut = (jeu.vue === 1 ? 1.75 : 2.9) + cam.tangage * 6;
+    const loin = jeu.vue === 1 ? 5.2 : 7.3, haut = (jeu.vue === 1 ? 1.7 : 2.65) + cam.tangage * 6;
     const recul = loin * (1 + clamp(Math.abs(v.v) / 60, 0, 0.25));
-    p.set(v.x - Math.sin(a) * recul, v.y + haut, v.z - Math.cos(a) * recul);
+    // la caméra ne traverse pas les bâtiments : on la rapproche du véhicule si un mur s'interpose
+    let libre = recul;
+    for (let k = 1; k <= 12; k++) {
+      const dd = (recul * k) / 12;
+      if (dd > 2.6 && monde.collision(v.x - Math.sin(a) * dd, v.z - Math.cos(a) * dd, 0.45)) { libre = Math.max(2.6, dd - recul / 12); break; }
+    }
+    cam.recul = libre < (cam.recul ?? recul) ? libre : amorti(cam.recul ?? recul, libre, 2.5, dt);
+    p.set(v.x - Math.sin(a) * cam.recul, v.y + haut, v.z - Math.cos(a) * cam.recul);
     p.y = Math.max(p.y, monde.hauteur(p.x, p.z) + 0.7);
     cam.pos.lerp(p, 1 - Math.exp(-9 * dt));
     camera.position.copy(cam.pos);
@@ -174,11 +182,13 @@ function boucle(maintenant) {
   const dt = Math.min(0.05, (maintenant - dernier) / 1000);
   dernier = maintenant;
   if (jeu.etat !== 'accueil' && !jeu.pause) {
-    jeu.temps += dt;
-    commandes(dt);
-    const conduite = jeu.etat === 'conduite';
-    vsav.maj(dt, conduite ? entrees.commande() : { avant: 0, arriere: 0, direction: 0, frein: 1 });
-    garde.maj(dt);
+    for (let k = 0; k < (jeu.accel || 1); k++) {            // jeu.accel > 1 : avance rapide (essais automatiques)
+      jeu.temps += dt;
+      commandes(dt);
+      const conduite = jeu.etat === 'conduite';
+      vsav.maj(dt, conduite ? entrees.commande() : { avant: 0, arriere: 0, direction: 0, frein: 1 });
+      garde.maj(dt);
+    }
     hud.maj(dt, vsav, { porteOuverte: vsav.portes.ar > 0.05 || vsav.portes.lat > 0.05 });
     sons.moteur(vsav.moteur, regime(vsav), vsav.gaz || 0, Math.abs(vsav.v), jeu.vue === 2);
     sons.deuxTons(vsav.deuxTons, jeu.vue === 2);

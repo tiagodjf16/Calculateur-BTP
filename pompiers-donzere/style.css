@@ -73,3 +73,80 @@ h1 span { color: #ff4a2e; }
 #jouer:disabled { background: #444c57; box-shadow: none; cursor: wait; }
 .note { font-size: 12px; color: #9aa4b0; margin: 16px 0 6px; }
 .credits { font-size: 10.5px; color: #7d8794; line-height: 1.5; margin: 0; }
+
+/* ------------------------------------------------------------ intervention : tablette de bilan */
+#hud.intervention #tableau, #hud.intervention #bloc-gps, #hud.intervention #touches, #hud.intervention #tactile, #hud.intervention #action { display: none; }
+#tablette, #bilan { position: fixed; inset: 0; display: grid; place-items: center; padding: 14px; pointer-events: none; }
+#tablette[hidden], #bilan[hidden] { display: none; }
+#bilan { background: rgba(5, 8, 12, .72); pointer-events: auto; }
+.tab-cadre, .bilan-cadre { pointer-events: auto; width: min(1200px, 100%); max-height: 100%; display: flex; flex-direction: column; background: rgba(12, 16, 22, .95);
+  border: 1px solid rgba(255,255,255,.14); border-radius: 18px; box-shadow: 0 20px 80px rgba(0,0,0,.6); overflow: hidden; }
+.tab-cadre { height: min(720px, 100%); }
+.tab-cadre header, .bilan-cadre header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; background: linear-gradient(90deg, #b71c1c, #7c1313); }
+.tab-motif { font: 800 18px system-ui; margin-right: 12px; }
+.tab-adresse { font-size: 13px; opacity: .92; }
+.tab-droite { display: flex; gap: 12px; align-items: center; }
+#tab-chrono { font: 700 18px system-ui; font-variant-numeric: tabular-nums; }
+#tab-voir { padding: 7px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.25); cursor: pointer; font-size: 12.5px; }
+.tab-corps { flex: 1; display: grid; grid-template-columns: 268px 1fr 300px; min-height: 0; }
+.tab-corps > section { padding: 10px 14px 14px; overflow: auto; }
+.tab-victime, .tab-journal { background: rgba(255,255,255,.035); }
+.tab-corps h3, .bilan-corps h3 { font: 700 11px system-ui; letter-spacing: .08em; text-transform: uppercase; color: #8b95a1; margin: 12px 0 6px; }
+.tab-qui { font-weight: 700; margin: 0 0 6px; }
+#tab-etat span { display: inline-block; font-size: 11px; background: #1f4f8f; padding: 2px 8px; border-radius: 12px; margin: 0 4px 4px 0; }
+#tab-constantes { margin: 0; }
+#tab-constantes div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+#tab-constantes dt { color: #aeb7c2; }
+#tab-constantes dd { margin: 0; font-weight: 700; }
+#tab-constantes .vide dd { color: #55606c; font-weight: 400; }
+#tab-lots { list-style: none; padding: 0; margin: 0; }
+#tab-lots li { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; padding: 3px 0; color: #aeb7c2; }
+#tab-lots li.ici { color: #f2f4f7; }
+#tab-lots em { color: #5fd08a; font-style: normal; font-size: 11px; }
+#tab-lots button { font-size: 11px; padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,.25); background: #1b232e; cursor: pointer; white-space: nowrap; }
+#tab-lots button:disabled { opacity: .45; cursor: default; }
+#tab-onglets { display: flex; gap: 6px; flex-wrap: wrap; }
+#tab-onglets button { padding: 7px 13px; border-radius: 20px; background: #1b232e; border: 1px solid rgba(255,255,255,.1); cursor: pointer; font-size: 13px; }
+#tab-onglets button.actif { background: #d6281a; border-color: #d6281a; font-weight: 700; }
+#tab-resultat { min-height: 64px; margin: 10px 0; padding: 10px 12px; background: rgba(60,130,255,.10); border-left: 3px solid #4d9bff; border-radius: 8px; font-size: 14px; line-height: 1.45; }
+#tab-resultat b { display: block; font-size: 12px; color: #9fc3ff; margin-bottom: 3px; }
+#tab-gestes { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 8px; }
+#tab-gestes button { text-align: left; padding: 9px 11px; border-radius: 10px; background: #18202a; border: 1px solid rgba(255,255,255,.10); cursor: pointer; }
+#tab-gestes button b { display: block; font-size: 13.5px; }
+#tab-gestes button small { color: #8b95a1; font-size: 11px; }
+#tab-gestes button.fait { border-color: #2f8f5b; background: #14261d; }
+#tab-gestes button:disabled { opacity: .45; cursor: default; }
+#tab-gestes button:not(:disabled):hover { border-color: #4d9bff; }
+#tab-progres { margin-top: 12px; font-size: 13px; color: #cfd6de; display: flex; align-items: center; gap: 10px; }
+#tab-progres .barre i { background: #4d9bff; transition: none; }
+#tab-journal { list-style: none; padding: 0; margin: 0; font-size: 12.5px; line-height: 1.4; }
+#tab-journal li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); color: #cfd6de; }
+#tab-journal time { color: #8b95a1; margin-right: 6px; font-variant-numeric: tabular-nums; }
+#tab-journal li.alerte { color: #ff8a80; }
+#tab-journal li.bien { color: #7fe0a0; }
+#tab-journal li.scene { font-style: italic; }
+#tablette.reduit { place-items: end center; }
+#tablette.reduit .tab-corps { display: none; }
+#tablette.reduit .tab-cadre { height: auto; width: min(640px, 100%); }
+
+/* ------------------------------------------------------------ bilan de fin d'intervention */
+.bilan-note b { font: 900 40px/1 system-ui; }
+.bilan-note span { font-size: 14px; margin-left: 6px; opacity: .92; }
+.bilan-corps { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow: auto; }
+.bilan-corps section { padding: 10px 18px 18px; }
+.bilan-corps h3 em { float: right; font-style: normal; color: #f2f4f7; }
+.bilan-lignes { list-style: none; padding: 0; margin: 0; font-size: 13px; line-height: 1.35; }
+.bilan-lignes li { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.bilan-lignes i { display: inline-block; width: 20px; font-style: normal; font-weight: 800; }
+.bilan-lignes .ok i { color: #5fd08a; } .bilan-lignes .tard i { color: #ffb020; } .bilan-lignes .manque i { color: #ff6b5e; }
+.bilan-lignes .manque { color: #d8b9b6; }
+.bilan-lignes.simple em { float: right; font-style: normal; font-weight: 700; }
+.bilan-rappel { font-size: 13.5px; line-height: 1.5; color: #cfd6de; background: rgba(60,130,255,.10); border-left: 3px solid #4d9bff; border-radius: 8px; padding: 10px 12px; margin: 0; }
+.bilan-moyenne { font-size: 12.5px; color: #8b95a1; }
+#bilan-suite { font: 800 16px system-ui; color: #fff; background: #d6281a; border: 0; border-radius: 12px; padding: 12px 22px; cursor: pointer; }
+@media (max-width: 860px) {
+  .tab-corps { grid-template-columns: 1fr; overflow: auto; }
+  .tab-corps > section { overflow: visible; }
+  .tab-centre { order: -1; }
+  .bilan-corps { grid-template-columns: 1fr; }
+}

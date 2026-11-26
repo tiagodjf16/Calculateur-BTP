@@ -29,7 +29,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
   console.log('chargement :', ((Date.now() - t0) / 1000).toFixed(1), 's —', await page.textContent('#charge-texte').catch(() => '?'));
   if (await page.$('#jouer:not([disabled])')) {
     await page.click('#jouer');
-    if (code) { const r = await page.evaluate(code).catch((e) => 'ERREUR ' + e.message); if (r !== undefined) console.log('résultat :', JSON.stringify(r)); }
+    if (code.startsWith('@')) await require(path.resolve(code.slice(1)))(page, (nom) => page.screenshot({ path: capture.replace(/\.png$/, `_${nom}.png`) })).catch((err) => erreurs.push('[scénario] ' + String(err).slice(0, 300)));   // scénario en plusieurs étapes
+    else if (code) { const r = await page.evaluate(code).catch((e) => 'ERREUR ' + e.message); if (r !== undefined) console.log('résultat :', JSON.stringify(r)); }
     await page.waitForTimeout(parseFloat(attente) * 1000);
     const infos = await page.evaluate(() => { const j = window.__jeu; const i = j.renderer.info; return { triangles: i.render.triangles, appels: i.render.calls, textures: i.memory.textures, x: +j.vsav.x.toFixed(1), z: +j.vsav.z.toFixed(1), v: +j.vsav.v.toFixed(2), etat: j.jeu.etat }; }).catch((e) => String(e));
     console.log('rendu :', JSON.stringify(infos));

@@ -18,7 +18,8 @@ Ajouter `#leger` à l'adresse pour la version allégée (téléphones).
 | --- | --- |
 | `bake.py` | Télécharge les données IGN de la zone et produit `data/donzere.json` + les photos aériennes |
 | `monde.py`, `facades.py` | Construit les bâtiments dans Blender (module `bpy`) → `modeles/batiments_brut.glb` |
-| `ciel.py`, `textures.py`, `cc0.py` | Ciel HDRI et textures de matériaux (Poly Haven, CC0) |
+| `commerces.py`, `devantures.py` | Commerces réels (annuaire Sirene) et leurs devantures |
+| `ciel.py`, `sol.py`, `arbres.py`, `textures.py`, `cc0.py` | Ciel HDRI, matières du sol, arbres et textures (Poly Haven, CC0) |
 | `atelier.py`, `vsav.py` | Atelier de modélisation Blender (coques, roues réalistes, livrées) |
 | `gta/convertir.py`, `gta/rsc.py` | Convertit un véhicule de mod GTA V (`.yft` + `.ytd`) en GLB |
 | `optimiser.mjs` | Allège un GLB pour le web (Meshopt, WebP) |
@@ -27,7 +28,8 @@ Ajouter `#leger` à l'adresse pour la version allégée (téléphones).
 ## Crédits et licences
 
 - Données géographiques : © IGN — BD TOPO® et BD ORTHO®, Licence Ouverte Etalab 2.0. Relief : Terrain Tiles (AWS Open Data).
-- Ciel et textures de matériaux : Poly Haven (CC0).
+- Commerces et services : base Sirene de l'INSEE via l'API Recherche d'entreprises (Licence Ouverte). Les noms de personnes ne sont pas repris.
+- Ciel, textures de matériaux et arbres : Poly Haven (CC0).
 - Moteur : three.js (MIT). Polices des outils : Roboto Condensed (Apache 2.0), Barlow Condensed (OFL).
 - Les modèles de véhicules issus de mods tiers (dossier `modeles_prives/`, non versionné) restent la propriété de leurs auteurs
   et ne doivent pas être redistribués sans leur accord.

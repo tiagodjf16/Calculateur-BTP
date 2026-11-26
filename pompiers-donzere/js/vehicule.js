@@ -105,7 +105,7 @@ export class Vehicule {
         const coul = n.userData.couleur === 'amber' ? 0xffa018 : 0x2f6bff;
         const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprite, color: coul, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
         s.position.copy(c);
-        s.scale.setScalar(n.userData.couleur === 'amber' ? 0.9 : 1.7);
+        s.scale.setScalar(n.userData.couleur === 'amber' ? 0.8 : 1.3);
         s.visible = false;
         this.caisse.add(s);
         Object.assign(feu, { extra: true, ambre: n.userData.couleur === 'amber', halo: s, gauche: c.x > 0, avant: c.z > 0, centre: c });
@@ -114,8 +114,8 @@ export class Vehicule {
       }
     });
     // deux lumières bleues qui éclairent le décor
-    this.lumG = new THREE.PointLight(0x2f6bff, 0, 35, 1.8);
-    this.lumD = new THREE.PointLight(0x2f6bff, 0, 35, 1.8);
+    this.lumG = new THREE.PointLight(0x2f6bff, 0, 22, 2);
+    this.lumD = new THREE.PointLight(0x2f6bff, 0, 22, 2);
     this.lumG.position.set(0.9, 2.6, 0.8);
     this.lumD.position.set(-0.9, 2.6, 0.8);
     this.caisse.add(this.lumG, this.lumD);
@@ -249,8 +249,8 @@ export class Vehicule {
       if (f.niveau !== niv) { f.niveau = niv; for (const mm of f.mats) mm.emissiveIntensity = niv; }
       if (on && !f.ambre) { if (f.gauche) iG = 1; else iD = 1; }
     }
-    this.lumG.intensity = iG * 260;
-    this.lumD.intensity = iD * 260;
+    this.lumG.intensity = iG * 70;
+    this.lumD.intensity = iD * 70;
     // feux de route
     const cli = Math.floor(t * 2.9) % 2 === 0;
     this.cliAllume = !!this.clignotant && cli;
