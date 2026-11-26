@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Sapeurs-Pompiers — Donzère</title>
+<meta name="theme-color" content="#0b0f14">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="vue"></canvas>
+
+<div id="hud" hidden>
+  <section id="mission" class="panneau">
+    <div class="ligne"><span id="m-etat" data-etat="">—</span><span id="m-chrono"></span></div>
+    <div id="m-titre">Centre de secours</div>
+    <div id="m-texte"></div>
+  </section>
+
+  <section id="bloc-gps" class="panneau">
+    <canvas id="gps"></canvas>
+    <div id="gps-rue">—</div>
+    <div id="gps-cible">Aucune destination</div>
+  </section>
+
+  <canvas id="tableau"></canvas>
+  <div id="action" hidden></div>
+  <div id="annonce"></div>
+
+  <aside id="touches" class="panneau">
+    <b>Commandes</b>
+    <span><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> conduire · <kbd>Espace</kbd> frein</span>
+    <span><kbd>M</kbd> moteur · <kbd>C</kbd> ceinture · <kbd>P</kbd> frein à main</span>
+    <span><kbd>G</kbd> gyrophares · <kbd>T</kbd> deux-tons · <kbd>K</kbd> klaxon</span>
+    <span><kbd>A</kbd><kbd>E</kbd> clignotants · <kbd>W</kbd> détresse · <kbd>L</kbd> feux · <kbd>B</kbd> balisage</span>
+    <span><kbd>F</kbd> action · <kbd>V</kbd> caméra · <kbd>R</kbd> replacer · <kbd>H</kbd> masquer l'aide</span>
+  </aside>
+
+  <div id="tactile">
+    <div id="manette"><div id="pouce"></div></div>
+    <div id="boutons">
+      <button type="button" data-touche="KeyG">Gyro</button>
+      <button type="button" data-touche="KeyT">2 tons</button>
+      <button type="button" data-touche="KeyC">Ceinture</button>
+      <button type="button" data-touche="KeyM">Moteur</button>
+      <button type="button" data-touche="KeyP">Frein P</button>
+      <button type="button" data-touche="KeyV">Vue</button>
+      <button type="button" data-touche="KeyK" data-tenu>Klaxon</button>
+      <button type="button" data-touche="Space" data-tenu>Frein</button>
+      <button type="button" data-touche="KeyF" class="fort">Action</button>
+    </div>
+  </div>
+</div>
+
+<div id="tablette" hidden></div>
+<div id="bilan" hidden></div>
+
+<div id="accueil">
+  <div class="carte-accueil">
+    <div class="sur-titre">Secours d'urgence aux personnes · Drôme</div>
+    <h1>Sapeurs-Pompiers<br><span>Donzère</span></h1>
+    <p class="intro">Prenez le VSAV du centre de secours et partez en intervention dans le vrai Donzère : rues, bâtiments, relief et photo aérienne de l'IGN.</p>
+    <div id="chargement"><div class="barre"><i id="charge-niveau"></i></div><span id="charge-texte">Chargement…</span></div>
+    <button id="jouer" type="button" disabled>Prendre la garde</button>
+    <p class="note">Simulation ludique : elle ne remplace pas une formation aux premiers secours (PSC, PSE).</p>
+    <p class="credits" id="credits">Données : IGN BD TOPO® et BD ORTHO® (Licence Ouverte Etalab 2.0) · relief : Terrain Tiles (AWS) · ciel et matériaux : Poly Haven (CC0)</p>
+  </div>
+</div>
+
+<script type="module" src="js/principal.js"></script>
+</body>
+</html>
