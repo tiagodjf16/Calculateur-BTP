@@ -55,12 +55,14 @@ async function charger() {
     await garde.charger();
     cam.pos.copy(vsav.point(0, 3, -9));
     etape('Prêt', 1);
+    if (monde.alertes.length) $('#diagnostic').textContent = monde.alertes.join(' · ');
     $('#jouer').disabled = false;
     renderer.compile(scene, camera);
     requestAnimationFrame(boucle);
   } catch (e) {
     console.error(e);
-    etape('Erreur : ' + e.message, 0);
+    etape('Erreur', 0);
+    $('#diagnostic').textContent = 'Erreur de chargement : ' + (e.message || e);
   }
 }
 

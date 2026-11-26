@@ -9,6 +9,16 @@ const RACINE = process.env.RACINE_JEU ? path.resolve(process.env.RACINE_JEU) : p
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.glb': 'model/gltf-binary', '.hdr': 'application/octet-stream' };
 
+// CSP=strict : imite un hébergement restrictif (pas de WebAssembly, pas de fetch vers data: ou blob:) ;
+// CSP=wasm : le même avec WebAssembly autorisé ; CSP=sansblob : le même que strict, sans images blob:.
+const POLITIQUES = {
+  strict: ["'self' 'unsafe-inline'", "'self' data: blob:"],
+  wasm: ["'self' 'unsafe-inline' 'wasm-unsafe-eval'", "'self' data: blob:"],
+  sansblob: ["'self' 'unsafe-inline'", "'self' data:"],
+};
+const P = POLITIQUES[process.env.CSP];
+const CSP = P && `default-src 'none'; script-src ${P[0]}; style-src 'self' 'unsafe-inline'; img-src ${P[1]}; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:`;
+
 (async () => {
   const nav = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
   const page = await nav.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
@@ -19,7 +29,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
     const u = new URL(route.request().url());
     const f = path.join(RACINE, decodeURIComponent(u.pathname));
     if (!f.startsWith(RACINE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return route.fulfill({ status: 404, body: 'absent' });
-    route.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+    const entetes = CSP && f.endsWith('.html') ? { 'Content-Security-Policy': CSP } : {};
+    route.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', headers: entetes, body: fs.readFileSync(f) });
   });
   const t0 = Date.now();
   await page.goto('http://jeu.test/index.html' + hash);
@@ -27,6 +38,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
     await page.waitForFunction(() => { const b = document.querySelector('#jouer'); return (b && !b.disabled) || /Erreur/.test(document.querySelector('#charge-texte')?.textContent || ''); }, null, { timeout: 240000 });
   } catch (e) { erreurs.push('délai de chargement dépassé'); }
   console.log('chargement :', ((Date.now() - t0) / 1000).toFixed(1), 's —', await page.textContent('#charge-texte').catch(() => '?'));
+  const diag = await page.textContent('#diagnostic').catch(() => '');
+  if (diag) console.log('diagnostic :', diag.slice(0, 400));
   if (await page.$('#jouer:not([disabled])')) {
     await page.click('#jouer');
     if (code.startsWith('@')) await require(path.resolve(code.slice(1)))(page, (nom) => page.screenshot({ path: capture.replace(/\.png$/, `_${nom}.png`) })).catch((err) => erreurs.push('[scénario] ' + String(err).slice(0, 300)));   // scénario en plusieurs étapes

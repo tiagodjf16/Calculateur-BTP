@@ -1,8 +1,8 @@
 """Prépare le dossier `publication/` pour un hébergement qui n'accepte que les types de fichiers courants du web :
-les modèles .glb deviennent des glTF au format texte (.json, données intégrées en base64), le ciel .hdr un .json.
+les modèles .glb et le ciel .hdr sont encodés en base64 dans des fichiers .json, que le jeu décode lui-même.
 Usage : python3 outils/publier.py   (le dossier publication/ n'est pas versionné)
 """
-import base64, json, os, shutil, struct
+import base64, json, os, shutil
 
 RACINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(RACINE, 'publication')
@@ -11,19 +11,9 @@ SERVIS = ('.html', '.css', '.js', '.json', '.jpg', '.png', '.webp')
 
 
 def glb_vers_json(src, dest):
-    d = open(src, 'rb').read()
-    magie, version, total = struct.unpack_from('<4sII', d, 0)
-    assert magie == b'glTF'
-    pos, doc, binaire = 12, None, b''
-    while pos < total:
-        taille, genre = struct.unpack_from('<I4s', d, pos)
-        bloc = d[pos + 8:pos + 8 + taille]
-        if genre == b'JSON': doc = json.loads(bloc)
-        elif genre[:3] == b'BIN': binaire = bloc
-        pos += 8 + taille
-    doc['buffers'][0]['uri'] = 'data:application/octet-stream;base64,' + base64.b64encode(binaire[:doc['buffers'][0]['byteLength']]).decode()
+    """Le .glb tel quel, encodé en base64 dans un fichier JSON : { "glb": "…" } (le jeu le décode lui-même)."""
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    json.dump(doc, open(dest, 'w'), separators=(',', ':'))
+    json.dump({'glb': base64.b64encode(open(src, 'rb').read()).decode()}, open(dest, 'w'))
 
 
 fichiers = ['index.html', 'style.css']

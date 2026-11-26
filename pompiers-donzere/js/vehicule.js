@@ -52,10 +52,11 @@ export class Vehicule {
 
   async charger(urls) {
     let gltf = null;
+    const erreurs = [];
     for (const u of urls) {
-      try { gltf = await chargerModele(u); this.modele = u; break; } catch (e) { /* modèle suivant */ }
+      try { gltf = await chargerModele(u); this.modele = u; break; } catch (e) { erreurs.push(String(e.message || e).slice(0, 220)); }
     }
-    if (!gltf) throw new Error('Aucun modèle de véhicule trouvé');
+    if (!gltf) throw new Error('aucun modèle de véhicule n\'a pu être chargé — ' + erreurs.join(' | '));
     const racine = gltf.scene.getObjectByName('vehicule') || gltf.scene;
     this.credits = racine.userData.credits || '';
     this.roues = {};

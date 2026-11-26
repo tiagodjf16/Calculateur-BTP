@@ -3,25 +3,100 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { alea, clamp, dansPolygone, procheSegment } from './outils.js';
 
 const CARROSSABLE = new Set(['Route à 1 chaussée', 'Route à 2 chaussées', 'Rond-point', 'Bretelle', 'Route empierrée']);
 const REVETUE = new Set(['Route à 1 chaussée', 'Route à 2 chaussées', 'Rond-point', 'Bretelle']);
 
-export function chargeurGLTF() {
+/** Décode une chaîne base64 en octets. */
+export function octets(b64) {
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(b64);
+  const brut = atob(b64), oct = new Uint8Array(brut.length);
+  for (let i = 0; i < brut.length; i++) oct[i] = brut.charCodeAt(i);
+  return oct;
+}
+
+const message = (e) => String((e && e.message) || e).slice(0, 160);
+
+let decodeurPret = null;
+/**
+ * Décodeur des maillages compressés : WebAssembly si la page l'autorise, sinon la version JavaScript
+ * (plus lente, même résultat). Certains hébergements interdisent WebAssembly par leur politique de sécurité.
+ */
+function decodeur() {
+  if (!decodeurPret) {
+    decodeurPret = (async () => {
+      try {
+        const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
+        if (MeshoptDecoder.supported) { await MeshoptDecoder.ready; return MeshoptDecoder; }
+      } catch (e) { /* WebAssembly refusé : on passe au décodeur JavaScript */ }
+      return (await import('../vendor/meshopt_decoder_reference.js')).MeshoptDecoder;
+    })();
+  }
+  return decodeurPret;
+}
+decodeur().catch(() => {});                  // préparé dès le départ
+
+/** Image à partir d'octets : par une balise <img> (adresse blob:), ou à défaut par décodage direct. */
+async function imageIntegree(blob) {
+  try {
+    return await new Promise((ok, ko) => {
+      const url = URL.createObjectURL(blob), img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('image refusée')); };
+      img.src = url;
+    });
+  } catch (e) {
+    return await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  }
+}
+
+/**
+ * Extension du chargeur glTF : les textures intégrées au fichier sont décodées ici, sans passer par fetch()
+ * sur une adresse blob: (interdit par certains hébergements, ce qui laissait les modèles sans textures).
+ */
+function texturesIntegrees(parser) {
+  const origine = parser.loadImageSource;
+  parser.loadImageSource = function (index, loader) {
+    const def = this.json.images[index];
+    if (def.bufferView === undefined) return origine.call(this, index, loader);
+    if (this.sourceCache[index] !== undefined) return this.sourceCache[index].then((t) => t.clone());
+    this.sourceCache[index] = this.getDependency('bufferView', def.bufferView)
+      .then((vue) => imageIntegree(new Blob([vue], { type: def.mimeType })))
+      .then((image) => {
+        const t = new THREE.Texture(image);
+        t.needsUpdate = true;
+        t.userData.mimeType = def.mimeType;
+        return t;
+      });
+    return this.sourceCache[index];
+  };
+  return { name: 'TEXTURES_INTEGREES' };
+}
+
+async function chargeurGLTF() {
   const l = new GLTFLoader();
-  l.setMeshoptDecoder(MeshoptDecoder);
+  l.setMeshoptDecoder(await decodeur());
+  l.register(texturesIntegrees);
   return l;
 }
 
-/** Charge un modèle : `base`.glb, ou à défaut `base`.json (glTF au format texte, pour les hébergements qui ne servent pas les .glb). */
+/**
+ * Charge un modèle : `base`.glb, ou à défaut `base`.json ({ "glb": "<base64>" }) pour les hébergements qui ne
+ * servent pas les .glb. Le binaire est décodé ici puis analysé en mémoire, sans requête vers une adresse data:.
+ */
 export async function chargerModele(base) {
-  let erreur;
-  for (const ext of ['.glb', '.json']) {
-    try { return await chargeurGLTF().loadAsync(base + ext); } catch (e) { erreur = e; }
-  }
-  throw erreur;
+  const l = await chargeurGLTF();
+  const echecs = [];
+  try {
+    return await l.loadAsync(base + '.glb');
+  } catch (e) { echecs.push('.glb : ' + message(e)); }
+  try {
+    const rep = await fetch(base + '.json');
+    if (!rep.ok) throw new Error('HTTP ' + rep.status);
+    return await l.parseAsync(octets((await rep.json()).glb).buffer, base.replace(/[^/]*$/, ''));
+  } catch (e) { echecs.push('.json : ' + message(e)); }
+  throw new Error(`${base} (${echecs.join(' ; ')})`);
 }
 
 export class Monde {
@@ -31,6 +106,7 @@ export class Monde {
     this.leger = leger;
     this.tex = new THREE.TextureLoader();
     this.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    this.alertes = [];                       // problèmes de chargement non bloquants, affichés sur l'écran d'accueil
   }
 
   texture(url, opts = {}) {
@@ -47,10 +123,7 @@ export class Monde {
     const d = (this.d = await (await fetch('data/donzere.json')).json());
     [this.L, this.H] = d.taille;
     this.n = d.relief.n;
-    const bin = atob(d.relief.data);
-    const octets = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) octets[i] = bin.charCodeAt(i);
-    this.rel = new Uint16Array(octets.buffer);
+    this.rel = new Uint16Array(octets(d.relief.data).buffer);
     this._index();
     etape('Ciel et lumière…', 0.12);
     await this._ciel();
@@ -243,10 +316,7 @@ export class Monde {
       env = await new Promise((ok, ko) => new RGBELoader().load('ciel/env.hdr', ok, undefined, ko));
     } catch (e) {
       // même image, livrée en JSON (base64) pour les hébergements qui ne servent pas les .hdr
-      const brut = atob((await (await fetch('ciel/env.json')).json()).hdr);
-      const oct = new Uint8Array(brut.length);
-      for (let i = 0; i < brut.length; i++) oct[i] = brut.charCodeAt(i);
-      const d = new RGBELoader().parse(oct.buffer);
+      const d = new RGBELoader().parse(octets((await (await fetch('ciel/env.json')).json()).hdr).buffer);
       env = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
       Object.assign(env, { colorSpace: THREE.LinearSRGBColorSpace, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, flipY: true, needsUpdate: true });
     }
@@ -451,6 +521,7 @@ export class Monde {
       gltf = await chargerModele('modeles/batiments');
     } catch (e) {
       console.warn('Bâtiments absents :', e.message);
+      this.alertes.push('Bâtiments non chargés : ' + e.message);
       return;
     }
     const platMat = new THREE.MeshStandardMaterial({ map: this.orthoLeger, roughness: 0.95 });
@@ -474,7 +545,7 @@ export class Monde {
     try {
       info = await (await fetch('textures/arbres.json')).json();
     } catch (e) {
-      console.warn('Arbres absents');
+      this.alertes.push('Arbres non chargés : ' + e.message);
       return;
     }
     const carte = await this.texture('textures/arbres.png');
