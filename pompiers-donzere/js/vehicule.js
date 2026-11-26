@@ -1,6 +1,6 @@
 // Le VSAV : chargement du modèle, conduite, suspension, feux (gyroleds, pénétration, stop, clignotants), portes.
 import * as THREE from 'three';
-import { chargeurGLTF } from './monde.js';
+import { chargerModele } from './monde.js';
 import { amorti, clamp } from './outils.js';
 
 const V_MAX = 38;            // m/s (≈ 137 km/h)
@@ -53,7 +53,7 @@ export class Vehicule {
   async charger(urls) {
     let gltf = null;
     for (const u of urls) {
-      try { gltf = await chargeurGLTF().loadAsync(u); this.modele = u; break; } catch (e) { /* modèle suivant */ }
+      try { gltf = await chargerModele(u); this.modele = u; break; } catch (e) { /* modèle suivant */ }
     }
     if (!gltf) throw new Error('Aucun modèle de véhicule trouvé');
     const racine = gltf.scene.getObjectByName('vehicule') || gltf.scene;

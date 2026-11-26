@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const [, , capture = 'essai.png', hash = '', attente = '6', code = ''] = process.argv;
-const RACINE = path.join(__dirname, '..');
+const RACINE = process.env.RACINE_JEU ? path.resolve(process.env.RACINE_JEU) : path.join(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.glb': 'model/gltf-binary', '.hdr': 'application/octet-stream' };
 

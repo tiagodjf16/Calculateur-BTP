@@ -15,6 +15,15 @@ export function chargeurGLTF() {
   return l;
 }
 
+/** Charge un modèle : `base`.glb, ou à défaut `base`.json (glTF au format texte, pour les hébergements qui ne servent pas les .glb). */
+export async function chargerModele(base) {
+  let erreur;
+  for (const ext of ['.glb', '.json']) {
+    try { return await chargeurGLTF().loadAsync(base + ext); } catch (e) { erreur = e; }
+  }
+  throw erreur;
+}
+
 export class Monde {
   constructor(scene, renderer, leger) {
     this.scene = scene;
@@ -229,7 +238,18 @@ export class Monde {
     const rot = a0 - voulu;
     const el = c.elevation;
     this.soleilDir = new THREE.Vector3(Math.cos(el) * Math.cos(voulu), Math.sin(el), Math.cos(el) * Math.sin(voulu)).normalize();
-    const env = await new Promise((ok, ko) => new RGBELoader().load('ciel/env.hdr', ok, undefined, ko));
+    let env;
+    try {
+      env = await new Promise((ok, ko) => new RGBELoader().load('ciel/env.hdr', ok, undefined, ko));
+    } catch (e) {
+      // même image, livrée en JSON (base64) pour les hébergements qui ne servent pas les .hdr
+      const brut = atob((await (await fetch('ciel/env.json')).json()).hdr);
+      const oct = new Uint8Array(brut.length);
+      for (let i = 0; i < brut.length; i++) oct[i] = brut.charCodeAt(i);
+      const d = new RGBELoader().parse(oct.buffer);
+      env = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+      Object.assign(env, { colorSpace: THREE.LinearSRGBColorSpace, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, flipY: true, needsUpdate: true });
+    }
     env.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = env;
     scene.environmentRotation = new THREE.Euler(0, rot, 0);
@@ -428,7 +448,7 @@ export class Monde {
   async _batiments() {
     let gltf;
     try {
-      gltf = await chargeurGLTF().loadAsync('modeles/batiments.glb');
+      gltf = await chargerModele('modeles/batiments');
     } catch (e) {
       console.warn('Bâtiments absents :', e.message);
       return;

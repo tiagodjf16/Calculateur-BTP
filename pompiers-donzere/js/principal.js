@@ -44,7 +44,7 @@ async function charger() {
   try {
     await monde.charger(etape);
     etape('Véhicule de secours…', 0.9);
-    await vsav.charger(['modeles_prives/vsav_bspp_web.glb', 'modeles/vsav.glb']);
+    await vsav.charger(['modeles_prives/vsav_bspp_web', 'modeles/vsav']);
     if (vsav.credits) $('#credits').textContent += ' · Véhicule : ' + vsav.credits;
     // stationnement devant le centre de secours
     const c = monde.caserne, r = monde.routeProche(c.x, c.z, 300);
