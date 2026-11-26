@@ -1,5 +1,5 @@
 // La garde : alertes, trajet vers l'intervention, prise en charge, transport à l'hôpital, plein de carburant, bilan noté.
-import * as THREE from 'three';
+import * as THREE from '../vendor/three.module.min.js';
 import { CAS } from './cas.js';
 import { Intervention } from './intervention.js';
 import { Scene3D } from './scene3d.js';
@@ -61,7 +61,9 @@ export class Garde {
   commencer() {
     const v = this.vsav;
     this._pompe3d();
-    this.hud.mission('Disponible', this.monde.caserne.nom, 'Mettez le contact (<b>M</b>), bouclez votre ceinture (<b>C</b>), desserrez le frein à main (<b>P</b>). En attente d\'un départ…', null);
+    this.hud.mission('Disponible', this.monde.caserne.nom, this.entrees.tactile
+      ? 'Touchez <b>Moteur</b>, <b>Ceinture</b>, puis <b>Frein P</b> (frein à main). En attente d\'un départ…'
+      : 'Mettez le contact (<b>M</b>), bouclez votre ceinture (<b>C</b>), desserrez le frein à main (<b>P</b>). En attente d\'un départ…', null);
     v.evenement = (type, force) => {
       if (type === 'choc') { this.sons.choc(force); this.stats.chocs = (this.stats.chocs || 0) + 1; this.hud.annonce('Choc !', 'Conduisez prudemment : vous êtes responsable du véhicule.', 2.5); }
       if (type === 'panne') this.hud.annonce('Panne sèche', 'Le réservoir est vide.', 6);
@@ -153,6 +155,9 @@ export class Garde {
     this.scene3d.installerScene(p, this.inter.lots);
     const cr = v.point(0, 0, v.arriereZ - 2);
     this.centre = new THREE.Vector3((p.x + cr.x) / 2, p.y + 1, (p.z + cr.z) / 2);
+    // demi-longueur et orientation de la scène (du VSAV à la victime), pour cadrer sur un écran étroit
+    this.demi = Math.hypot(p.x - cr.x, p.z - cr.z) / 2;
+    this.axe = Math.atan2(p.x - cr.x, p.z - cr.z);
     // angle de vue : la direction la plus dégagée autour de la scène
     const libre = (a) => { let r = 2; while (r < 11 && !m.collision(this.centre.x + Math.sin(a) * (r + 1), this.centre.z + Math.cos(a) * (r + 1), 0.9)) r += 1; return r; };
     const base = Math.atan2(v.x - p.x, v.z - p.z) + 1.9;
@@ -273,7 +278,7 @@ export class Garde {
       const d = Math.hypot(this.cible.x - v.x, this.cible.z - v.z);
       this.surPlace = d < 32 && Math.abs(v.v) < 0.7;
       hud.mission('Départ', this.cas.motif, `${this.cas.depart}.<br><b>${this.adresse}</b>`, this.chrono);
-      hud.aide(this.surPlace ? '<kbd>F</kbd> Se présenter sur les lieux' : d < 32 ? 'Arrêtez le véhicule' : null);
+      hud.aide(this.surPlace ? '<kbd>F</kbd> Se présenter sur les lieux' : d < 32 ? 'Arrêtez le véhicule' : null, this.surPlace);
     } else if (this.phase === 'intervention') {
       this.inter.maj(dt);
       if (this.inter.phase === 'charge' && !this.inter.encours) {
@@ -296,10 +301,11 @@ export class Garde {
     const pres = Math.hypot(st.x - v.x, st.z - v.z) < 11 && Math.abs(v.v) < 0.5;
     const plein = v.carburant >= v.reservoir - 0.05;
     if (pres && !plein && this.phase !== 'alerte') {
-      if (v.moteur) this.hud.aide('Coupez le moteur (<kbd>M</kbd>) pour faire le plein');
+      const doigt = this.entrees.tactile;
+      if (v.moteur) this.hud.aide(doigt ? 'Coupez le moteur pour faire le plein' : 'Coupez le moteur (<kbd>M</kbd>) pour faire le plein', false);
       else {
         const sert = this.entrees.tenue('KeyF');
-        this.hud.aide(sert ? `Plein en cours… ${v.carburant.toFixed(0)} L` : 'Maintenez <kbd>F</kbd> : faire le plein de gazole');
+        this.hud.aide(sert ? `Plein en cours… ${v.carburant.toFixed(0)} L` : doigt ? 'Maintenez appuyé ici : plein de gazole' : 'Maintenez <kbd>F</kbd> : faire le plein de gazole');
         if (sert) v.carburant = Math.min(v.reservoir, v.carburant + 5.5 * dt);
         this.sons.pompe(sert);
         this.servait = sert;
@@ -313,14 +319,23 @@ export class Garde {
   piloteCamera(dt, cam) {
     if (this.phase !== 'intervention') return false;
     const a = this.angle + cam.lacet, c = this.centre, m = this.monde;
+    // écran en hauteur : le champ est étroit ; la caméra se place à la distance qui garde le VSAV et le brancard dans l'image
+    const etroit = this.camera.aspect < 0.9;
+    let rMax = 10.5, large = 1;
+    if (etroit) {
+      const demiChamp = Math.atan(Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect);
+      const largeur = this.demi * Math.abs(Math.sin(a - this.axe)) + 3.4;        // demi-largeur de la scène vue sous cet angle
+      rMax = Math.min(17, Math.max(6.5, largeur / Math.tan(demiChamp)));
+      large = Math.max(1, rMax / 10.5);
+    }
     let r = 2;
-    while (r < 10.5 && !m.collision(c.x + Math.sin(a) * (r + 1), c.z + Math.cos(a) * (r + 1), 0.9)) r += 0.5;
+    while (r < rMax && !m.collision(c.x + Math.sin(a) * (r + 1), c.z + Math.cos(a) * (r + 1), 0.9)) r += 0.5;
     // rue étroite : la caméra monte et regarde la scène d'en haut
-    const haut = r < 6 ? 5 + (6 - r) * 2.6 : 2.4;
+    const haut = r < 6 ? 5 + (6 - r) * 2.6 : 2.4 * large;
     const x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r;
     const y = Math.max(c.y + haut + cam.tangage * 5, m.hauteur(x, z) + 1);
     this.camera.position.lerp(new THREE.Vector3(x, y, z), 1 - Math.exp(-3 * dt));
-    this.camera.fov = 52;
+    this.camera.fov = this.jeu.champ ? this.jeu.champ(52) : 52;
     this.camera.lookAt(c);
     this.camera.updateProjectionMatrix();
     return true;

@@ -1,5 +1,5 @@
 // La scène d'intervention en 3D : brancard (sorti, amené, rechargé), sacs de matériel posés près de la victime, balisage.
-import * as THREE from 'three';
+import * as THREE from '../vendor/three.module.min.js';
 import { clamp } from './outils.js';
 
 const lisse = (t) => t * t * (3 - 2 * t);

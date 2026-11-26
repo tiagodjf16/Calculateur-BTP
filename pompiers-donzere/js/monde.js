@@ -1,8 +1,8 @@
 // Le monde : Donzère réel (relief, photo aérienne, routes, bâtiments, eau, ciel) et les requêtes de jeu
 // (altitude, route la plus proche, collisions, itinéraire GPS).
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import * as THREE from '../vendor/three.module.min.js';
+import { GLTFLoader } from '../vendor/jsm/loaders/GLTFLoader.js';
+import { RGBELoader } from '../vendor/jsm/loaders/RGBELoader.js';
 import { alea, clamp, dansPolygone, procheSegment } from './outils.js';
 
 const CARROSSABLE = new Set(['Route à 1 chaussée', 'Route à 2 chaussées', 'Rond-point', 'Bretelle', 'Route empierrée']);
@@ -27,7 +27,7 @@ function decodeur() {
   if (!decodeurPret) {
     decodeurPret = (async () => {
       try {
-        const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
+        const { MeshoptDecoder } = await import('../vendor/jsm/libs/meshopt_decoder.module.js');
         if (MeshoptDecoder.supported) { await MeshoptDecoder.ready; return MeshoptDecoder; }
       } catch (e) { /* WebAssembly refusé : on passe au décodeur JavaScript */ }
       return (await import('../vendor/meshopt_decoder_reference.js')).MeshoptDecoder;
@@ -352,6 +352,9 @@ export class Monde {
     this.porteeOmbres = portee;
   }
 
+  /** Active ou coupe les ombres portées du soleil (coupées en qualité « économie »). */
+  ombres(actives) { if (this.soleil && this.soleil.castShadow !== actives) this.soleil.castShadow = actives; }
+
   /** À appeler à chaque image : le ciel et les ombres suivent la caméra / le véhicule. */
   suivre(camera, cible) {
     this.dome.position.set(camera.position.x, 0, camera.position.z);
@@ -518,7 +521,8 @@ export class Monde {
   async _batiments() {
     let gltf;
     try {
-      gltf = await chargerModele('modeles/batiments');
+      // téléphone : même ville, textures deux fois plus petites (la mémoire graphique y est comptée)
+      gltf = this.leger ? await chargerModele('modeles/batiments_leger').catch(() => chargerModele('modeles/batiments')) : await chargerModele('modeles/batiments');
     } catch (e) {
       console.warn('Bâtiments absents :', e.message);
       this.alertes.push('Bâtiments non chargés : ' + e.message);

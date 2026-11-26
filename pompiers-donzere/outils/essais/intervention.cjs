@@ -1,6 +1,7 @@
 // Scénario d'essai : une intervention complète (hémorragie), de l'alerte au bilan.
 module.exports = async (page, photo) => {
   const js = (code) => page.evaluate(code);
+  await page.evaluate(() => { const b = document.querySelector('#aide-tactile:not([hidden]) #aide-fermer'); if (b) b.click(); });   // téléphone : on ferme l'aide de départ
   const attendre = (s) => page.waitForTimeout(s * 1000);
   const geste = async (id) => {
     await js(`window.__jeu.garde.inter.lancer('${id}')`);

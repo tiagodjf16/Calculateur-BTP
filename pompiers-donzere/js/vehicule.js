@@ -1,5 +1,5 @@
 // Le VSAV : chargement du modèle, conduite, suspension, feux (gyroleds, pénétration, stop, clignotants), portes.
-import * as THREE from 'three';
+import * as THREE from '../vendor/three.module.min.js';
 import { chargerModele } from './monde.js';
 import { amorti, clamp } from './outils.js';
 

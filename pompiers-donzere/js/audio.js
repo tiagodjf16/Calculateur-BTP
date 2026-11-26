@@ -8,6 +8,7 @@ export class Sons {
   /** À appeler depuis un clic (les navigateurs n'autorisent le son qu'après un geste). */
   demarrer() {
     if (this.ctx) return;
+    this._iphone();
     try {
       const C = (this.ctx = new (window.AudioContext || window.webkitAudioContext)());
       this.maitre = C.createGain();
@@ -22,6 +23,31 @@ export class Sons {
       this._klaxon();
       this._pompe();
     } catch (e) { this.ctx = null; }
+  }
+
+  /** iPhone, iPad : sans cela, le bouton « silencieux » de l'appareil coupe tous les sons du jeu. */
+  _iphone() {
+    try {
+      if (navigator.audioSession) { navigator.audioSession.type = 'playback'; return; }
+      if (!/iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) return;
+      // anciens iOS : un court fichier muet joué en boucle fait passer la page en « lecture audio »
+      const n = 2205, o = new Uint8Array(44 + n), v = new DataView(o.buffer);
+      const ecrire = (p, t) => { for (let i = 0; i < t.length; i++) o[p + i] = t.charCodeAt(i); };
+      ecrire(0, 'RIFF'); v.setUint32(4, 36 + n, true); ecrire(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, 22050, true); v.setUint32(28, 22050, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); ecrire(36, 'data'); v.setUint32(40, n, true);
+      o.fill(128, 44);
+      const a = new Audio(URL.createObjectURL(new Blob([o], { type: 'audio/wav' })));
+      a.loop = true;
+      a.setAttribute('playsinline', '');
+      const p = a.play();
+      if (p && p.catch) p.catch(() => {});
+      this._muet = a;
+    } catch (e) { /* le jeu fonctionne aussi sans */ }
+  }
+
+  /** Relance le son s'il a été suspendu (à appeler depuis un appui). */
+  reprendre() {
+    try { if (this.ctx && this.ctx.state !== 'running') { const p = this.ctx.resume(); if (p && p.catch) p.catch(() => {}); } } catch (e) { /* sans importance */ }
   }
 
   couper(muet) { this.muet = muet; if (this.ctx) this.maitre.gain.value = muet ? 0 : 0.8; }

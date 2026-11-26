@@ -46,6 +46,7 @@ export class Intervention {
           <div><span class="tab-motif">${c.motif}</span><span class="tab-adresse">${this.adresse}</span></div>
           <div class="tab-droite"><span id="tab-chrono">00:00</span><button type="button" id="tab-voir" title="Regarder la scène">Voir la scène</button></div>
         </header>
+        <div id="tab-vitales"></div>
         <div class="tab-corps">
           <section class="tab-victime">
             <h3>Victime</h3>
@@ -70,7 +71,12 @@ export class Intervention {
       </div>`;
     $('#tab-onglets').innerHTML = ONGLETS.map(([id, nom]) => `<button type="button" data-onglet="${id}">${nom}</button>`).join('');
     $('#tab-onglets').addEventListener('click', (ev) => { const b = ev.target.closest('[data-onglet]'); if (b) { this.onglet = b.dataset.onglet; this._gestes(); } });
-    $('#tab-gestes').addEventListener('click', (ev) => { const b = ev.target.closest('[data-geste]'); if (b && !b.disabled) this.lancer(b.dataset.geste); });
+    const ouverture = performance.now();
+    $('#tab-gestes').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-geste]');
+      if (!b || b.disabled || performance.now() - ouverture < 350) return;      // pas de geste lancé par l'appui qui a ouvert la tablette
+      if (b.dataset.lot) this.chercher(b.dataset.lot); else this.lancer(b.dataset.geste);     // matériel resté au VSAV : on l'envoie chercher
+    });
     $('#tab-lots').addEventListener('click', (ev) => { const b = ev.target.closest('[data-lot]'); if (b && !b.disabled) this.chercher(b.dataset.lot); });
     $('#tab-voir').addEventListener('click', () => this.basculer());
     this._gestes(); this._lots(); this._constantes(); this._journal();
@@ -88,8 +94,12 @@ export class Intervention {
     $('#tab-gestes').innerHTML = Object.entries(GESTES).filter(([, g]) => g[0] === this.onglet).map(([id, [, nom, lot, duree]]) => {
       const fait = this.faits.has(id), absent = lot && this.lots[lot] !== 'place';
       const bloque = this._bloque(id);
+      // matériel resté dans le VSAV : le bouton sert à l'envoyer chercher (sauf le brancard, qui se sort par son propre geste)
+      const chercher = absent && !bloque && lot !== 'brancard';
+      if (chercher) return `<button type="button" data-geste="${id}" data-lot="${lot}" class="absent" ${occupe ? 'disabled' : ''}>
+        <b>${nom}</b><small>Aller chercher : ${LOTS[lot].nom} · ${ALLER_RETOUR} s</small></button>`;
       return `<button type="button" data-geste="${id}" class="${fait ? 'fait' : ''}" ${occupe || absent || bloque ? 'disabled' : ''}>
-        <b>${nom}</b><small>${absent ? 'Matériel resté dans le VSAV : ' + LOTS[lot].nom : bloque || (lot ? LOTS[lot].nom : 'Sans matériel')} · ${duree} s</small></button>`;
+        <b>${nom}</b><small>${bloque || (absent ? 'Matériel resté dans le VSAV : ' + LOTS[lot].nom : lot ? LOTS[lot].nom : 'Sans matériel')} · ${duree} s</small></button>`;
     }).join('');
   }
 
@@ -112,6 +122,9 @@ export class Intervention {
       if (this.faits.has(g)) etats.push(txt);
     if (this.s.rcp && !this.s.racs) etats.push('Réanimation en cours');
     $('#tab-etat').innerHTML = etats.map((x) => `<span>${x}</span>`).join('');
+    // bandeau des constantes déjà relevées (petits écrans : toujours sous les yeux)
+    const vitales = [['Consc.', k.conscience], ['Resp.', k.respiration], ['SpO₂', k.spo2], ['Pouls', k.pouls], ['TA', k.tension], ['Douleur', k.douleur]].filter(([, x]) => x);
+    $('#tab-vitales').innerHTML = vitales.map(([n, x]) => `<span><i>${n}</i>${x}</span>`).join('');
   }
 
   _journal() {

@@ -24,10 +24,17 @@ for f in fichiers:
     if f.endswith(SERVIS) and not f.endswith('commerces.json'):
         os.makedirs(os.path.dirname(os.path.join(OUT, f)) or OUT, exist_ok=True)
         shutil.copy(os.path.join(RACINE, f), os.path.join(OUT, f))
-glb_vers_json(os.path.join(RACINE, 'modeles', 'batiments.glb'), os.path.join(OUT, 'modeles', 'batiments.json'))
+# modèles : version complète (ordinateur) et version allégée (téléphone), cette dernière si elle existe
+for nom in ('batiments', 'batiments_leger'):
+    src = os.path.join(RACINE, 'modeles', nom + '.glb')
+    if os.path.exists(src):
+        glb_vers_json(src, os.path.join(OUT, 'modeles', nom + '.json'))
 prive = os.path.join(RACINE, 'modeles_prives', 'vsav_bspp_web.glb')
 if os.path.exists(prive):
-    glb_vers_json(prive, os.path.join(OUT, 'modeles_prives', 'vsav_bspp_web.json'))
+    for nom in ('vsav_bspp_web', 'vsav_bspp_leger'):
+        src = os.path.join(RACINE, 'modeles_prives', nom + '.glb')
+        if os.path.exists(src):
+            glb_vers_json(src, os.path.join(OUT, 'modeles_prives', nom + '.json'))
 else:
     glb_vers_json(os.path.join(RACINE, 'modeles', 'vsav.glb'), os.path.join(OUT, 'modeles', 'vsav.json'))
 json.dump({'hdr': base64.b64encode(open(os.path.join(RACINE, 'ciel', 'env.hdr'), 'rb').read()).decode()}, open(os.path.join(OUT, 'ciel', 'env.json'), 'w'))

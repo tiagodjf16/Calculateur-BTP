@@ -6,9 +6,6 @@
 <title>Sapeurs-Pompiers — Donzère</title>
 <meta name="theme-color" content="#0b0f14">
 <link rel="stylesheet" href="style.css">
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
-</script>
 </head>
 <body>
 <canvas id="vue"></canvas>
@@ -27,7 +24,7 @@
   </section>
 
   <canvas id="tableau"></canvas>
-  <div id="action" hidden></div>
+  <div id="action" data-touche="KeyF" data-tenu hidden></div>
   <div id="annonce"></div>
 
   <aside id="touches" class="panneau">
@@ -37,22 +34,32 @@
     <span><kbd>G</kbd> gyrophares · <kbd>T</kbd> deux-tons · <kbd>K</kbd> klaxon</span>
     <span><kbd>A</kbd><kbd>E</kbd> clignotants · <kbd>W</kbd> détresse · <kbd>L</kbd> feux · <kbd>B</kbd> balisage</span>
     <span><kbd>F</kbd> action / plein · <kbd>V</kbd> caméra · <kbd>R</kbd> replacer</span>
-    <span><kbd>Échap</kbd> tablette / scène · <kbd>H</kbd> masquer l'aide · souris : tourner la vue</span>
+    <span><kbd>Échap</kbd> tablette / scène · <kbd>O</kbd> qualité · <kbd>H</kbd> masquer l'aide</span>
+    <span>souris : tourner la vue</span>
   </aside>
 
   <div id="tactile">
-    <div id="manette"><div id="pouce"></div></div>
-    <div id="boutons">
-      <button type="button" data-touche="KeyG">Gyro</button>
-      <button type="button" data-touche="KeyT">2 tons</button>
-      <button type="button" data-touche="KeyC">Ceinture</button>
-      <button type="button" data-touche="KeyM">Moteur</button>
-      <button type="button" data-touche="KeyP">Frein P</button>
-      <button type="button" data-touche="KeyV">Vue</button>
-      <button type="button" data-touche="KeyK" data-tenu>Klaxon</button>
-      <button type="button" data-touche="Space" data-tenu>Frein</button>
-      <button type="button" data-touche="KeyF" class="fort">Action</button>
-    </div>
+    <div id="volant" aria-label="Volant"><i class="fleche gauche"></i><i class="fleche droite"></i><div id="volant-pouce"></div></div>
+    <div id="ped-frein" class="pedale" aria-label="Frein et marche arrière"><b></b><span id="ped-frein-nom">Reculer</span></div>
+    <div id="ped-gaz" class="pedale" aria-label="Accélérateur"><b></b><span>Avancer</span></div>
+    <div id="boutons-g" class="boutons"></div>
+    <div id="boutons-d" class="boutons"></div>
+    <div id="plus" class="panneau" hidden></div>
+  </div>
+</div>
+
+<div id="aide-tactile" hidden>
+  <div class="aide-carte panneau">
+    <h2>Commandes tactiles</h2>
+    <ul>
+      <li><b>Volant</b> en bas à gauche : glissez le pouce vers la gauche ou la droite.</li>
+      <li><b>Pédales</b> en bas à droite : <b>Avancer</b>, et <b>Frein</b> (à l'arrêt, la même pédale fait <b>reculer</b>).</li>
+      <li>Avant de partir : <b>Moteur</b>, <b>Ceinture</b>, puis desserrez le <b>Frein P</b>.</li>
+      <li><b>Gyro</b> et <b>2 tons</b> pour les départs en urgence ; <b>Plus</b> pour les feux, clignotants, balisage.</li>
+      <li>Le <b>bandeau rouge</b> au-dessus du tableau de bord propose l'action du moment : touchez-le (maintenez pour le plein).</li>
+      <li>Glissez un doigt sur l'image pour tourner la caméra.</li>
+    </ul>
+    <button type="button" id="aide-fermer">Compris</button>
   </div>
 </div>
 
@@ -66,12 +73,21 @@
     <p class="intro">Prenez le VSAV du centre de secours et partez en intervention dans le vrai Donzère : rues, bâtiments, relief et photo aérienne de l'IGN.</p>
     <div id="chargement"><div class="barre"><i id="charge-niveau"></i></div><span id="charge-texte">Chargement…</span></div>
     <button id="jouer" type="button" disabled>Prendre la garde</button>
+    <p id="commandes-info"></p>
     <p id="diagnostic"></p>
     <p class="note">Simulation ludique : elle ne remplace pas une formation aux premiers secours (PSC, PSE).</p>
     <p class="credits" id="credits">Données : IGN BD TOPO® et BD ORTHO® (Licence Ouverte Etalab 2.0) · commerces : base Sirene (INSEE) · relief : Terrain Tiles (AWS) · ciel, matériaux et arbres : Poly Haven (CC0)</p>
   </div>
 </div>
 
+<script>
+// Si le jeu ne peut pas démarrer (navigateur trop ancien, fichier manquant), on le dit au lieu de rester sur « Chargement… ».
+window.addEventListener('error', function (e) {
+  var d = document.getElementById('diagnostic'), c = e.target && e.target.src ? ' (' + String(e.target.src).split('/').slice(-2).join('/') + ')' : '';
+  if (d && !d.textContent) d.textContent = 'Erreur : ' + (e.message || 'chargement impossible') + c;
+}, true);
+</script>
+<script nomodule>document.getElementById('diagnostic').textContent = 'Ce navigateur est trop ancien pour le jeu. Mettez-le à jour ou essayez avec un autre appareil.';</script>
 <script type="module" src="js/principal.js"></script>
 </body>
 </html>

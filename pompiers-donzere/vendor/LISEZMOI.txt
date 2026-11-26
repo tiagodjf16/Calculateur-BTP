@@ -1,0 +1,8 @@
+Bibliothèques incluses telles quelles, sauf mention :
+
+- three.module.min.js et jsm/ : three.js r170 (licence MIT, voir LICENSE).
+  Seule modification : dans jsm/loaders/GLTFLoader.js, jsm/loaders/RGBELoader.js et jsm/utils/BufferGeometryUtils.js,
+  l'import « from 'three' » est remplacé par un chemin relatif (« ../../three.module.min.js »), pour que le jeu
+  se charge sans « import map » (navigateurs de téléphones plus anciens).
+- meshopt_decoder_reference.js : décodeur JavaScript de meshoptimizer (licence MIT, voir LICENCE-meshoptimizer.txt),
+  utilisé quand la page n'a pas le droit d'exécuter WebAssembly.

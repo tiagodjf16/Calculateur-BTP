@@ -22,10 +22,15 @@ export class Hud {
 
   _taille() {
     const r = Math.min(2, window.devicePixelRatio || 1);
+    this._aRevoir = false;
+    // la hauteur du tableau de bord suit exactement sa largeur : compact (téléphone) ou à aiguilles
+    const lt = this.tb.getBoundingClientRect().width;
+    if (lt >= 2) this.tb.style.height = Math.round(lt * (lt < 470 && document.documentElement.dataset.mode === 'tactile' ? 0.235 : 0.3)) + 'px';
     for (const c of [this.tb, this.gps]) {
       const b = c.getBoundingClientRect();
-      c.width = Math.round(b.width * r);
-      c.height = Math.round(b.height * r);
+      if (b.width < 2 || b.height < 2) { this._aRevoir = true; continue; }       // masqué : on y reviendra
+      const w = Math.round(b.width * r), hh = Math.round(b.height * r);
+      if (c.width !== w || c.height !== hh) { c.width = w; c.height = hh; }
     }
   }
 
@@ -37,9 +42,13 @@ export class Hud {
     this._ta = setTimeout(() => a.classList.remove('visible'), duree * 1000);
   }
 
-  aide(texte) {
+  /** Bandeau d'action du moment. `action` : vrai s'il déclenche quelque chose (touche F, ou appui sur le bandeau). */
+  aide(texte, action = true) {
     const a = $('#action');
-    if (texte) { a.innerHTML = texte; a.hidden = false; } else a.hidden = true;
+    if (!texte) { if (!a.hidden) a.hidden = true; this._aide = null; return; }
+    if (this._aide !== texte) { this._aide = texte; a.innerHTML = texte; }
+    a.classList.toggle('info', !action);
+    if (a.hidden) a.hidden = false;
   }
 
   mission(etat, titre, texte, chrono) {
@@ -59,6 +68,7 @@ export class Hud {
 
   maj(dt, v, etat) {
     this.t += dt;
+    if (this._aRevoir) this._taille();
     this._tableau(v, etat);
     this.img = (this.img || 0) + 1;
     if (this.img % 2 === 0) this._gps(v, dt * 2);
@@ -67,6 +77,8 @@ export class Hud {
   // ------------------------------------------------------------------ tableau de bord
   _tableau(v, etat) {
     const g = this.g, W = this.tb.width, H = this.tb.height, k = H / 200;
+    if (W < 4 || H < 4) return;
+    if (H / W < 0.27) { this._compact(v, etat); return; }         // téléphone : tableau de bord compact
     g.setTransform(k, 0, 0, k, 0, 0);
     const w = W / k;
     g.clearRect(0, 0, w, 200);
@@ -114,14 +126,21 @@ export class Hud {
     g.fillStyle = '#f4f6f8'; g.font = '700 40px system-ui'; g.textAlign = 'center';
     g.fillText(v.moteur ? v.rapport : '—', mx, 80);
     g.font = '11px system-ui'; g.fillStyle = '#8b95a1';
-    g.fillText(v.moteur ? 'boîte automatique' : 'moteur arrêté — touche M', mx, 98);
+    g.fillText(v.moteur ? 'boîte automatique' : document.documentElement.dataset.mode === 'tactile' ? 'moteur arrêté' : 'moteur arrêté — touche M', mx, 98);
     g.font = '12px system-ui'; g.fillStyle = '#c9d1da';
     const h = new Date();
     g.textAlign = 'left'; g.fillText(`${v.km.toFixed(1)} km`, mx - 84, 118);
     g.textAlign = 'right'; g.fillText(`${String(h.getHours()).padStart(2, '0')}:${String(h.getMinutes()).padStart(2, '0')}`, mx + 84, 118);
     // ---- témoins
+    const temoins = this._temoins(v, etat);
+    const x0 = mx - (temoins.length * 31) / 2;
+    temoins.forEach(([nom, on, coul], i) => this._temoin(g, nom, x0 + i * 31 + 15, 152, on ? coul : '#2a2f37', on));
+    this._fleches(g, v, mx, 60, 118, 1);
+  }
+
+  _temoins(v, etat) {
     const clign = Math.floor(this.t * 2.6) % 2 === 0;
-    const temoins = [
+    return [
       ['ceinture', !v.ceinture, v.moteur && !v.ceinture && v.vitesseKmh > 5 ? (clign ? '#ff3b30' : '#5a1512') : '#ff3b30'],
       ['frein', v.freinMain, '#ff3b30'],
       ['moteur', !v.moteur, '#ffb020'],
@@ -131,17 +150,56 @@ export class Hud {
       ['balisage', v.balisage, '#ffb020'],
       ['porte', etat.porteOuverte, '#ff3b30'],
     ];
-    const x0 = mx - (temoins.length * 31) / 2;
-    temoins.forEach(([nom, on, coul], i) => this._temoin(g, nom, x0 + i * 31 + 15, 152, on ? coul : '#2a2f37', on));
-    // clignotants
+  }
+
+  /** Flèches des clignotants, de part et d'autre de x. */
+  _fleches(g, v, mx, y, ecart, e) {
     for (const s of [-1, 1]) {
       const on = (v.clignotant === s || v.clignotant === 2) && v.cliAllume;
       g.fillStyle = on ? '#30d158' : '#232830';
-      const x = mx + s * 118, y = 60;
+      const x = mx + s * ecart;
       g.beginPath();
-      g.moveTo(x + s * 13, y); g.lineTo(x, y - 11); g.lineTo(x, y - 5); g.lineTo(x - s * 11, y - 5); g.lineTo(x - s * 11, y + 5); g.lineTo(x, y + 5); g.lineTo(x, y + 11);
+      g.moveTo(x + s * 13 * e, y); g.lineTo(x, y - 11 * e); g.lineTo(x, y - 5 * e); g.lineTo(x - s * 11 * e, y - 5 * e); g.lineTo(x - s * 11 * e, y + 5 * e); g.lineTo(x, y + 5 * e); g.lineTo(x, y + 11 * e);
       g.closePath(); g.fill();
     }
+  }
+
+  /** Tableau de bord compact (téléphone) : vitesse, rapport, carburant, témoins. 400 × 94 unités. */
+  _compact(v, etat) {
+    const g = this.g, W = this.tb.width, H = this.tb.height, k = H / 94, w = W / k, mx = w / 2;
+    g.setTransform(k, 0, 0, k, 0, 0);
+    g.clearRect(0, 0, w, 94);
+    const fond = g.createLinearGradient(0, 0, 0, 94);
+    fond.addColorStop(0, 'rgba(14,16,20,0.93)');
+    fond.addColorStop(1, 'rgba(4,5,7,0.97)');
+    g.fillStyle = fond;
+    this._rr(g, 1, 1, w - 2, 92, 18);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 1.2; g.stroke();
+    g.textBaseline = 'alphabetic';
+    // vitesse
+    g.fillStyle = '#f4f6f8'; g.textAlign = 'right'; g.font = '700 42px system-ui';
+    g.fillText(Math.round(v.vitesseKmh), 84, 48);
+    g.textAlign = 'left'; g.font = '600 12px system-ui'; g.fillStyle = '#8b95a1';
+    g.fillText('km/h', 89, 48);
+    // rapport de boîte et clignotants
+    g.fillStyle = 'rgba(120,170,255,0.10)';
+    this._rr(g, mx - 25, 10, 50, 44, 10); g.fill();
+    g.fillStyle = '#f4f6f8'; g.textAlign = 'center'; g.font = '700 33px system-ui';
+    g.fillText(v.moteur ? v.rapport : '—', mx, 44);
+    this._fleches(g, v, mx, 32, 46, 0.85);
+    // carburant
+    const niveau = clamp(v.carburant / v.reservoir, 0, 1), reserve = niveau < 0.15, clign = Math.floor(this.t * 2) % 2 === 0;
+    const bx = w - 106, bw = 92, coul = reserve ? (clign ? '#ffb020' : '#7a5510') : '#dfe4ea';
+    this._pompe(g, bx - 24, 13, reserve ? coul : '#8b95a1', false);
+    g.fillStyle = '#2a2f37'; this._rr(g, bx, 17, bw, 9, 4.5); g.fill();
+    g.fillStyle = coul; this._rr(g, bx, 17, Math.max(9, bw * niveau), 9, 4.5); g.fill();
+    g.textAlign = 'right'; g.font = '600 16px system-ui'; g.fillStyle = reserve ? '#ffb020' : '#e9edf2';
+    g.fillText(`${v.carburant.toFixed(0)} L`, w - 14, 48);
+    if (reserve) { g.textAlign = 'left'; g.font = '700 9.5px system-ui'; g.fillText('RÉSERVE', bx - 24, 47); }
+    // témoins
+    const temoins = this._temoins(v, etat), pas = 36, x0 = mx - (temoins.length * pas) / 2;
+    temoins.forEach(([nom, on, c], i) => this._temoin(g, nom, x0 + i * pas + pas / 2, 74, on ? c : '#2a2f37', on, 0.92));
   }
 
   _rr(g, x, y, w, h, r) {
@@ -177,16 +235,18 @@ export class Hud {
     g.strokeStyle = '#4a515c'; g.lineWidth = 1.5; g.stroke();
   }
 
-  _pompe(g, x, y, coul) {
+  _pompe(g, x, y, coul, fenetre = true) {
     g.fillStyle = coul; g.strokeStyle = coul; g.lineWidth = 1.6;
-    g.fillRect(x, y, 11, 15); g.clearRect(x + 2, y + 2, 7, 5);
+    g.fillRect(x, y, 11, 15);
+    if (fenetre) g.clearRect(x + 2, y + 2, 7, 5); else { g.fillStyle = '#0b0d10'; g.fillRect(x + 2, y + 2, 7, 5); g.fillStyle = coul; }
     g.fillRect(x - 1.5, y + 15, 14, 2);
     g.beginPath(); g.moveTo(x + 11, y + 5); g.lineTo(x + 15, y + 8); g.lineTo(x + 15, y + 14); g.stroke();
   }
 
-  _temoin(g, nom, x, y, coul, on) {
+  _temoin(g, nom, x, y, coul, on, e = 1) {
     g.save();
     g.translate(x, y);
+    g.scale(e, e);
     if (on) { g.shadowColor = coul; g.shadowBlur = 9; }
     g.strokeStyle = coul; g.fillStyle = coul; g.lineWidth = 1.8; g.lineCap = 'round'; g.lineJoin = 'round';
     g.textAlign = 'center';
