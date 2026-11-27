@@ -107,6 +107,7 @@ export class Monde {
     this.tex = new THREE.TextureLoader();
     this.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     this.alertes = [];                       // problèmes de chargement non bloquants, affichés sur l'écran d'accueil
+    this.obstacles = [];                     // obstacles ronds (îlots de giratoire) : { x, z, r }
   }
 
   texture(url, opts = {}) {
@@ -238,6 +239,10 @@ export class Monde {
 
   /** Repousse un disque (x, z, rayon) hors des bâtiments. Renvoie [dx, dz] ou null. */
   collision(x, z, rayon) {
+    for (const o of this.obstacles) {
+      const dx = x - o.x, dz = z - o.z, dd = Math.hypot(dx, dz);
+      if (dd < o.r + rayon) { const s = (o.r + rayon - dd) / (dd || 1e-6); return [dx * s, dz * s]; }
+    }
     const lus = this.grilleBat.get(Math.floor(x / this.CB) + ',' + Math.floor(z / this.CB));
     if (!lus) return null;
     for (const bi of lus) {
@@ -484,6 +489,7 @@ export class Monde {
         prec = ligne;
       }
     }
+    this._abords(marque);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
@@ -522,6 +528,112 @@ export class Monde {
     }
   }
 
+  /**
+   * Abords des rues en agglomération : trottoirs avec leur bordure, îlots des giratoires, passages piétons.
+   * Les trottoirs s'interrompent aux carrefours et là où un bâtiment touche la chaussée.
+   */
+  _abords(marque) {
+    const P = [], C = [], I = [];
+    const quad = (a, b, c, d, coul) => {
+      const k = P.length / 3;
+      for (const p of [a, b, c, d]) { P.push(p[0], p[1], p[2]); C.push(coul[0], coul[1], coul[2]); }
+      I.push(k, k + 1, k + 2, k, k + 2, k + 3);
+    };
+    // zones bâties : cases de 20 m à moins de 14 m d'un bâtiment
+    const bati = new Set();
+    for (const b of this.d.batiments) {
+      if (!b.boite) continue;
+      for (let i = Math.floor((b.boite[0] - 14) / 20); i <= Math.floor((b.boite[2] + 14) / 20); i++)
+        for (let j = Math.floor((b.boite[1] - 14) / 20); j <= Math.floor((b.boite[3] + 14) / 20); j++) bati.add(i + ',' + j);
+    }
+    const enVille = (x, z) => bati.has(Math.floor(x / 20) + ',' + Math.floor(z / 20));
+    const DALLE = [0.23, 0.225, 0.215], BORD = [0.37, 0.365, 0.35], PIERRE = [0.42, 0.39, 0.33], TERRE = [0.15, 0.19, 0.09];      // couleurs linéaires
+    const HT = 0.13, LARG = 1.4;
+    for (const r of this.d.routes) {
+      if (!REVETUE.has(r.n) || r.n === 'Rond-point' || r.n === 'Bretelle' || r.w < 3) continue;
+      const pts = [];
+      for (let i = 0; i + 3 < r.p.length; i += 2) {
+        const ax = r.p[i], az = r.p[i + 1], bx = r.p[i + 2], bz = r.p[i + 3];
+        const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 4));
+        for (let s = 0; s < k; s++) pts.push([ax + ((bx - ax) * s) / k, az + ((bz - az) * s) / k]);
+      }
+      pts.push([r.p[r.p.length - 2], r.p[r.p.length - 1]]);
+      const d0 = Math.max(1.6, r.w / 2 + 0.25) + 0.05;
+      for (const s of [-1, 1]) {
+        const lignes = [];
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+          const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = (-(b[1] - a[1]) / l) * s, nz = ((b[0] - a[0]) / l) * s;
+          const [x, z] = pts[i];
+          const xi = x + nx * d0, zi = z + nz * d0, xe = x + nx * (d0 + LARG), ze = z + nz * (d0 + LARG), xm = (xi + xe) / 2, zm = (zi + ze) / 2;
+          let ok = enVille(xm, zm) && !this.collision(xe, ze, 0.25) && !this.collision(xm, zm, 0.25);
+          if (ok) { const rp = this.routeProche(xm, zm, 14); if (rp && rp.r !== r && rp.d < rp.r.w / 2 + 1.2) ok = false; }
+          const yi = this.hauteur(xi, zi) + 0.07, ye = this.hauteur(xe, ze) + 0.07;
+          lignes.push(ok ? [[xi, yi, zi], [xi, yi + HT, zi], [xe, ye + HT, ze], [xe, ye - 0.1, ze]] : null);
+        }
+        // seuls les tronçons continus d'au moins 12 m sont posés (pas de dalle isolée)
+        for (let i = 0; i < lignes.length; i++) {
+          if (!lignes[i]) continue;
+          let j = i;
+          while (j + 1 < lignes.length && lignes[j + 1]) j++;
+          if (j - i >= 3) for (let k = i + 1; k <= j; k++) {
+            const prec = lignes[k - 1], ligne = lignes[k];
+            quad(prec[1], prec[2], ligne[2], ligne[1], DALLE);        // dessus du trottoir
+            quad(prec[0], prec[1], ligne[1], ligne[0], BORD);         // bordure côté chaussée
+            quad(prec[2], prec[3], ligne[3], ligne[2], DALLE);        // chant côté riverains
+          }
+          i = j;
+        }
+      }
+      // passage piéton à l'approche d'un carrefour, sur une partie des rues de ville assez larges
+      const long = pts.length * 4;
+      if (r.w >= 4.5 && long > 30 && enVille(pts[0][0], pts[0][1]) && Math.abs(Math.round(r.p[0] * 7 + r.p[1] * 13)) % 5 < 2) {
+        const k = Math.min(pts.length - 2, 2), [x, z] = pts[k], [x2, z2] = pts[k + 1];
+        const l = Math.hypot(x2 - x, z2 - z) || 1, tx = (x2 - x) / l, tz = (z2 - z) / l;
+        for (let e = -r.w / 2 + 0.5; e <= r.w / 2 - 0.5; e += 1.0) marque(x - tz * e, z + tx * e, x - tz * e + tx * 2.6, z + tx * e + tz * 2.6, 0.5);
+      }
+    }
+    // giratoires : les tronçons d'un même anneau sont réunis, puis on pose l'îlot central (muret de pierre, terre-plein)
+    const ronds = this.d.routes.filter((r) => r.n === 'Rond-point');
+    const parent = ronds.map((_, i) => i), racine = (i) => (parent[i] === i ? i : (parent[i] = racine(parent[i])));
+    const bouts = ronds.map((r) => [[r.p[0], r.p[1]], [r.p[r.p.length - 2], r.p[r.p.length - 1]]]);
+    for (let i = 0; i < ronds.length; i++) for (let j = i + 1; j < ronds.length; j++)
+      if (bouts[i].some((a) => bouts[j].some((b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 1.5))) parent[racine(i)] = racine(j);
+    const anneaux = new Map();
+    ronds.forEach((r, i) => {
+      const k = racine(i);
+      if (!anneaux.has(k)) anneaux.set(k, { pts: [], w: r.w });
+      for (let q = 0; q < r.p.length; q += 2) anneaux.get(k).pts.push([r.p[q], r.p[q + 1]]);
+    });
+    this.giratoires = [];
+    for (const g of anneaux.values()) {
+      const xs = g.pts.map((p) => p[0]), zs = g.pts.map((p) => p[1]);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+      const rs = g.pts.map((p) => Math.hypot(p[0] - cx, p[1] - cz)), rm = rs.reduce((a, b) => a + b, 0) / rs.length;
+      const ri = rm - g.w / 2 - 0.5;
+      if (g.pts.length < 8 || Math.max(...rs) - Math.min(...rs) > rm * 0.5 || ri < 1) continue;
+      const y0 = this.hauteur(cx, cz) + 0.02, hm = ri < 7 ? 0.5 : 0.22, N = 28;
+      for (let k = 0; k < N; k++) {
+        const a0 = (k / N) * Math.PI * 2, a1 = ((k + 1) / N) * Math.PI * 2;
+        const p0 = [cx + Math.cos(a0) * ri, y0, cz + Math.sin(a0) * ri], p1 = [cx + Math.cos(a1) * ri, y0, cz + Math.sin(a1) * ri];
+        quad(p0, p1, [p1[0], y0 + hm, p1[2]], [p0[0], y0 + hm, p0[2]], PIERRE);
+        quad([cx, y0 + hm + 0.12, cz], [p0[0], y0 + hm, p0[2]], [p1[0], y0 + hm, p1[2]], [cx, y0 + hm + 0.12, cz], TERRE);
+      }
+      this.obstacles.push({ x: cx, z: cz, r: ri });
+      this.giratoires.push({ x: cx, z: cz, r: ri });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    geo.setIndex(I);
+    geo.computeVertexNormals();
+    const maille = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, flatShading: true }));
+    maille.receiveShadow = true;
+    maille.castShadow = false;
+    this.scene.add(maille);
+    this.nbTrottoirs = I.length / 6;
+  }
+
   // ------------------------------------------------------------------ bâtiments (générés dans Blender depuis la BD TOPO)
   async _batiments() {
     let gltf;
@@ -533,14 +645,19 @@ export class Monde {
       this.alertes.push('Bâtiments non chargés : ' + e.message);
       return;
     }
-    const platMat = new THREE.MeshStandardMaterial({ map: this.orthoLeger, roughness: 0.95 });
+    // toits : formes mesurées par laser (IGN LiDAR HD). Chaque facette garde sa propre orientation : pans plans, arêtes vives.
+    const platMat = new THREE.MeshStandardMaterial({ map: this.orthoLeger, roughness: 0.95, flatShading: true });
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = o.receiveShadow = true;
       if (o.material.name === 'toit_plat') o.material = platMat;
       else {
         if (o.material.map) o.material.map.anisotropy = this.aniso;
-        if (o.material.name === 'tuiles') o.material.side = THREE.DoubleSide;
+        if (o.material.name === 'tuiles') {
+          o.material.side = THREE.DoubleSide;
+          o.material.flatShading = true;
+          o.material.color.setScalar(1.3);              // la teinte de chaque toit est stockée divisée par 1,3
+        }
         o.material.envMapIntensity = 0.9;
       }
     });
@@ -573,8 +690,12 @@ export class Monde {
       return candidats[0];
     };
     const surface = (p) => { let s = 0; for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) s += p[j] * p[i + 1] - p[i] * p[j + 1]; return Math.abs(s) / 2; };
+    // arbres réels : chacun a été repéré dans le relevé laser de l'IGN (position, hauteur, envergure) ; à défaut, on les devine
+    const centre = await this._arbresCentre();
+    const auCentre = (x, z) => !!centre && x > centre.zone[0] && x < centre.zone[2] && z > centre.zone[1] && z < centre.zone[3];
     // 1) bois, forêts et haies de la BD TOPO
     for (const v of this.d.vegetation) {
+      if (centre) break;
       const dens = /Forêt fermée/.test(v.n) ? 1 / 50 : /Bois|Forêt ouverte/.test(v.n) ? 1 / 75 : /Haie/.test(v.n) ? 1 / 28 : /Verger/.test(v.n) ? 1 / 45 : 0;
       if (!dens) continue;
       let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
@@ -589,10 +710,6 @@ export class Monde {
         k++; total++;
       }
     }
-    // au centre-ville, les arbres ont été repérés un par un sur la photo aérienne : ils sont plantés en 3D (voir plus bas)
-    const centre = await this._arbresCentre();
-    const auCentre = (x, z) => !!centre && x > centre.zone[0] && x < centre.zone[2] && z > centre.zone[1] && z < centre.zone[3];
-    for (const liste of places) for (let i = liste.length - 1; i >= 0; i--) if (auCentre(liste[i][0], liste[i][1])) { liste.splice(i, 1); total--; }
     // 2) arbres des jardins, parcs et rues : là où la photo aérienne montre un feuillage
     const img = this.orthoLeger.image, T = 1024;
     const cv = document.createElement('canvas');
@@ -613,7 +730,11 @@ export class Monde {
     }
     // arbres 3D du centre : de loin, ils sont remplacés par leur silhouette plate (dalles de 70 m, basculées selon la distance)
     const D3 = 70;
-    if (centre) for (const [x, z, ray] of centre.arbres) places[0].push([x, z, clamp(ray / 4.6, 0.55, 1.2), rnd() * Math.PI, 'L' + Math.floor(x / D3) + ',' + Math.floor(z / D3)]);
+    if (centre) for (const [x, z, ray, h = ray * 2.4] of centre.arbres) {
+      const cle = Math.floor(x / D3) + ',' + Math.floor(z / D3);
+      places[0].push([x, z, clamp(h / esp[0].hauteur, 0.22, 2.6), rnd() * Math.PI, centre.denses.has(cle) ? undefined : 'L' + cle]);
+      total++;
+    }
     // deux plans croisés par arbre (une photo par plan), regroupés par dalles de 275 m pour n'afficher que les arbres visibles
     const D = 275, dalles = new Map();
     esp.forEach((e, ei) => {
@@ -661,7 +782,7 @@ export class Monde {
     this.dallesArbres = new Map();
     let liste, gltf;
     try {
-      liste = await (await fetch('data/arbres_centre.json')).json();
+      liste = await (await fetch('data/arbres.json')).json();
       gltf = await chargerModele('modeles/arbres');
     } catch (e) {
       this.alertes.push('Arbres 3D non chargés : ' + e.message);
@@ -695,14 +816,24 @@ export class Monde {
     // envergure de chaque modèle (pour l'ajuster au houppier repéré)
     const envergure = {};
     for (const n of modeles) { const g = pieces[n + suffixe].geometry; g.computeBoundingBox(); envergure[n] = (g.boundingBox.max.x - g.boundingBox.min.x + g.boundingBox.max.z - g.boundingBox.min.z) / 4; }
+    const hauteurModele = {};
+    for (const n of modeles) hauteurModele[n] = pieces[n + suffixe].geometry.boundingBox.max.y;
     const rnd = alea(777), D3 = 70, groupes = new Map(), M = new THREE.Matrix4(), q = new THREE.Quaternion(), haut = new THREE.Vector3(0, 1, 0);
-    for (const [x, z, ray] of liste.arbres) {
-      const n = ray < 3.1 ? 'jeune_a' : modeles[Math.floor(rnd() * 3)];
-      const e = clamp(ray / envergure[n], 0.8, 1.3) * (n === 'jeune_a' ? 1 : 1.18) * (0.92 + rnd() * 0.16);
-      const cle = Math.floor(x / D3) + ',' + Math.floor(z / D3);
+    const cleDe = (x, z) => Math.floor(x / D3) + ',' + Math.floor(z / D3);
+    // bois épais : trop d'arbres pour les dessiner en volume ; ils gardent leur silhouette (deux plans croisés)
+    const compte = new Map();
+    for (const [x, z] of liste.arbres) compte.set(cleDe(x, z), (compte.get(cleDe(x, z)) || 0) + 1);
+    liste.denses = new Set([...compte].filter(([, nb]) => nb > (this.leger ? 40 : 75)).map(([cle]) => cle));
+    for (const [x, z, ray, h = ray * 2.4] of liste.arbres) {
+      const cle = cleDe(x, z);
+      if (liste.denses.has(cle)) continue;
+      const [ti, tj] = cle.split(',').map(Number);
+      const n = h < 5.2 ? 'jeune_a' : modeles[Math.abs(ti * 7 + tj * 13) % 3];
+      const ey = (h / hauteurModele[n]) * (0.96 + rnd() * 0.08);
+      const exz = clamp(ray / envergure[n], ey * 0.7, ey * 1.5);
       if (!groupes.has(cle)) groupes.set(cle, {});
       const g = groupes.get(cle);
-      (g[n] = g[n] || []).push(M.compose(new THREE.Vector3(x, this.hauteur(x, z), z), q.setFromAxisAngle(haut, rnd() * Math.PI * 2), new THREE.Vector3(e, e * (0.94 + rnd() * 0.12), e)).clone());
+      (g[n] = g[n] || []).push(M.compose(new THREE.Vector3(x, this.hauteur(x, z) - 0.05, z), q.setFromAxisAngle(haut, rnd() * Math.PI * 2), new THREE.Vector3(exz, ey, exz)).clone());
     }
     for (const [cle, parModele] of groupes) {
       const groupe = new THREE.Group();

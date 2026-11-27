@@ -31,27 +31,23 @@ flou = lambda img, r: np.asarray(Image.fromarray((np.clip(img, 0, 1) * 255).asty
 poids = flou(np.repeat(1 - m, 3, 2), 9)
 comble = flou(a * (1 - m), 9) / np.maximum(poids, 1e-3)
 sol = a * (1 - m) + comble * m
-# centre-ville : les houppiers des arbres (plantés en 3D dans le jeu) cachent le sol sur la photo ; on les efface en
-# prolongeant de proche en proche la couleur du sol dégagé qui les entoure (chaussée de la place, pelouse du parc…)
-f_centre = os.path.join(RACINE, 'data', 'arbres_centre.json')
-if os.path.exists(f_centre):
-    x0, z0, x1, z1 = json.load(open(f_centre))['zone']
-    i0, i1, j0, j1 = [int(round(v)) for v in ((x0 + L / 2) / L * T, (x1 + L / 2) / L * T, (z0 + H / 2) / H * T, (z1 + H / 2) / H * T)]
-    zone = sol[j0:j1, i0:i1].copy()
-    r_, v_, b_ = zone[..., 0], zone[..., 1], zone[..., 2]
-    feuilles = ((v_ - (r_ + b_) / 2 > 5 / 255) & (r_ + v_ + b_ < 380 / 255)).astype(np.float32)
-    feuilles = np.asarray(Image.fromarray((feuilles * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(5)), np.float32)[..., None] / 255.0
-    connu = 1 - feuilles
-    for _ in range(80):
-        if connu.min() > 0.5:
+# les houppiers des arbres cachent le sol sur la photo aérienne : sous chaque arbre (repéré par le relevé laser de l'IGN),
+# on prolonge de proche en proche la couleur du sol dégagé qui l'entoure (chaussée, gravier, pelouse…)
+f_mnh = os.path.join(RACINE, '.cache', 'lidar', 'mnh.npy')
+if os.path.exists(f_mnh):
+    mnh = np.load(f_mnh, mmap_mode='r')
+    couvert = np.asarray(Image.fromarray((np.asarray(mnh[::2, ::2]) > 2.2).astype(np.uint8) * 255).resize((T, T), Image.BILINEAR), np.float32)[..., None] / 255.0
+    couvert = np.asarray(Image.fromarray((couvert[..., 0] * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(5)), np.float32)[..., None] / 255.0 * (1 - m)
+    connu = (couvert < 0.3).astype(np.float32) * (1 - m)
+    for _ in range(120):
+        if connu.mean() > 0.999:
             break
-        p_ = flou(np.repeat(connu, 3, 2), 4)
-        c_ = flou(zone * connu, 4) / np.maximum(p_, 1e-3)
-        gagne = (connu < 0.5) & (p_[..., :1] > 0.08)
-        zone = np.where(gagne, c_, zone)
+        p_ = flou(np.repeat(connu, 3, 2), 3)
+        c_ = flou(sol * connu, 3) / np.maximum(p_, 1e-3)
+        gagne = (connu < 0.5) & (p_[..., :1] > 0.1)
+        sol = np.where(gagne, c_, sol)
         connu = np.where(gagne, 1.0, connu)
-    sol[j0:j1, i0:i1] = zone
-    print('centre : %.0f %% de la zone était sous les arbres' % (feuilles.mean() * 100))
+    print('sol : %.0f %% de la carte était sous les arbres' % (couvert.mean() * 100))
 # voitures et petits objets : filtre médian ; ombres : on remonte les zones sombres
 img = Image.fromarray((np.clip(sol, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(11)).filter(ImageFilter.GaussianBlur(3))
 s = np.asarray(img, np.float32) / 255.0

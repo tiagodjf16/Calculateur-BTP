@@ -2,7 +2,8 @@
 
 Jeu de secours d'urgence aux personnes dans le vrai Donzère (Drôme), jouable dans un navigateur (three.js).
 
-- **Ville réelle** : emprises et hauteurs des bâtiments, routes, végétation et relief issus de l'IGN (BD TOPO®, BD ORTHO®).
+- **Ville réelle** : emprises des bâtiments et routes de la BD TOPO®, photo aérienne BD ORTHO®, et relevé laser LiDAR HD de l'IGN pour la
+  forme et la hauteur réelles de chaque toit, la position et la hauteur de chaque arbre, et le relief du sol. Les façades sont génériques.
 - **Véhicule** : VSAV. Le jeu charge `modeles_prives/vsav_bspp_web.glb` (ou `vsav_bspp_leger.glb` sur téléphone) s'il existe, sinon `modeles/vsav.glb`.
 - **Interventions** : catalogue de cas (arrêt cardiaque, hémorragie, traumatismes, malaises, accidents de la route…), matériel du VSAV,
   bilan, gestes, brancardage, transport. Simulation ludique : elle ne remplace pas une formation aux premiers secours.
@@ -29,7 +30,10 @@ La finesse de l'image s'ajuste seule à la fluidité (menu Plus → Qualité, ou
 | Script | Rôle |
 | --- | --- |
 | `bake.py` | Télécharge les données IGN de la zone et produit `data/donzere.json` + les photos aériennes |
-| `monde.py`, `facades.py` | Construit les bâtiments dans Blender (module `bpy`) → `modeles/batiments_brut.glb` |
+| `lidar.py` | Télécharge le relevé laser LiDAR HD de l'IGN (hauteurs, sol, classes) dans `.cache/lidar/` |
+| `relief.py`, `arbres_lidar.py` | Relief du sol et arbres réels (position, hauteur, envergure) d'après ce relevé |
+| `monde.py`, `facades.py` | Construit les bâtiments dans Blender (module `bpy`), toits d'après le relevé laser → `modeles/batiments_brut.glb` |
+| `arbres3d.py` | Modèles d'arbres en volume (platanes, jeune arbre, olivier) → `modeles/arbres_brut.glb` |
 | `commerces.py`, `devantures.py` | Commerces réels (annuaire Sirene) et leurs devantures |
 | `ciel.py`, `sol.py`, `arbres.py`, `textures.py`, `cc0.py` | Ciel HDRI, matières du sol, arbres et textures (Poly Haven, CC0) |
 | `atelier.py`, `vsav.py` | Atelier de modélisation Blender (coques, roues réalistes, livrées) |
@@ -41,7 +45,7 @@ La finesse de l'image s'ajuste seule à la fluidité (menu Plus → Qualité, ou
 
 ## Crédits et licences
 
-- Données géographiques : © IGN — BD TOPO® et BD ORTHO®, Licence Ouverte Etalab 2.0. Relief : Terrain Tiles (AWS Open Data).
+- Données géographiques : © IGN — BD TOPO®, BD ORTHO® et LiDAR HD, Licence Ouverte Etalab 2.0.
 - Commerces et services : base Sirene de l'INSEE via l'API Recherche d'entreprises (Licence Ouverte). Les noms de personnes ne sont pas repris.
 - Ciel, textures de matériaux et arbres : Poly Haven (CC0).
 - Moteur : three.js (MIT). Polices des outils : Roboto Condensed (Apache 2.0), Barlow Condensed (OFL).

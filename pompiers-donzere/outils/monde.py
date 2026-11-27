@@ -10,11 +10,13 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
 import numpy as np
 import bpy
-from shapely.geometry import Polygon, MultiPolygon, Point
+from shapely.geometry import Polygon, MultiPolygon, MultiPoint, Point
+from shapely.ops import triangulate
+from shapely.prepared import prep
 from shapely.geometry.polygon import orient
 from shapely import STRtree
 import mapbox_earcut as earcut
-from PIL import Image
+from PIL import Image, ImageDraw
 import atelier as A
 import facades, devantures, cc0
 
@@ -32,6 +34,79 @@ def sol(x, y):
     i, j = int(fx), int(fz)
     a, b = fx - i, fz - j
     return (REL[j, i] * (1 - a) * (1 - b) + REL[j, i + 1] * a * (1 - b) + REL[j + 1, i] * (1 - a) * b + REL[j + 1, i + 1] * a * b)
+
+
+# ---------------------------------------------------------------- toits mesurés (LiDAR HD de l'IGN, voir outils/lidar.py)
+LIDAR = os.path.join(RACINE, '.cache', 'lidar')
+MNH = np.load(os.path.join(LIDAR, 'mnh.npy'), mmap_mode='r') if os.path.exists(os.path.join(LIDAR, 'mnh.npy')) else None
+MNT = np.load(os.path.join(LIDAR, 'mnt.npy'), mmap_mode='r') if MNH is not None else None
+ALT0 = float(D['relief']['min'])                 # altitude du zéro du relief du jeu
+Image.MAX_IMAGE_PIXELS = None
+_f_cl = os.path.join(LIDAR, 'classes.png')
+CLASSE_BATI = None
+if MNH is not None and os.path.exists(_f_cl):
+    _c = np.asarray(Image.open(_f_cl).convert('RGB'))
+    CLASSE_BATI = (_c[..., 0] == 180) & (_c[..., 1] == 20) & (_c[..., 2] == 20)          # rouge : classe « bâtiment » de l'IGN
+    del _c
+PXM = 2.0                                        # pixels par mètre des relevés
+PAS_BORD, PAS_TOIT = 0.8, 1.0                    # finesse du maillage des toits : bord et intérieur (m)
+
+
+def toit_mesure(poly):
+    """Hauteur réelle du toit au-dessus d'une emprise. Renvoie une fonction z(x, y) (repère du jeu), ou None si le relevé
+    ne montre pas de bâtiment à cet endroit (construction récente, démolie, ou simple auvent)."""
+    if MNH is None:
+        return None
+    x0, y0, x1, y1 = poly.bounds
+    i0, i1 = max(0, int((x0 + LARG / 2) * PXM) - 4), min(MNH.shape[1], int((x1 + LARG / 2) * PXM) + 5)
+    j0, j1 = max(0, int((HAUT / 2 - y1) * PXM) - 4), min(MNH.shape[0], int((HAUT / 2 - y0) * PXM) + 5)
+    if i1 - i0 < 3 or j1 - j0 < 3:
+        return None
+    h = np.array(MNH[j0:j1, i0:i1], np.float32)
+    img = Image.new('L', (i1 - i0, j1 - j0), 0)
+    dm = ImageDraw.Draw(img)
+    px = lambda an: [((x + LARG / 2) * PXM - i0, (HAUT / 2 - y) * PXM - j0) for x, y in an]
+    dm.polygon(px(poly.exterior.coords), fill=1)
+    for trou in poly.interiors:
+        dm.polygon(px(trou.coords), fill=0)
+    masque = np.asarray(img, bool)
+    ok = masque & (h > 1.8)
+    if CLASSE_BATI is not None:
+        ok &= CLASSE_BATI[j0:j1, i0:i1]
+    if masque.sum() < 6 or ok.sum() < 0.3 * masque.sum():
+        return None
+    # le relevé et l'emprise ne se superposent pas au pixel près : là où l'on voit le sol au bord, on prolonge le toit voisin
+    val, connu = np.where(ok, h, 0.0), ok.copy()
+    for tour in range(60):
+        if tour >= 4 and connu[masque].all():
+            break
+        acc, nb = np.zeros_like(val), np.zeros(val.shape, np.float32)
+        for dj, di in ((0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            acc += np.roll(val * connu, (dj, di), (0, 1))
+            nb += np.roll(connu, (dj, di), (0, 1))
+        gagne = ~connu & (nb > 0)
+        val[gagne] = acc[gagne] / nb[gagne]
+        connu |= gagne
+    # antennes, cheminées et bruit de mesure : filtre médian 3 x 3, puis léger lissage
+    piles = np.stack([np.roll(val, (dj, di), (0, 1)) for dj in (-1, 0, 1) for di in (-1, 0, 1)])
+    val = np.median(piles, axis=0)
+    val = (val * 4 + sum(np.roll(val, d_, (0, 1)) for d_ in ((0, 1), (0, -1), (1, 0), (-1, 0)))) / 8
+    z = val + np.array(MNT[j0:j1, i0:i1], np.float32) - ALT0
+    nj, ni = z.shape
+
+    def f(x, y):
+        fx = min(max((x + LARG / 2) * PXM - 0.5 - i0, 0.0), ni - 1.001)
+        fy = min(max((HAUT / 2 - y) * PXM - 0.5 - j0, 0.0), nj - 1.001)
+        i, j = int(fx), int(fy)
+        a_, b_ = fx - i, fy - j
+        return float(z[j, i] * (1 - a_) * (1 - b_) + z[j, i + 1] * a_ * (1 - b_) + z[j + 1, i] * (1 - a_) * b_ + z[j + 1, i + 1] * a_ * b_)
+    return f
+
+
+def points_bord(p_, q_):
+    """Points régulièrement espacés le long d'une arête (mêmes points pour le haut du mur et le bord du toit)."""
+    n2 = max(1, int(float(np.hypot(*(np.asarray(q_) - np.asarray(p_)))) / PAS_BORD))
+    return [np.asarray(p_) + (np.asarray(q_) - np.asarray(p_)) * (i / n2) for i in range(n2 + 1)]
 
 
 # teintes de crépi provençales (multipliées par le crépi clair de l'atlas)
@@ -54,10 +129,11 @@ MAILLE = 4                                   # découpage de la carte en 4 x 4 d
 
 class Lot:
     def __init__(self):
-        self.p, self.uv, self.c = [], [], []
+        self.p, self.uv, self.c, self.n = [], [], [], []
 
-    def tri(self, p0, p1, p2, uv0, uv1, uv2, coul):
+    def tri(self, p0, p1, p2, uv0, uv1, uv2, coul, normales=None):
         self.p += [p0, p1, p2]; self.uv += [uv0, uv1, uv2]; self.c += [coul, coul, coul]
+        self.n += list(normales) if normales else [None, None, None]
 
     def quad(self, p0, p1, p2, p3, u0, u1, v0, v1, coul):
         self.tri(p0, p1, p2, (u0, v0), (u1, v0), (u1, v1), coul)
@@ -171,6 +247,10 @@ for ib, (poly, b) in enumerate(zip(polys, infos)):
     r = float(b.get('r', 0))
     pans = style in ('maison', 'collectif', 'annexe', 'eglise') and r >= 0.5 and w > 1.2
     rise = min(max(r, 0.24 * w), 0.40 * w) if pans else 0.0
+    zt = toit_mesure(poly)                                   # toit réel (relevé laser) : remplace le toit « deviné »
+    if zt is not None:
+        pans, rise = False, 0.0
+        stats['mesures'] = stats.get('mesures', 0) + 1
     # arêtes des murs (coupées au faîtage pour former les pignons)
     voisins = [polys[k] for k in arbre.query(poly.buffer(0.6)) if k != ib]
     aretes = []
@@ -202,6 +282,9 @@ for ib, (poly, b) in enumerate(zip(polys, infos)):
     teinte = tuple(t * float(rng.uniform(0.9, 1.04)) for t in teinte)
     z0 = min(g_max, g_min + 1.2)
     h_eff = max(2.5, h - (z0 - g_min))
+    if zt is not None:                                       # égout : bas du toit le long des murs
+        bord = [zt(*q) for (p_, q_) in aretes for q in points_bord(p_, q_)]
+        h_eff = max(2.3, float(np.percentile(bord, 25)) - z0)
     etages = max(1, int(round(h_eff / 2.85)))
     # enseignes : chaque commerce va sur la façade libre la plus proche de son adresse
     places = {}
@@ -224,7 +307,7 @@ for ib, (poly, b) in enumerate(zip(polys, infos)):
         for i, e in enumerate(liste):
             e.update(s0=(longueurs[k] - total) / 2 + i * (larg + 0.25), largeur=larg, teinte=teinte, famille=famille if famille != 'pierre' else 'galets', index=len(toutes_enseignes))
             toutes_enseignes.append(e)
-    preps.append(dict(style=style, famille=famille, teinte=teinte, pans=pans, rise=rise, dfait=dfait, nrm=nrm, centre=centre, w=w, long=max(l0, l1),
+    preps.append(dict(zt=zt, style=style, famille=famille, teinte=teinte, pans=pans, rise=rise, dfait=dfait, nrm=nrm, centre=centre, w=w, long=max(l0, l1),
                       aretes=aretes, longueurs=longueurs, mitoyen=mitoyen, z0=z0, base=g_min - 0.8, h_eff=h_eff, etages=etages, places=places, ext=ext, aire=aire))
 
 TEX = os.path.join(RACINE, '.cache', 'tex')
@@ -248,7 +331,44 @@ for ib, (poly, b, P) in enumerate(zip(polys, infos, preps)):
         volets = 'volets_gris'
     nu = lambda: F['nu'][int(rng.integers(len(F['nu'])))]
 
+    zt = P['zt']
+    egout_b, etages_b = egout, etages
+    z_bord = {}                                              # hauteur du toit aux points du bord (rectifiée par morceaux)
+    if zt is not None:
+        unite = lambda v_: v_ / max(float(np.hypot(*v_)), 1e-9)
+        for an in [P['ext']] + [list(i_.coords)[:-1] for i_ in poly.interiors]:
+            na = len(an)
+            coins = []
+            for k_ in range(na):                             # aux angles : hauteur prise le long de la bissectrice, vers l'intérieur
+                p0_, p1_, p2_ = np.array(an[k_ - 1]), np.array(an[k_]), np.array(an[(k_ + 1) % na])
+                d1_, d2_ = unite(p1_ - p0_), unite(p2_ - p1_)
+                bis = np.array([d1_[1], -d1_[0]]) + np.array([d2_[1], -d2_[0]])
+                bis = unite(bis) if np.hypot(*bis) > 0.3 else np.array([d1_[1], -d1_[0]])
+                coins.append(zt(p1_[0] - bis[0] * 1.1, p1_[1] - bis[1] * 1.1))
+            for k_ in range(na):
+                pb = points_bord(an[k_], an[(k_ + 1) % na])
+                dd_ = unite(np.array(an[(k_ + 1) % na]) - np.array(an[k_]))
+                zz = [zt(q[0] - dd_[1] * 0.9, q[1] + dd_[0] * 0.9) for q in pb]
+                zz[0], zz[-1] = coins[k_], coins[(k_ + 1) % na]
+                zz = [zz[0]] + [float(np.median(zz[max(0, i - 2):i + 3])) for i in range(1, len(zz) - 1)] + [zz[-1]] if len(zz) > 2 else zz
+                gardes, pile = {0, len(zz) - 1}, [(0, len(zz) - 1)]
+                while pile:
+                    i0_, i1_ = pile.pop()
+                    if i1_ - i0_ < 2:
+                        continue
+                    ecarts = [abs(zz[i] - (zz[i0_] + (zz[i1_] - zz[i0_]) * (i - i0_) / (i1_ - i0_))) for i in range(i0_ + 1, i1_)]
+                    im = int(np.argmax(ecarts))
+                    if ecarts[im] > 0.22:
+                        gardes.add(i0_ + 1 + im)
+                        pile += [(i0_, i0_ + 1 + im), (i0_ + 1 + im, i1_)]
+                gardes = sorted(gardes)
+                for i0_, i1_ in zip(gardes[:-1], gardes[1:]):
+                    for i in range(i0_, i1_ + 1):
+                        z_bord[(float(pb[i][0]), float(pb[i][1]))] = zz[i0_] + (zz[i1_] - zz[i0_]) * (i - i0_) / max(i1_ - i0_, 1)
+
     def z_toit(x, y):
+        if zt is not None:
+            return zt(x, y)
         return egout + rise * (1 - min(1.0, abs(float(np.dot((x - centre[0], y - centre[1]), nrm))) / w)) if pans else egout
 
     libres = [k for k in range(len(aretes)) if not mitoyen[k] and longueurs[k] >= 2.4]
@@ -266,6 +386,13 @@ for ib, (poly, b, P) in enumerate(zip(polys, infos, preps)):
         nb = max(1, int(round(L / 3.0)))
         bw = L / nb
         simple = mitoyen[k] or L < 2.2 or style == 'annexe'
+        if zt is not None:                                                     # ce mur monte jusqu'au bas du toit réel à cet endroit
+            bord_k = points_bord(p_, q_)
+            zs = [z_bord.get((float(q[0]), float(q[1])), None) for q in bord_k]
+            zs = [z_ if z_ is not None else zt(*q) for z_, q in zip(zs, bord_k)]
+            egout = max(z0 + 2.2, min(egout_b, min(zs)))
+            etages = max(1, int(round((egout - z0) / 2.85)))
+            he = (egout - z0) / etages
         occupes = [(e['s0'], e['s0'] + e['largeur'], e) for e in P['places'].get(k, [])]
 
         def travee(s0, s1, za, zb, cel, coul=teinte):
@@ -352,6 +479,36 @@ for ib, (poly, b, P) in enumerate(zip(polys, infos, preps)):
                 elif style == 'annexe' and f == 0 and k == (libres[0] if libres else -1) and i == 0 and bw >= 2.5:
                     cel = 'garage_metal' if rng.random() < 0.5 else 'porte_bois'
                 travee(i * bw, (i + 1) * bw, za, zb, cel)
+        # toit mesuré : le mur suit le bord du toit (pignons, rampants, décrochements)
+        if zt is not None:
+            u0, u1, v0, v1 = facades.uv_cellule(F['nu'][0], 0, min(1, PAS_BORD / 3), 0, 1)
+            vv = lambda z: v0 + (v1 - v0) * min(1.0, max(0.0, (z - egout) / 3.0))
+            n2 = len(zs) - 1
+            hz = [max(z_, egout) for z_ in zs]
+            garde, pile = {0, n2}, [(0, n2)]
+            while pile:
+                i0_, i1_ = pile.pop()
+                if i1_ - i0_ < 2:
+                    continue
+                ecarts = [abs(hz[i] - (hz[i0_] + (hz[i1_] - hz[i0_]) * (i - i0_) / (i1_ - i0_))) for i in range(i0_ + 1, i1_)]
+                im = int(np.argmax(ecarts))
+                if ecarts[im] > 0.004:
+                    garde.add(i0_ + 1 + im)
+                    pile += [(i0_, i0_ + 1 + im), (i0_ + 1 + im, i1_)]
+            garde = sorted(garde)
+            for i0_, i1_ in zip(garde[:-1], garde[1:]):
+                h0, h1 = hz[i0_], hz[i1_]
+                if max(h0, h1) - egout > 0.02:
+                    s0, s1 = L * i0_ / n2, L * i1_ / n2
+                    u0, u1, v0, v1 = facades.uv_cellule(F['nu'][0], 0, min(1, (s1 - s0) / 3), 0, 1)
+                    A0, B0, B1, A1 = pt(s0, egout), pt(s1, egout), pt(s1, h1), pt(s0, h0)
+                    murs.tri(A0, B0, B1, (u0, v0), (u1, v0), (u1, vv(h1)), teinte)
+                    murs.tri(A0, B1, A1, (u0, v0), (u1, vv(h1)), (u0, vv(h0)), teinte)
+            if not mitoyen[k] and style in ('maison', 'bourg', 'annexe') and max(zs) - min(zs) < 0.4 and L > 2.5:     # génoise sous un égout horizontal
+                zg = min(zs)
+                for i in range(nb):
+                    u0, u1, v0, v1 = facades.uv_cellule('genoise', 0, min(1, bw / 3), 0.0, 0.118)
+                    murs.quad(pt(i * bw, zg - 0.30, 0.01), pt((i + 1) * bw, zg - 0.30, 0.01), pt((i + 1) * bw, zg + 0.03, 0.2), pt(i * bw, zg + 0.03, 0.2), u0, u1, v0, v1, (1, 1, 1))
         # pignon : du niveau de l'égout jusqu'à la pente du toit
         if pans:
             for i in range(nb):
@@ -371,12 +528,125 @@ for ib, (poly, b, P) in enumerate(zip(polys, infos, preps)):
                     murs.quad(pt(i * bw, egout - 0.30, 0.01), pt((i + 1) * bw, egout - 0.30, 0.01), pt((i + 1) * bw, egout + 0.03, 0.2), pt(i * bw, egout + 0.03, 0.2), u0, u1, v0, v1, (1, 1, 1))
 
     # ---- couverture
-    if pans:
+    egout, etages = egout_b, etages_b
+    if zt is not None:
+        # points : bord (les mêmes que le haut des murs) + grille intérieure ; triangulation de Delaunay
+        pts2 = [tuple(q) for an in [P['ext']] + [list(i.coords)[:-1] for i in poly.interiors] for k in range(len(an)) for q in points_bord(an[k], an[(k + 1) % len(an)])[:-1]]
+        dedans = poly.buffer(-0.5)
+        if not dedans.is_empty:
+            bx0, by0, bx1, by1 = dedans.bounds
+            prep_d = prep(dedans)
+            for gx in np.arange(bx0 + 0.3, bx1, PAS_TOIT):
+                for gy in np.arange(by0 + 0.3, by1, PAS_TOIT):
+                    if prep_d.contains(Point(gx, gy)):
+                        pts2.append((float(gx), float(gy)))
+        prep_p = prep(poly.buffer(0.01))
+        tris = [list(t.exterior.coords)[:3] for t in triangulate(MultiPoint(pts2)) if prep_p.contains(t.representative_point())]
+        zc = {}
+        faces = []
+        for t in tris:
+            Pt = []
+            for q in t:
+                if q not in zc:
+                    zc[q] = z_bord.get((float(q[0]), float(q[1])), None)
+                    if zc[q] is None:
+                        zc[q] = z_toit(q[0], q[1])
+                Pt.append((float(q[0]), float(q[1]), zc[q]))
+            e1, e2 = np.subtract(Pt[1], Pt[0]), np.subtract(Pt[2], Pt[0])
+            nf = np.cross(e1, e2)
+            if nf[2] < 0:
+                Pt[1], Pt[2] = Pt[2], Pt[1]
+                nf = -nf
+            aire_t = float(np.linalg.norm(nf)) / 2
+            if aire_t < 1e-6:
+                continue
+            nf = nf / (aire_t * 2)
+            pente = float(np.hypot(nf[0], nf[1]) / max(nf[2], 1e-3))
+            # sens de la pente, mesuré sur 2,4 m autour du triangle (insensible au bruit) et ramené sur les axes du bâtiment :
+            # toutes les tuiles d'un même pan sont alignées et ses triangles partagent leurs sommets
+            cadre = -1
+            mx_, my_ = (Pt[0][0] + Pt[1][0] + Pt[2][0]) / 3, (Pt[0][1] + Pt[1][1] + Pt[2][1]) / 3
+            gx_, gy_ = (z_toit(mx_ + 1.2, my_) - z_toit(mx_ - 1.2, my_)) / 2.4, (z_toit(mx_, my_ + 1.2) - z_toit(mx_, my_ - 1.2)) / 2.4
+            if math.hypot(gx_, gy_) > 0.1:
+                gdir = np.array([-gx_, -gy_]) / math.hypot(gx_, gy_)
+                axes = [nrm, -nrm, dfait, -dfait]
+                sc = [float(np.dot(gdir, ax)) for ax in axes]
+                cadre = int(np.argmax(sc))
+            faces.append((Pt, nf, pente, aire_t, cadre))
+        # pans réguliers : un triangle isolé (ou en bord de pan) prend l'orientation de la majorité de ses voisins
+        par_arete = {}
+        for i_f, f_ in enumerate(faces):
+            for a_, b_ in ((0, 1), (1, 2), (2, 0)):
+                par_arete.setdefault(tuple(sorted((f_[0][a_][:2], f_[0][b_][:2]))), []).append(i_f)
+        voisins_f = [[] for _ in faces]
+        for lst in par_arete.values():
+            if len(lst) == 2:
+                voisins_f[lst[0]].append(lst[1]); voisins_f[lst[1]].append(lst[0])
+        cad = [f_[4] for f_ in faces]
+        for _ in range(4):
+            nouveau = list(cad)
+            for i_f, vs in enumerate(voisins_f):
+                c_ = [cad[v_] for v_ in vs]
+                for cand in set(c_):
+                    if cand != cad[i_f] and c_.count(cand) >= 2:
+                        nouveau[i_f] = cand
+            cad = nouveau
+        faces = [(f_[0], f_[1], f_[2], f_[3], cad[i_f]) for i_f, f_ in enumerate(faces)]
+        pente_moy = sum(f_[2] * f_[3] for f_ in faces) / max(sum(f_[3] for f_ in faces), 1e-6)
+        tuiles = pente_moy > 0.13 and style != 'industriel'
+        cr, cg, cb = b.get('c', [150, 110, 90])
+        tt = tuple(float(np.clip(0.45 + 0.55 * v / m, 0.6, 1.3)) / 1.3 for v, m in zip((cr, cg, cb), moy_tuile)) if tuiles else (1.0, 1.0, 1.0)
+        toit = lot(dalle, 'tuiles' if tuiles else 'toit_plat')
+        # normales : moyenne par sommet au sein d'un même pan (arêtes vives entre pans, pans bien lisses)
+        somme = {}
+        for Pt, nf, pente, aire_t, cadre in faces:
+            for q in Pt:
+                cle = (q, cadre)
+                somme[cle] = somme.get(cle, 0) + nf * aire_t
+        pente_cadre = {}
+        for Pt, nf, pente, aire_t, cadre in faces:
+            pa = pente_cadre.setdefault(cadre, [0.0, 0.0])
+            pa[0] += pente * aire_t
+            pa[1] += aire_t
+        for Pt, nf, pente, aire_t, cadre in faces:
+            if tuiles and cadre >= 0:
+                ax = [nrm, -nrm, dfait, -dfait][cadre]
+                tg = np.array([-ax[1], ax[0]])
+                pm = pente_cadre[cadre][0] / max(pente_cadre[cadre][1], 1e-9)
+                k_p = math.sqrt(1 + pm * pm)
+                UV = [(float(np.dot(q[:2], tg)) / 2.2, -float(np.dot(q[:2], ax)) * k_p / 2.2) for q in Pt]
+            elif tuiles:
+                UV = [(q[0] / 2.2, q[1] / 2.2) for q in Pt]
+            else:
+                UV = [((q[0] + LARG / 2) / LARG, (q[1] + HAUT / 2) / HAUT) for q in Pt]
+            N = []
+            for q in Pt:
+                v_ = somme[(q, cadre)]
+                N.append(tuple(float(c_) for c_ in v_ / max(float(np.linalg.norm(v_)), 1e-9)))
+            toit.tri(Pt[0], Pt[1], Pt[2], UV[0], UV[1], UV[2], tt, N)
+        stats['tri_toits'] = stats.get('tri_toits', 0) + len(faces)
+        # cheminée
+        if tuiles and style in ('maison', 'bourg') and rng.random() < 0.62:
+            c2 = centre + dfait * float(rng.uniform(-0.3, 0.3)) * P['long'] + nrm * float(rng.uniform(0.15, 0.55)) * w * (1 if rng.random() < 0.5 else -1)
+            if poly.contains(Point(c2)):
+                zb, zh = z_toit(c2[0], c2[1]) - 0.5, z_toit(c2[0], c2[1]) + float(rng.uniform(0.7, 1.1))
+                u0, u1, v0, v1 = facades.uv_cellule('nu', 0, 0.17, 0, 0.35)
+                coins = [c2 + dfait * sx * 0.27 + nrm * sy * 0.22 for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                for i in range(4):
+                    a, c_ = coins[i], coins[(i + 1) % 4]
+                    murs.quad((a[0], a[1], zb), (c_[0], c_[1], zb), (c_[0], c_[1], zh), (a[0], a[1], zh), u0, u1, v0, v1, tuple(t * 0.95 for t in teinte))
+                cap = [c2 + dfait * sx * 0.33 + nrm * sy * 0.28 for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                dec = lot(dalle, 'couleur')
+                dec.quad(*[(q[0], q[1], zh + 0.06) for q in cap], 0, 0, 0, 0, (0.50, 0.24, 0.15))
+                for i in range(4):
+                    a, c_ = cap[i], cap[(i + 1) % 4]
+                    dec.quad((a[0], a[1], zh), (c_[0], c_[1], zh), (c_[0], c_[1], zh + 0.06), (a[0], a[1], zh + 0.06), 0, 0, 0, 0, (0.42, 0.20, 0.13))
+    elif pans:
         stats['pans'] += 1
         debord = 0.0 if any(mitoyen) else 0.32
         emprise = poly.buffer(debord, join_style=2) if debord else poly
         cr, cg, cb = b.get('c', [150, 110, 90])
-        tt = tuple(float(np.clip(0.45 + 0.55 * v / m, 0.6, 1.3)) for v, m in zip((cr, cg, cb), moy_tuile))
+        tt = tuple(float(np.clip(0.45 + 0.55 * v / m, 0.6, 1.3)) / 1.3 for v, m in zip((cr, cg, cb), moy_tuile))
         toit = lot(dalle, 'tuiles')
         k_pente = math.sqrt(1 + (rise / w) ** 2)
         for signe in (1, -1):
@@ -483,11 +753,17 @@ for ((i, j), nom_mat), L in sorted(lots.items()):
         me.polygons.foreach_set('loop_total', np.full(n // 3, 3, dtype=np.int32))
     except Exception:
         pass
-    me.polygons.foreach_set('use_smooth', np.zeros(n // 3, dtype=bool))
+    lisse = any(v is not None for v in L.n)
+    me.polygons.foreach_set('use_smooth', np.full(n // 3, lisse, dtype=bool))
     me.uv_layers.new(name='UVMap').data.foreach_set('uv', np.array(L.uv, np.float32).ravel())
     col = me.color_attributes.new('Col', 'BYTE_COLOR', 'CORNER')
     col.data.foreach_set('color_srgb', np.concatenate([np.clip(np.array(L.c, np.float32), 0, 1), np.ones((n, 1), np.float32)], 1).ravel())
     me.update(calc_edges=True)
+    if lisse:                                              # normales fournies (toits mesurés) ; à défaut, celle de la face
+        Pn = np.array(L.p, np.float64).reshape(-1, 3, 3)
+        nf = np.cross(Pn[:, 1] - Pn[:, 0], Pn[:, 2] - Pn[:, 0])
+        nf /= np.maximum(np.linalg.norm(nf, axis=1, keepdims=True), 1e-12)
+        me.normals_split_custom_set([tuple(v) if v is not None else tuple(nf[i // 3]) for i, v in enumerate(L.n)])
     me.materials.append(MATS[nom_mat])
     A.lier(bpy.data.objects.new(me.name, me))
     tot += n // 3
