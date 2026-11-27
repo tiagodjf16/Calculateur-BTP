@@ -88,14 +88,14 @@ const jeu = {
     this.lumieres.installer(inst);
     salle.installer(session.lieu, inst, session.nbScene, session.extras);
     for (const m of this.biblio.morceaux) { m.demande = false; m.joue = 0; }
-    this.pc.genre = ''; this.pc.etat('Cliquez sur A ou B pour charger un morceau sur une platine.'); this.pc.rendre();
+    this.pc.genre = ''; this.pc.etat('Cliquez sur A ou B pour charger un morceau sur une platine.'); this.pc.public(''); this.pc.rendre();
     $('#b-micro').hidden = !inst.micro; $('#b-ambiance').hidden = !session.nbScene;
     $('#annonces').innerHTML = ''; $('#demandes').innerHTML = ''; $('#b-info').textContent = '';
     for (const b of $$('#onglets .alerte')) b.classList.remove('alerte');
     session.demarrer();
     this.etat = { ambiance: session.ambiance || 0, energie: 0, phase: 0, musique: false };
     this.actif = true;
-    vue('salle');
+    vue(petit.matches ? 'platines' : 'salle');
     taille();
   },
 };
@@ -113,24 +113,37 @@ async function preparer() {
   $('#aide').innerHTML = AIDE;
 }
 
+// Petit écran (téléphone tenu à l'horizontale) : les platines occupent tout l'écran, la salle a son propre onglet.
+const petit = matchMedia('(max-height: 520px)');
+
 function vue(nom) {
+  if (nom === 'platines' && !petit.matches) nom = 'salle';
+  jeu.vue = nom;
+  $('#jeu').dataset.vue = nom;
   for (const b of $$('#onglets [data-vue]')) { b.classList.toggle('actif', b.dataset.vue === nom); if (b.dataset.vue === nom) b.classList.remove('alerte'); }
   $('#pc').hidden = nom !== 'pc'; $('#pupitre').hidden = nom !== 'pupitre'; $('#aide').hidden = nom !== 'aide';
-  if (nom === 'pc') jeu.pc.rendre();
+  if (nom === 'pc' && jeu.pc) jeu.pc.rendre();
 }
 
 function taille() {
-  const h = jeu.actif ? Math.max(120, $('#cabine').getBoundingClientRect().top - $('#bandeau').offsetHeight) : innerHeight;
+  const bandeau = $('#bandeau').offsetHeight;
+  const h = !jeu.actif ? innerHeight : petit.matches ? innerHeight - bandeau : Math.max(120, $('#cabine').getBoundingClientRect().top - bandeau);
   salle.redimensionner(innerWidth, Math.round(h));
 }
+function ecran() {
+  for (const b of $$('#onglets [data-court]')) { if (!b.dataset.long) b.dataset.long = b.textContent; b.textContent = petit.matches ? b.dataset.court : b.dataset.long; }
+  if (jeu.actif) vue(petit.matches ? (jeu.vue === 'salle' ? 'platines' : jeu.vue) : jeu.vue === 'platines' ? 'salle' : jeu.vue);
+  taille();
+}
 addEventListener('resize', taille);
+petit.addEventListener('change', ecran);
 
 // ------------------------------------------------------------------ bandeau
 $('#onglets').addEventListener('click', async (e) => {
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.vue) vue(b.dataset.vue);
-  else if (b.id === 'b-vue') { const k = (VUES.findIndex((v) => v[0] === salle.vueNom) + 1) % VUES.length; salle.vue(VUES[k][0]); annoncer(VUES[k][1], '', 2); vue('salle'); }
+  else if (b.id === 'b-vue') { const k = (VUES.findIndex((v) => v[0] === salle.vueNom) + (jeu.vue === 'salle' ? 1 : 0)) % VUES.length; salle.vue(VUES[k][0]); annoncer(VUES[k][1], '', 2); vue('salle'); }
   else if (b.id === 'b-quitter') {
     const s = jeu.session;
     if (!s || !(await s.quitter())) return;
@@ -195,7 +208,7 @@ function boucle(t) {
   if (!dialogueOuvert()) { const e = jeu.session.maj(dt); if (e) jeu.etat = e; }
   if (!jeu.actif) return;                                       // la séance vient de se terminer
   salle.maj(dt, { lum, ...jeu.etat });
-  salle.rendre();
+  if (!petit.matches || jeu.vue === 'salle' || jeu.vue === 'pupitre') salle.rendre();          // sur téléphone, la salle n'est dessinée que lorsqu'on la voit
   $('#haut').classList.toggle('avec-demandes', $('#demandes').childElementCount > 0);
   // la liste de l'ordinateur suit le morceau que le public entend (couleurs de compatibilité)
   const E = ecoute(moteur), id = E.mo ? E.mo.id : null;
@@ -203,5 +216,6 @@ function boucle(t) {
 }
 requestAnimationFrame(boucle);
 
+ecran();
 menuPrincipal();
 window.__dj = { jeu, moteur, salle, carriere, vue };

@@ -35,7 +35,7 @@ export function fader(el, { min = 0, max = 1, valeur = 1, vertical = true, cran 
   el.innerHTML = '<div class="rail"></div><div class="cap"></div>';
   const cap = el.lastChild;
   let v = valeur, actif = false;
-  const maj = (prevenir) => { const p = (v - min) / (max - min); cap.style[vertical ? 'top' : 'left'] = `${(vertical ? 1 - p : p) * 100}%`; if (prevenir) surChange(v); };
+  const maj = (prevenir) => { const p = (v - min) / (max - min); cap.style.setProperty('--p', vertical ? 1 - p : p); if (prevenir) surChange(v); };       // la feuille de style place le capuchon
   const lire = (e) => {
     const r = el.getBoundingClientRect(), marge = (vertical ? cap.offsetHeight : cap.offsetWidth) / 2;
     let p = vertical ? 1 - (e.clientY - r.top - marge) / Math.max(1, r.height - 2 * marge) : (e.clientX - r.left - marge) / Math.max(1, r.width - 2 * marge);

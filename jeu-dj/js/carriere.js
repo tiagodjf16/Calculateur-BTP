@@ -397,7 +397,8 @@ export class Soiree {
       this.tAffiche = 0.25;
       $('#b-heure').textContent = heure(d.de + (d.a - d.de) * prog) + '  ·  fin à ' + heure(d.a);
       $('#b-ambiance i').style.width = Math.round(this.ambiance) + '%';
-      $('#b-info').textContent = 'Le public aime : ' + this.aime + '  ·  énergie attendue ' + points(voulue) + '  ·  ' + J.salle.dansants + ' sur la piste';
+      $('#b-info').innerHTML = 'Énergie attendue <b>' + points(voulue) + '</b> · ' + J.salle.dansants + ' sur la piste<br>Le public aime : ' + echapper(this.aime);
+      J.pc.public('Le public aime : <b>' + echapper(this.aime) + '</b> · énergie attendue <b>' + points(voulue) + '</b> · ambiance ' + Math.round(this.ambiance) + ' / 100');
     }
     if (prog > 0.88) this._conseil('fin', 'La soirée touche à sa fin : soignez le dernier morceau.', '', 9999);
     if (prog >= 1) this._terminer();

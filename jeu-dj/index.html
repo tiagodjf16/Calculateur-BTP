@@ -16,13 +16,14 @@
     <div class="jauge" id="b-ambiance" title="Ambiance de la piste"><i></i><span>Ambiance</span></div>
     <div class="info" id="b-info"></div>
     <nav id="onglets">
-      <button type="button" data-vue="salle" class="actif">Salle</button>
-      <button type="button" data-vue="pc">Ordinateur</button>
-      <button type="button" data-vue="pupitre">Lumières</button>
-      <button type="button" data-vue="aide">Aide</button>
+      <button type="button" data-vue="platines" class="tel" data-court="Platines">Platines</button>
+      <button type="button" data-vue="salle" class="actif" data-court="Salle">Salle</button>
+      <button type="button" data-vue="pc" data-court="Ordi">Ordinateur</button>
+      <button type="button" data-vue="pupitre" data-court="Lumières">Lumières</button>
+      <button type="button" data-vue="aide" data-court="Aide">Aide</button>
       <button type="button" id="b-vue" title="Changer d'angle de vue">Vue</button>
       <button type="button" id="b-micro" title="Maintenir pour parler : la musique baisse d'elle-même" hidden>Micro</button>
-      <button type="button" id="b-quitter">Quitter</button>
+      <button type="button" id="b-quitter" data-court="✕">Quitter</button>
     </nav>
   </header>
   <section id="haut">
@@ -35,6 +36,7 @@
   <section id="cabine"></section>
 </div>
 
+<div id="tourner"><p>Tournez votre téléphone à l'horizontale pour jouer.</p></div>
 <div id="menu"></div>
 <div id="dialogue" hidden></div>
 

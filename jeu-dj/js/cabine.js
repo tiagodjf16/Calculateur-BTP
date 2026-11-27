@@ -273,18 +273,19 @@ export class Cabine {
     if (!mo) { g.fillStyle = '#5c6877'; g.font = '13px system-ui'; g.textAlign = 'center'; g.fillText('Platine vide', W / 2, H / 2 - 8); return; }
     const t = p.secondes, hTexte = 30, hVue = Math.max(10, H * 0.2), hOnde = H - hTexte - hVue - 4;
     // ligne d'informations
+    const etroit = W < 400;                                                  // petit écran : on ne garde que le temps restant
     g.textAlign = 'left'; g.fillStyle = '#eef2f6'; g.font = '600 13px system-ui';
-    g.fillText(mo.titre, 8, 3, W * 0.5);
+    g.fillText(mo.titre, 8, 3, W * (etroit ? 0.44 : 0.5));
     g.fillStyle = '#8fa0b3'; g.font = '11px system-ui';
-    g.fillText(`${mo.artiste}${mo.camelot ? '  ·  ' + mo.camelot : ''}`, 8, 17, W * 0.5);
+    g.fillText(`${mo.artiste}${mo.camelot ? '  ·  ' + mo.camelot : ''}`, 8, 17, W * (etroit ? 0.44 : 0.5));
     g.textAlign = 'right'; g.fillStyle = p.sync ? '#40c8e0' : '#ffd60a'; g.font = '700 19px system-ui';
     g.fillText(p.bpm.toFixed(1), W - 8, 2);
     g.fillStyle = '#8fa0b3'; g.font = '10px system-ui';
     g.fillText(`BPM  ${(p.tempo - 1 >= 0 ? '+' : '') + ((p.tempo - 1) * 100).toFixed(1)} %`, W - 8, 20);
     g.textAlign = 'center'; g.fillStyle = '#eef2f6'; g.font = '600 14px system-ui';
-    g.fillText(`${mmss(t)}  /  −${mmss(mo.duree - t)}`, W * 0.66, 3);
-    const reste = mo.duree - t;
-    if (p.lecture && reste < 20) { g.fillStyle = Math.floor(performance.now() / 300) % 2 ? '#ff453a' : '#7a1f1a'; g.font = '700 10px system-ui'; g.fillText('FIN DU MORCEAU', W * 0.66, 19); }
+    const xT = etroit ? W * 0.6 : W * 0.66, reste = mo.duree - t;
+    g.fillText(etroit ? `−${mmss(reste)}` : `${mmss(t)}  /  −${mmss(reste)}`, xT, 3);
+    if (p.lecture && reste < 20) { g.fillStyle = Math.floor(performance.now() / 300) % 2 ? '#ff453a' : '#7a1f1a'; g.font = '700 10px system-ui'; g.fillText(etroit ? 'FIN' : 'FIN DU MORCEAU', xT, 19); }
     // forme d'onde défilante et grille des temps
     const y0 = hTexte, onde = this.ondes[vue.i];
     if (onde) onde.dessiner(g, 0, y0, W, hOnde, t);
@@ -368,7 +369,8 @@ export class Cabine {
       }
     });
     g.fillStyle = '#8fa0b3'; g.font = '8px system-ui'; g.textAlign = 'center'; g.textBaseline = 'top';
-    g.fillText('A', 7, 0); g.fillText('SORTIE', W / 2, 0); g.fillText('B', W - 7, 0);
+    if (W >= 48) { g.fillText('A', 7, 0); g.fillText('B', W - 7, 0); }
+    g.fillText('SORTIE', W / 2, 0);
     this.rouge = n.rouge;
   }
 }

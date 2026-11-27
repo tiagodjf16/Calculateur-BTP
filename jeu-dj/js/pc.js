@@ -24,7 +24,7 @@ export class Pc {
       '<input type="search" placeholder="Rechercher un titre, un artiste…" aria-label="Rechercher">',
       '<span class="genres"></span>',
       '<label class="bouton importer" title="Vos propres fichiers audio : MP3, WAV, OGG, FLAC, M4A"><input type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.opus" hidden>Importer mes fichiers…</label></div>',
-      '<div class="pc-corps"><table><thead><tr><th class="ch">Charger</th>',
+      '<div class="pc-public" hidden></div><div class="pc-corps"><table><thead><tr><th class="ch">Charger</th>',
       COLONNES.map(([c, n]) => '<th data-tri="' + c + '">' + n + '</th>').join(''),
       '<th>★</th></tr></thead><tbody></tbody></table></div>',
       '<div class="pc-pied"><span class="etat">Cliquez sur A ou B pour charger un morceau sur une platine.</span>',
@@ -57,6 +57,8 @@ export class Pc {
 
   _id(t) { return /^\d+$/.test(t) ? +t : t; }
   etat(t) { $('.etat', this.el).textContent = t; }
+  /** Rappel de ce que le public attend (vide : rien à afficher). */
+  public(html) { const z = $('.pc-public', this.el); if (z.innerHTML !== html) { z.innerHTML = html; z.hidden = !html; } }
 
   /** Morceau « de référence » : celui que le public entend le plus. */
   reference() {
@@ -71,7 +73,8 @@ export class Pc {
     const ref = this.reference(), [cle, sens] = this.tri;
     const liste = this.b.morceaux.filter((m) => (this.genre === '' || (this.genre === '★' ? m.favori : m.genre === this.genre))
       && (!this.recherche || (m.titre + ' ' + m.artiste + ' ' + m.genre).toLowerCase().includes(this.recherche)));
-    liste.sort((x, y) => { const a = x[cle] ?? '', b = y[cle] ?? ''; return (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'fr')) * sens || x.titre.localeCompare(y.titre, 'fr'); });
+    liste.sort((x, y) => { if (!!x.demande !== !!y.demande) return x.demande ? -1 : 1;                  // les morceaux demandés par le public d'abord
+      const a = x[cle] ?? '', b = y[cle] ?? ''; return (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'fr')) * sens || x.titre.localeCompare(y.titre, 'fr'); });
     const sur = this.m.platines.map((p) => p.morceau && p.morceau.id);
     $('tbody', el).innerHTML = liste.map((m) => {
       const compat = ref && ref.morceau.id !== m.id && temposCompatibles(m.bpm, ref.bpm) ? (tonsCompatibles(m.camelot, ref.morceau.camelot) ? 'ok' : 'tempo') : '';
