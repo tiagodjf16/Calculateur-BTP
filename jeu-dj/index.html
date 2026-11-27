@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Platines — carrière de DJ</title>
+<meta name="theme-color" content="#07090c">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="jeu" hidden>
+  <header id="bandeau">
+    <div class="lieu"><b id="b-lieu">Mix libre</b><span id="b-heure"></span></div>
+    <div class="jauge" id="b-ambiance" title="Ambiance de la piste"><i></i><span>Ambiance</span></div>
+    <div class="info" id="b-info"></div>
+    <nav id="onglets">
+      <button type="button" data-vue="salle" class="actif">Salle</button>
+      <button type="button" data-vue="pc">Ordinateur</button>
+      <button type="button" data-vue="pupitre">Lumières</button>
+      <button type="button" data-vue="aide">Aide</button>
+      <button type="button" id="b-vue" title="Changer d'angle de vue">Vue</button>
+      <button type="button" id="b-micro" title="Maintenir pour parler : la musique baisse d'elle-même" hidden>Micro</button>
+      <button type="button" id="b-quitter">Quitter</button>
+    </nav>
+  </header>
+  <section id="haut">
+    <div id="annonces"></div>
+    <div id="pc" class="panneau" hidden></div>
+    <div id="pupitre" class="panneau" hidden></div>
+    <div id="aide" class="panneau" hidden></div>
+    <div id="demandes"></div>
+  </section>
+  <section id="cabine"></section>
+</div>
+
+<div id="menu"></div>
+<div id="dialogue" hidden></div>
+
+<script>
+window.addEventListener('error', function (e) {
+  var d = document.getElementById('menu');
+  if (d && !document.getElementById('erreur-chargement')) { var p = document.createElement('p'); p.id = 'erreur-chargement'; p.textContent = 'Erreur : ' + (e.message || 'chargement impossible'); d.appendChild(p); }
+}, true);
+</script>
+<script type="module" src="js/principal.js"></script>
+</body>
+</html>
