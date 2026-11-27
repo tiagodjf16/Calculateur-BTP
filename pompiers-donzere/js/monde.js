@@ -323,12 +323,12 @@ export class Monde {
     env.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = env;
     scene.environmentRotation = new THREE.Euler(0, rot, 0);
-    scene.environmentIntensity = 1.0;
+    scene.environmentIntensity = 1.25;
     // dôme du ciel (photo), non soumis au « développement » de l'image
     const carte = await this.texture(this.leger ? 'ciel/dome_leger.jpg' : 'ciel/dome.jpg');
     const bas = (c.sous_horizon_deg * Math.PI) / 180;
     const geo = new THREE.SphereGeometry(9000, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2 + bas);
-    const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: carte, side: THREE.DoubleSide, toneMapped: false, fog: false, depthWrite: false }));
+    const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: carte, color: new THREE.Color(1.14, 1.12, 1.08), side: THREE.DoubleSide, toneMapped: false, fog: false, depthWrite: false }));
     dome.scale.z = -1;
     dome.rotation.y = rot;
     dome.renderOrder = -10;
@@ -358,6 +358,11 @@ export class Monde {
   /** À appeler à chaque image : le ciel et les ombres suivent la caméra / le véhicule. */
   suivre(camera, cible) {
     this.dome.position.set(camera.position.x, 0, camera.position.z);
+    if (this.dallesArbres) for (const d of this.dallesArbres.values()) {
+      const pres = Math.hypot(d.x - camera.position.x, d.z - camera.position.z) < this.porteeArbres + (d.groupe.visible ? 12 : 0);
+      if (d.groupe.visible !== pres) d.groupe.visible = pres;
+      if (d.loin && d.loin.visible === pres) d.loin.visible = !pres;
+    }
     // on aligne la carte d'ombres sur une grille pour éviter le scintillement
     const pas = (this.porteeOmbres * 2) / this.soleil.shadow.mapSize.x * 8;
     const cx = Math.round(cible.x / pas) * pas, cz = Math.round(cible.z / pas) * pas;
@@ -421,7 +426,7 @@ export class Monde {
             vec3 detail = texture2D(uHerbe, m / 3.1).rgb * texture2D(uHerbe, m / 17.0).rgb * 4.0 * cl.r
                         + texture2D(uBitume, m / 4.3).rgb * 2.0 * cl.g
                         + texture2D(uTerre, m / 2.7).rgb * texture2D(uTerre, m / 13.0).rgb * 4.0 * cl.b;
-            vec3 pres = texture2D(uFlou, uvG).rgb * detail * mix(vec3(0.62), vec3(0.50, 0.58, 0.40), cl.r);
+            vec3 pres = texture2D(uFlou, uvG).rgb * detail * (vec3(0.50, 0.58, 0.40) * cl.r + vec3(1.08) * cl.g + vec3(0.74) * cl.b);
             float k = 1.0 - smoothstep(45.0, 170.0, length(vViewPosition));
             diffuseColor.rgb = mix(loin, pres, k);`);
       };
@@ -584,6 +589,10 @@ export class Monde {
         k++; total++;
       }
     }
+    // au centre-ville, les arbres ont été repérés un par un sur la photo aérienne : ils sont plantés en 3D (voir plus bas)
+    const centre = await this._arbresCentre();
+    const auCentre = (x, z) => !!centre && x > centre.zone[0] && x < centre.zone[2] && z > centre.zone[1] && z < centre.zone[3];
+    for (const liste of places) for (let i = liste.length - 1; i >= 0; i--) if (auCentre(liste[i][0], liste[i][1])) { liste.splice(i, 1); total--; }
     // 2) arbres des jardins, parcs et rues : là où la photo aérienne montre un feuillage
     const img = this.orthoLeger.image, T = 1024;
     const cv = document.createElement('canvas');
@@ -597,16 +606,19 @@ export class Monde {
         const xx = x + (rnd() - 0.5) * pas, zz = z + (rnd() - 0.5) * pas;
         const k = (Math.floor(((zz + this.H / 2) / this.H) * T) * T + Math.floor(((xx + this.L / 2) / this.L) * T)) * 4;
         const r = px[k], v = px[k + 1], b = px[k + 2];
-        if (v - (r + b) / 2 < 9 || r + v + b > 300 || rnd() > 0.5 || !libre(xx, zz)) continue;   // feuillage : vert et sombre
+        if (v - (r + b) / 2 < 9 || r + v + b > 300 || rnd() > 0.5 || auCentre(xx, zz) || !libre(xx, zz)) continue;   // feuillage : vert et sombre
         places[choisir(tous)].push([xx, zz, 0.55 + rnd() * 0.55, rnd() * Math.PI]);
         total++;
       }
     }
+    // arbres 3D du centre : de loin, ils sont remplacés par leur silhouette plate (dalles de 70 m, basculées selon la distance)
+    const D3 = 70;
+    if (centre) for (const [x, z, ray] of centre.arbres) places[0].push([x, z, clamp(ray / 4.6, 0.55, 1.2), rnd() * Math.PI, 'L' + Math.floor(x / D3) + ',' + Math.floor(z / D3)]);
     // deux plans croisés par arbre (une photo par plan), regroupés par dalles de 275 m pour n'afficher que les arbres visibles
     const D = 275, dalles = new Map();
     esp.forEach((e, ei) => {
-      for (const [x, z, s, a] of places[ei]) {
-        const cle = Math.floor(x / D) + ',' + Math.floor(z / D);
+      for (const [x, z, s, a, loin] of places[ei]) {
+        const cle = loin || Math.floor(x / D) + ',' + Math.floor(z / D);
         if (!dalles.has(cle)) dalles.set(cle, { P: [], UV: [], N: [], I: [], C: [] });
         const tr = 0.72 + rnd() * 0.4, tv = 0.78 + rnd() * 0.34, tb = 0.6 + rnd() * 0.35;     // teinte propre à chaque arbre
         const t = dalles.get(cle), y = this.hauteur(x, z) - 0.12, hh = e.hauteur * s, dl = (e.largeur * s) / 2;
@@ -624,7 +636,7 @@ export class Monde {
     });
     const mat = new THREE.MeshStandardMaterial({ map: carte, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.92, metalness: 0, envMapIntensity: 0.6, vertexColors: true });
     const ombre = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: carte, alphaTest: 0.45 });
-    for (const t of dalles.values()) {
+    for (const [cle, t] of dalles) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(t.P, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(t.UV, 2));
@@ -635,7 +647,99 @@ export class Monde {
       maille.castShadow = true;
       maille.customDepthMaterial = ombre;
       this.scene.add(maille);
+      if (cle[0] === 'L' && this.dallesArbres.has(cle.slice(1))) this.dallesArbres.get(cle.slice(1)).loin = maille;
     }
     this.nbArbres = total;
+  }
+
+  /**
+   * Arbres du centre-ville en volume (platanes de la place et des boulevards, parc) : chaque arbre repéré sur la photo
+   * aérienne reçoit un modèle 3D (tronc, branches, feuillage), regroupé avec ses voisins par dalles de 70 m.
+   * Renvoie { zone, arbres } ou null si les modèles ne sont pas disponibles.
+   */
+  async _arbresCentre() {
+    this.dallesArbres = new Map();
+    let liste, gltf;
+    try {
+      liste = await (await fetch('data/arbres_centre.json')).json();
+      gltf = await chargerModele('modeles/arbres');
+    } catch (e) {
+      this.alertes.push('Arbres 3D non chargés : ' + e.message);
+      return null;
+    }
+    // les maillages compressés sont stockés en entiers avec une mise à l'échelle sur leur nœud : on les remet en mètres
+    const pieces = {};
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry, src = g.attributes.position, pos = new Float32Array(src.count * 3);
+      for (let i = 0; i < src.count; i++) { pos[i * 3] = src.getX(i); pos[i * 3 + 1] = src.getY(i); pos[i * 3 + 2] = src.getZ(i); }
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const ns = g.attributes.normal, nrm = new Float32Array(ns.count * 3);
+      for (let i = 0; i < ns.count; i++) { nrm[i * 3] = ns.getX(i); nrm[i * 3 + 1] = ns.getY(i); nrm[i * 3 + 2] = ns.getZ(i); }
+      g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+      g.applyMatrix4(o.matrixWorld);
+      g.computeBoundingBox();
+      pieces[o.name] = o;
+    });
+    const suffixe = this.leger ? '_feuilles_leger' : '_feuilles';
+    const modeles = ['platane_a', 'platane_b', 'platane_c', 'jeune_a'].filter((n) => pieces[n + '_bois'] && pieces[n + suffixe]);
+    if (modeles.length < 4) { this.alertes.push('Arbres 3D incomplets'); return null; }
+    const feuille = pieces['platane_a' + suffixe].material, carte = feuille.map;
+    carte.anisotropy = this.aniso;
+    const matFeuilles = new THREE.MeshStandardMaterial({ map: carte, alphaTest: 0.4, vertexColors: true, roughness: 0.82, metalness: 0, envMapIntensity: 0.55 });
+    const matBois = pieces.platane_a_bois.material;
+    matBois.envMapIntensity = 0.5;
+    const ombre = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: carte, alphaTest: 0.4 });
+    this.arbre3d = { pieces, matFeuilles, matBois, ombre, suffixe };
+    // envergure de chaque modèle (pour l'ajuster au houppier repéré)
+    const envergure = {};
+    for (const n of modeles) { const g = pieces[n + suffixe].geometry; g.computeBoundingBox(); envergure[n] = (g.boundingBox.max.x - g.boundingBox.min.x + g.boundingBox.max.z - g.boundingBox.min.z) / 4; }
+    const rnd = alea(777), D3 = 70, groupes = new Map(), M = new THREE.Matrix4(), q = new THREE.Quaternion(), haut = new THREE.Vector3(0, 1, 0);
+    for (const [x, z, ray] of liste.arbres) {
+      const n = ray < 3.1 ? 'jeune_a' : modeles[Math.floor(rnd() * 3)];
+      const e = clamp(ray / envergure[n], 0.8, 1.3) * (n === 'jeune_a' ? 1 : 1.18) * (0.92 + rnd() * 0.16);
+      const cle = Math.floor(x / D3) + ',' + Math.floor(z / D3);
+      if (!groupes.has(cle)) groupes.set(cle, {});
+      const g = groupes.get(cle);
+      (g[n] = g[n] || []).push(M.compose(new THREE.Vector3(x, this.hauteur(x, z), z), q.setFromAxisAngle(haut, rnd() * Math.PI * 2), new THREE.Vector3(e, e * (0.94 + rnd() * 0.12), e)).clone());
+    }
+    for (const [cle, parModele] of groupes) {
+      const groupe = new THREE.Group();
+      for (const [n, matrices] of Object.entries(parModele)) {
+        for (const [piece, mat] of [[n + '_bois', matBois], [n + suffixe, matFeuilles]]) {
+          const im = new THREE.InstancedMesh(pieces[piece].geometry, mat, matrices.length);
+          matrices.forEach((mx, i) => im.setMatrixAt(i, mx));
+          im.castShadow = true;
+          im.receiveShadow = piece.endsWith('_bois');
+          if (mat === matFeuilles) im.customDepthMaterial = ombre;
+          im.computeBoundingSphere();
+          groupe.add(im);
+        }
+      }
+      const [i, j] = cle.split(',').map(Number);
+      this.scene.add(groupe);
+      this.dallesArbres.set(cle, { groupe, x: (i + 0.5) * D3, z: (j + 0.5) * D3, loin: null });
+    }
+    this.porteeArbres = this.leger ? 95 : 190;
+    return liste;
+  }
+
+  /** Un arbre isolé du catalogue (olivier du giratoire…), posé au sol. */
+  planter(nom, x, z, echelle = 1, angle = 0) {
+    const a = this.arbre3d;
+    if (!a || !a.pieces[nom + '_bois']) return null;
+    const g = new THREE.Group();
+    for (const [piece, mat] of [[nom + '_bois', a.matBois], [nom + a.suffixe, a.matFeuilles]]) {
+      const o = new THREE.Mesh(a.pieces[piece].geometry, mat);
+      o.castShadow = true;
+      if (mat === a.matFeuilles) o.customDepthMaterial = a.ombre;
+      g.add(o);
+    }
+    g.position.set(x, this.hauteur(x, z), z);
+    g.rotation.y = angle;
+    g.scale.setScalar(echelle);
+    this.scene.add(g);
+    return g;
   }
 }

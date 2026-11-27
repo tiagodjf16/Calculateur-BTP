@@ -25,7 +25,7 @@ for f in fichiers:
         os.makedirs(os.path.dirname(os.path.join(OUT, f)) or OUT, exist_ok=True)
         shutil.copy(os.path.join(RACINE, f), os.path.join(OUT, f))
 # modèles : version complète (ordinateur) et version allégée (téléphone), cette dernière si elle existe
-for nom in ('batiments', 'batiments_leger'):
+for nom in ('batiments', 'batiments_leger', 'arbres', 'centre'):
     src = os.path.join(RACINE, 'modeles', nom + '.glb')
     if os.path.exists(src):
         glb_vers_json(src, os.path.join(OUT, 'modeles', nom + '.json'))
