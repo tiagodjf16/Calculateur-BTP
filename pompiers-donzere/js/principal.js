@@ -237,7 +237,9 @@ function majCamera(dt) {
       if (dd > 2.6 && monde.collision(v.x - Math.sin(a) * dd, v.z - Math.cos(a) * dd, 0.45)) { libre = Math.max(2.6, dd - recul / 12); break; }
     }
     cam.recul = libre < (cam.recul ?? recul) ? libre : amorti(cam.recul ?? recul, libre, 2.5, dt);
-    p.set(v.x - Math.sin(a) * cam.recul, v.y + haut, v.z - Math.cos(a) * cam.recul);
+    // rue étroite : la caméra, rapprochée par les murs, monte au-dessus du véhicule au lieu d'entrer dedans
+    cam.serre = amorti(cam.serre ?? 0, clamp((recul - cam.recul) / recul, 0, 1), 4, dt);
+    p.set(v.x - Math.sin(a) * cam.recul, v.y + haut + cam.serre * 4.4, v.z - Math.cos(a) * cam.recul);
     p.y = Math.max(p.y, monde.hauteur(p.x, p.z) + 0.7);
     cam.pos.lerp(p, 1 - Math.exp(-9 * dt));
     camera.position.copy(cam.pos);
