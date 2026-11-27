@@ -149,6 +149,21 @@ const EXIGENCES = {
   boule: ['une boule à facettes', (i) => !!i.effets.boule],
 };
 
+/** Ce qu'un matériel change dans le jeu, en une ligne (affiché dans la boutique). */
+function atout(x) {
+  const e = x.eff, nb = (n, un, plusieurs) => (n ? n + ' ' + (n > 1 ? plusieurs : un) : '');
+  switch (x.cat) {
+    case 'platines': return 'Curseur de tempo par pas de ' + String(Math.round(e.pasTempo * 10000) / 100).replace('.', ',') + ' % · ' + (e.ecrans === 'integres' ? 'écrans intégrés' : 'formes d\'onde sur l\'ordinateur');
+    case 'casque': return 'Isolation : ' + Math.round(e.isolation * 100) + ' % (le son de la salle gêne moins la pré-écoute)';
+    case 'sono': return 'Sonorise bien jusqu\'à ' + e.puissance + ' personnes';
+    case 'lumieres': return [nb(e.pars, 'projecteur PAR', 'projecteurs PAR'), nb(e.lyres, 'lyre', 'lyres'), nb(e.derbys, 'effet rotatif', 'effets rotatifs'), nb(e.laser, 'laser', 'lasers'), nb(e.strobo, 'stroboscope', 'stroboscopes'), nb(e.aveuglants, 'aveuglant', 'aveuglants')].filter(Boolean).join(', ');
+    case 'pupitre': return ['', 'Couleur ou noir seulement', 'Scènes, couleurs, vitesse, stroboscope et laser à la main', 'Comme un pupitre manuel, plus le calage sur le tempo des platines', 'Tout, à la main ou calé sur le tempo'][e.niveau];
+    case 'fumee': return e.brouillard ? 'Brouillard continu, sans attente' : 'Bouffées de fumée · remise en chauffe : ' + e.pause + ' s';
+    case 'micro': return ['', 'Avec fil : pour les annonces', 'Sans fil : exigé par certains clients', 'Sans fil numérique'][e.micro];
+    default: return '';
+  }
+}
+
 /** Ce que le public entend en ce moment : platine dominante, morceau, présences. */
 export function ecoute(m) {
   const [a, b] = m.platines, pa = a.morceau ? m.presence(0) : 0, pb = b.morceau ? m.presence(1) : 0, i = pa >= pb ? 0 : 1, pres = Math.max(pa, pb);
@@ -420,7 +435,8 @@ export class Soiree {
     for (const o of this.objectifs) if (o.actif) { o.actif = false; S.objTotal--; }
     if (d.lecons) { this.surFin({ lecon: true, etoiles: 3, note: 0, pourboires: 0 }); return; }
     const amb = S.ambTemps ? S.ambSomme / S.ambTemps : this.ambiance, nb = S.propres + S.passables + S.rates;
-    const tech = nb ? (S.propres + 0.5 * S.passables) / nb : 0.4, dem = S.objTotal ? S.objOk / S.objTotal : 1, lum = S.lumTemps ? S.lumSomme / S.lumTemps : 0;
+    // technique : un mélange calé vaut 1, un passable 0,5, une coupe franche 0,35 (propre mais sans mérite), un raté 0
+    const tech = nb + S.coupes ? (S.propres + 0.5 * S.passables + 0.35 * S.coupes) / (nb + S.coupes) : 0.3, dem = S.objTotal ? S.objOk / S.objTotal : 1, lum = S.lumTemps ? S.lumSomme / S.lumTemps : 0;
     const fautes = clamp(S.blancs * 0.3 * (d.strict ? 1.6 : 1) + (S.tRouge / 25) * (d.strict ? 1.6 : 1) + S.tGalop / 30 + S.repetitions * 0.15, 0, 1);
     const note = Math.round(20 * (0.5 * amb / 100 + 0.17 * tech + 0.15 * dem + 0.08 * lum + 0.1 * (1 - fautes)) * 10) / 10;
     const et = note >= 16 ? 5 : note >= 13.5 ? 4 : note >= 11 ? 3 : note >= 8 ? 2 : 1;
@@ -485,7 +501,7 @@ export class Carriere {
       h += '<div class="categorie">' + nom + (cat === 'effets' ? ' — on peut en posséder plusieurs' : '') + '</div>';
       for (const x of MATERIEL.filter((y) => y.cat === cat)) {
         const a = e.possede.includes(x.id), eq = e.equipe[cat] === x.id;
-        h += '<div class="fiche' + (eq ? ' equipe' : a ? ' possede' : '') + '"><span class="gamme g' + x.gamme + '">' + GAMMES[x.gamme] + '</span><h3>' + echapper(x.nom) + '</h3><p>' + echapper(x.desc) + '</p>'
+        h += '<div class="fiche' + (eq ? ' equipe' : a ? ' possede' : '') + '"><span class="gamme g' + x.gamme + '">' + GAMMES[x.gamme] + '</span><h3>' + echapper(x.nom) + '</h3><p>' + echapper(x.desc) + '</p>' + (atout(x) ? '<p class="meta">' + atout(x) + '</p>' : '')
           + '<p class="prix">' + (x.prix ? euros(x.prix) : 'Fourni avec les projecteurs') + '</p>'
           + (a ? (cat === 'effets' ? '<button type="button" disabled>Possédé</button>' : eq ? '<button type="button" disabled>Utilisé en soirée</button>' : '<button type="button" data-equiper="' + x.id + '">Utiliser en soirée</button>')
             : '<button type="button" data-acheter="' + x.id + '"' + (e.argent >= x.prix ? '' : ' disabled') + '>' + (e.argent >= x.prix ? 'Acheter' : 'Il vous manque ' + euros(x.prix - e.argent)) + '</button>') + '</div>';

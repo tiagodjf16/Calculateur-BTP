@@ -54,7 +54,7 @@ const AIDE = `
 <h3>Clavier</h3>
 <p>Platine A : <kbd>A</kbd> CUE, <kbd>Z</kbd> lecture, <kbd>E</kbd> SYNC — Platine B : <kbd>K</kbd> CUE, <kbd>L</kbd> lecture, <kbd>M</kbd> SYNC.<br><kbd>←</kbd> <kbd>→</kbd> crossfader — <kbd>1</kbd> à <kbd>4</kbd> repères A — <kbd>7</kbd> <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> repères B.<br>Double-clic sur un bouton rotatif ou un curseur : retour au centre.</p>
 <h3>Votre musique</h3>
-<p>« Importer mes fichiers… » (onglet Ordinateur) ajoute vos MP3, WAV, OGG, FLAC ou M4A : le tempo est détecté tout seul. Les fichiers restent sur votre appareil. Les adresses YouTube ne peuvent pas être lues : YouTube ne laisse aucun site extérieur accéder au son de ses vidéos.</p>
+<p>« Importer mes fichiers… » (onglet Ordinateur) ajoute vos MP3, WAV, OGG, FLAC ou M4A : le tempo est détecté tout seul. Les fichiers restent sur votre appareil et sont à réimporter à chaque visite. Les adresses YouTube ne peuvent pas être lues : YouTube ne laisse aucun site extérieur accéder au son de ses vidéos.</p>
 </div>
 </div>`;
 
@@ -168,7 +168,7 @@ function menuPrincipal() {
     + (document.fullscreenEnabled ? '<button type="button" class="grand second" data-a="plein">Plein écran</button>' : '') + '</div>'
     + '<p class="notes">Musique : 24 morceaux fabriqués pour le jeu, dans douze styles, et vos propres fichiers audio (MP3, WAV, FLAC…) depuis l\'onglet Ordinateur. Les adresses YouTube ne peuvent pas être lues : YouTube ne laisse aucun site extérieur accéder au son de ses vidéos.<br>'
     + 'Le matériel porte les noms de vrais modèles du commerce, classés en entrée, milieu et haut de gamme ; ces marques appartiennent à leurs propriétaires, qui n\'ont aucun lien avec ce jeu.<br>'
-    + 'Pour bien entendre les graves : un casque ou de vraies enceintes.' + (salle.absente ? '<br><b>La vue en 3D de la salle n\'est pas disponible sur cet appareil ; les platines fonctionnent quand même.</b>' : '') + '</p><p id="etat-menu" class="notes"></p></div>';
+    + 'Pour bien entendre les graves : un casque ou de vraies enceintes. Sur iPhone, désactivez le mode silencieux (le petit interrupteur sur le côté), sinon rien ne s\'entend.' + (salle.absente ? '<br><b>La vue en 3D de la salle n\'est pas disponible sur cet appareil ; les platines fonctionnent quand même.</b>' : '') + '</p><p id="etat-menu" class="notes"></p></div>';
   el.onclick = async (e) => {
     const b = e.target.closest('[data-a]');
     if (!b) return;
@@ -209,8 +209,7 @@ function boucle(t) {
   const lum = jeu.lumieres.maj(dt);
   if (!dialogueOuvert()) { const e = jeu.session.maj(dt); if (e) jeu.etat = e; }
   if (!jeu.actif) return;                                       // la séance vient de se terminer
-  salle.maj(dt, { lum, ...jeu.etat });
-  if (!petit.matches || jeu.vue === 'salle' || jeu.vue === 'pupitre') salle.rendre();          // sur téléphone, la salle n'est dessinée que lorsqu'on la voit
+  if (!petit.matches || jeu.vue === 'salle' || jeu.vue === 'pupitre') { salle.maj(dt, { lum, ...jeu.etat }); salle.rendre(); }          // sur téléphone, la salle n'est animée et dessinée que lorsqu'on la voit
   $('#haut').classList.toggle('avec-demandes', $('#demandes').childElementCount > 0);
   // la liste de l'ordinateur suit le morceau que le public entend (couleurs de compatibilité)
   const E = ecoute(moteur), id = E.mo ? E.mo.id : null;
