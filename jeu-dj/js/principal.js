@@ -110,7 +110,7 @@ async function preparer() {
   jeu.lumieres = new Lumieres($('#pupitre'), moteur);
   jeu.lumieres.surTir = (nom) => { salle.tir(nom); if (jeu.session) jeu.session.effet(nom); };
   jeu.pc = new Pc($('#pc'), jeu.biblio, moteur, jeu.cabine);
-  $('#aide').innerHTML = AIDE;
+  $('#aide').innerHTML = AIDE + '<p class="moteur-audio">Moteur audio : ' + (moteur.worklet ? 'lecteur de précision' : 'lecteur de secours (navigateur ancien ou restreint)') + ' · ' + Math.round(moteur.ctx.sampleRate / 100) / 10 + ' kHz</p>';
 }
 
 // Petit écran (téléphone tenu à l'horizontale) : les platines occupent tout l'écran, la salle a son propre onglet.
@@ -164,13 +164,15 @@ function menuPrincipal() {
   el.innerHTML = '<div class="carte"><h1>Plat<span>i</span>nes</h1>'
     + '<p class="sous">Devenez DJ : de votre chambre à la grande scène d\'un festival. Deux platines et une table de mixage qui fonctionnent vraiment, des jeux de lumière, de la fumée — et un public à faire danser.</p>'
     + '<div class="choix">' + (c ? '<button type="button" class="grand" data-a="continuer">Continuer la carrière de ' + echapper(carriere.e.nom) + '</button>' : '')
-    + '<button type="button" class="grand' + (c ? ' second' : '') + '" data-a="nouvelle">Nouvelle carrière</button><button type="button" class="grand second" data-a="libre">Mix libre</button></div>'
+    + '<button type="button" class="grand' + (c ? ' second' : '') + '" data-a="nouvelle">Nouvelle carrière</button><button type="button" class="grand second" data-a="libre">Mix libre</button>'
+    + (document.fullscreenEnabled ? '<button type="button" class="grand second" data-a="plein">Plein écran</button>' : '') + '</div>'
     + '<p class="notes">Musique : 24 morceaux fabriqués pour le jeu, dans douze styles, et vos propres fichiers audio (MP3, WAV, FLAC…) depuis l\'onglet Ordinateur. Les adresses YouTube ne peuvent pas être lues : YouTube ne laisse aucun site extérieur accéder au son de ses vidéos.<br>'
     + 'Le matériel porte les noms de vrais modèles du commerce, classés en entrée, milieu et haut de gamme ; ces marques appartiennent à leurs propriétaires, qui n\'ont aucun lien avec ce jeu.<br>'
     + 'Pour bien entendre les graves : un casque ou de vraies enceintes.' + (salle.absente ? '<br><b>La vue en 3D de la salle n\'est pas disponible sur cet appareil ; les platines fonctionnent quand même.</b>' : '') + '</p><p id="etat-menu" class="notes"></p></div>';
   el.onclick = async (e) => {
     const b = e.target.closest('[data-a]');
     if (!b) return;
+    if (b.dataset.a === 'plein') { try { await (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()); } catch (err) { $('#etat-menu').textContent = 'Le plein écran n\'est pas autorisé ici.'; } return; }
     try { await preparer(); } catch (err) { $('#etat-menu').textContent = 'Le son n\'a pas pu démarrer sur cet appareil : ' + (err.message || err); return; }
     const a = b.dataset.a;
     if (a === 'continuer') carriere.afficher('soirees');

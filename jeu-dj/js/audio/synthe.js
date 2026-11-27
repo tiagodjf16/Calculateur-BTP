@@ -258,11 +258,13 @@ export function generer(id, fe = 44100, progres = () => {}) {
           poser(mG, mD, cache.get(`m${deg}:${lon}:${o.onde}`), t + 3 * pas, ng * 0.3, -0.5);                 // écho
         }
       }
-      if (st.lead === 'acide' && f.basse) for (let s = 0; s < 16; s++) {
+      // ligne « acide » ; pendant la pause elle reste seule, étouffée, et son filtre s'ouvre peu à peu (jamais de silence complet)
+      if (st.lead === 'acide' && (f.basse || f.nom === 'Pause')) for (let s = 0; s < 16; s++) {
         if ((s * 7 + mes * 3) % 5 > 2) continue;
-        const nn = m.ton - 12 + [0, 0, 12, 3, 0, 10, 0, 7][(s + mes) % 8];
-        poser(mG, mD, note(`ac${nn}:${f.nom === 'Refrain' ? 1 : 0}`, { onde: 'scie', f: hz(nn), duree: pas * 0.7, coupure: f.nom === 'Refrain' ? 900 : 500, envFiltre: 5, declinFiltre: 0.06, res: 0.78, tenue: 0.5, rel: 0.03 }), t0 + s * pas, 0.13, 0.1);
+        const nn = m.ton - 12 + [0, 0, 12, 3, 0, 10, 0, 7][(s + mes) % 8], ouv = f.nom === 'Pause' ? Math.floor((b / f.m) * 4) : -1;
+        poser(mG, mD, note(`ac${nn}:${f.nom === 'Refrain' ? 1 : 0}:${ouv}`, { onde: 'scie', f: hz(nn), duree: pas * 0.7, coupure: ouv >= 0 ? 280 + ouv * 190 : f.nom === 'Refrain' ? 900 : 500, envFiltre: ouv >= 0 ? 3.5 : 5, declinFiltre: 0.06, res: 0.78, tenue: 0.5, rel: 0.03 }), t0 + s * pas, ouv >= 0 ? 0.15 : 0.13, 0.1);
       }
+      if (!f.bat && st.accords === 'aucun') for (let s = 0; s < 16; s += 2) poser(bG, bD, kit.H, t0 + s * pas, s % 4 === 0 ? 0.12 : 0.07, 0.15);          // charley discret : le tempo reste lisible
       // ---- montée avant le refrain : souffle qui s'ouvre et roulement
       if (f.montee && b >= f.m - 2) for (let s = 0; s < 16; s += b === f.m - 1 ? 1 : 2) poser(bG, bD, kit.S, t0 + s * pas, 0.1 + ((b - (f.m - 2)) * 16 + s) * 0.008);
     }

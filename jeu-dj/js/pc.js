@@ -95,7 +95,8 @@ export class Pc {
     if (p.lecture && this.m.presence(i) > 0.05) { this.etat('La platine ' + L + ' joue pour le public : baissez-la ou arrêtez-la avant d\'y charger un autre morceau.'); return false; }
     this.etat('Préparation de « ' + f.titre + ' »…');
     try {
-      const d = await this.b.obtenir(id, (x) => this.etat('Préparation de « ' + f.titre + ' »… ' + Math.round(x * 100) + ' %'));
+      let d = await this.b.obtenir(id, (x) => this.etat('Préparation de « ' + f.titre + ' »… ' + Math.round(x * 100) + ' %'));
+      if (!d.G) d = await this.b.obtenir(id);                    // ses échantillons viennent de partir sur l'autre platine : on le refait
       p.pause();
       p.charger(d);
       this.cabine.charge(i);

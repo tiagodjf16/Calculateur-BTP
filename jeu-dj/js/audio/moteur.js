@@ -27,16 +27,22 @@ export class Platine {
     } else {                                           // secours : même lecteur, dans le fil principal
       this.dsp = new LecteurDSP(ctx.sampleRate);
       this.noeud = ctx.createScriptProcessor(1024, 0, 2);
+      // L'heure que le navigateur donne à ces blocs varie de plusieurs millisecondes : le lecteur de secours tient sa propre
+      // horloge, en comptant les échantillons qu'il a produits. Les deux platines avancent ainsi sur la même base.
+      this.blocs = 0;
       this.noeud.onaudioprocess = (e) => {
-        this.dsp.traiter(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1), e.playbackTime);
-        this._etat({ pos: this.dsp.pos, v: this.dsp.vitesse, lecture: this.dsp.lecture, fin: this.dsp.fin, t: e.playbackTime + e.outputBuffer.duration });
+        const n = e.outputBuffer.length, fs = ctx.sampleRate;
+        this.dsp.traiter(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1), (this.blocs * n) / fs);
+        const t = (++this.blocs * n) / fs;
+        if (index === 0) moteur.secours = { t, p: performance.now() };
+        this._etat({ pos: this.dsp.pos, v: this.dsp.vitesse, lecture: this.dsp.lecture, fin: this.dsp.fin, t });
       };
     }
   }
 
   _etat(d) {
     if (d.t != null && d.t < this.tSaut) return;          // nouvelles antérieures à un saut programmé : périmées
-    this.pos = d.pos; this.v = d.v; this.tMaj = d.t ?? this.m.ctx.currentTime;
+    this.pos = d.pos; this.v = d.v; this.tMaj = d.t ?? this.m.horloge();
     if (d.fin && !this.fin) { this.lecture = false; if (this.surFin) this.surFin(this); }
     this.fin = d.fin;
     if (!d.lecture && this.lecture && !this.cueTenu && d.fin) this.lecture = false;
@@ -47,26 +53,28 @@ export class Platine {
   /** morceau : { id, titre, artiste, G, D, fe, bpm, premierTemps, duree, cretes, sections… } */
   charger(morceau) {
     this.morceau = morceau;
-    // le lecteur reçoit sa propre copie des échantillons
-    const G = morceau.G.slice(), D = morceau.D.slice();
+    // Les échantillons sont confiés au lecteur (sans copie : un morceau pèse des dizaines de mégaoctets) ;
+    // de ce côté-ci on ne garde que la forme d'onde et les repères.
+    const G = morceau.G, D = morceau.D;
+    morceau.nEch = G.length;
     if (this.dsp) this.dsp.message({ t: 'charger', G, D, fe: morceau.fe });
-    else this.noeud.port.postMessage({ t: 'charger', G, D, fe: morceau.fe }, [G.buffer, D.buffer]);
+    else { this.noeud.port.postMessage({ t: 'charger', G, D, fe: morceau.fe }, [G.buffer, D.buffer]); morceau.G = morceau.D = null; }
     this.pos = 0; this.v = 0; this.lecture = false; this.fin = false; this.boucle = null; this.inverse = false;
     this.reperes = new Array(8).fill(null);
     this.cue = Math.max(0, morceau.premierTemps * morceau.fe);
     this.envoyer({ t: 'aller', pos: this.cue, net: true });
     this.pos = this.cue;
-    this.reglerCurseur(this.curseur);
+    if (!(this.sync && this._tempoSur(this.m.platines[1 - this.i]))) this.reglerCurseur(this.curseur);
     this._inertie();
   }
 
   get charge() { return !!this.morceau; }
   /** Position actuelle en secondes (extrapolée entre deux nouvelles du lecteur). */
-  get secondes() { return this.secondesA(this.m.ctx.currentTime); }
-  /** Position (secondes du morceau) à un instant donné de l'horloge audio, proche de maintenant. */
+  get secondes() { return this.secondesA(this.m.horloge()); }
+  /** Position (secondes du morceau) à un instant donné de l'horloge du moteur (voir Moteur.horloge), proche de maintenant. */
   secondesA(t) {
     if (!this.morceau) return 0;
-    return clamp(this.pos / this.morceau.fe + this.v * clamp(t - this.tMaj, 0, 0.4), 0, this.morceau.duree);
+    return clamp(this.pos / this.morceau.fe + this.v * clamp(t - this.tMaj, -0.25, 0.4), 0, this.morceau.duree);
   }
   tempsA(t) { return this.morceau ? ((this.secondesA(t) - this.morceau.premierTemps) * this.morceau.bpm) / 60 : 0; }
   get bpm() { return this.morceau ? this.morceau.bpm * this.tempo : 0; }
@@ -80,8 +88,10 @@ export class Platine {
 
   lire() {
     if (!this.morceau) return;
+    const autre = this.m.platines[1 - this.i];
+    if (this.sync) this._tempoSur(autre);                     // SYNC allumé : même tempo que l'autre platine…
     this.lecture = true; this.fin = false;
-    if (!(this.sync && this._phase(this.m.platines[1 - this.i], true))) this.envoyer({ t: 'lire' });      // SYNC : départ calé sur l'autre platine
+    if (!(this.sync && this._phase(autre, true))) this.envoyer({ t: 'lire' });      // … et départ calé sur ses temps
   }
   /** Vide la platine. */
   decharger() {
@@ -94,8 +104,8 @@ export class Platine {
   basculer() { if (this.lecture) this.pause(); else this.lire(); }
   aller(sec, net = true) {
     if (!this.morceau) return;
-    const p = clamp(sec * this.morceau.fe, 0, this.morceau.G.length - 4);
-    this.pos = p; this.tMaj = this.tSaut = this.m.ctx.currentTime;
+    const p = clamp(sec * this.morceau.fe, 0, this.morceau.nEch - 4);
+    this.pos = p; this.tMaj = this.tSaut = this.m.horloge();
     this.envoyer({ t: 'aller', pos: p, net });
   }
 
@@ -168,13 +178,18 @@ export class Platine {
 
   /** Aligne le tempo, puis les temps, sur l'autre platine. */
   synchroniser(autre) {
+    if (!this._tempoSur(autre)) return false;
+    if (this.lecture) this._phase(autre, false);
+    return true;
+  }
+  /** Règle le curseur de tempo pour jouer au tempo de l'autre platine (plage élargie si besoin). */
+  _tempoSur(autre) {
     if (!this.morceau || !autre || !autre.morceau) return false;
     let cible = autre.bpm / this.morceau.bpm;
     while (cible > 1.42) cible /= 2;                   // tempos doubles ou moitiés (hip-hop et drum & bass, par exemple)
     while (cible < 0.71) cible *= 2;
     if (Math.abs(cible - 1) > this.plage) this.plage = Math.abs(cible - 1) <= 0.16 ? 0.16 : 0.5;
     this.reglerCurseur((cible - 1) / this.plage, true);
-    if (this.lecture) this._phase(autre, false);
     return true;
   }
   /** Touche SYNC : la platine suit l'autre (tempo tout de suite, temps calés au départ) jusqu'à ce qu'on la relâche ou qu'on touche au curseur. */
@@ -189,7 +204,7 @@ export class Platine {
    */
   _phase(autre, demarrage) {
     if (!autre || !autre.morceau || !autre.audible || !this.morceau) return false;
-    const mo = this.morceau, quand = this.m.ctx.currentTime + 0.05, per = 60 / mo.bpm;
+    const mo = this.morceau, quand = this.m.horloge() + (this.dsp ? 0.09 : 0.05), per = 60 / mo.bpm;
     const k = this.bpm / autre.bpm, f = k > 1.5 ? 2 : k < 0.67 ? 0.5 : 1;
     const ici = demarrage ? this.pos / mo.fe : this.secondesA(quand), tau = demarrage ? (this.vinyle ? 0.05 : 0.012) : 0;
     let d = autre.tempsA(quand) * f + (tau * this.bpm) / 60 - ((ici - mo.premierTemps) * mo.bpm) / 60;
@@ -207,7 +222,10 @@ export class Platine {
 }
 
 export class Moteur {
-  constructor() { this.ctx = null; this.pret = false; }
+  constructor() { this.ctx = null; this.pret = false; this.secours = null; }
+
+  /** L'heure sur laquelle les platines se calent : l'horloge audio, ou celle du lecteur de secours quand il sert. */
+  horloge() { return this.secours ? this.secours.t + Math.min(0.2, (performance.now() - this.secours.p) / 1000) : this.ctx.currentTime; }
 
   /** À appeler depuis un clic (les navigateurs n'autorisent le son qu'après un geste). */
   async demarrer() {

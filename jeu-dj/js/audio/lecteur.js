@@ -56,7 +56,8 @@ export class LecteurDSP {
         const k = Math.max(0, i0);
         if (k > 0) this._bloc(sG, sD, 0, k);
         this.attente = null;
-        this.pos = Math.max(1, Math.min(this.n - 4, a.pos + (i0 < 0 ? -i0 * this.vitesse * this.ratio : 0)));
+        // instant déjà passé : on rattrape le retard, à la vitesse de croisière si la platine démarre
+        this.pos = Math.max(1, Math.min(this.n - 4, a.pos + (i0 < 0 ? -i0 * (a.lire ? this.tempo : this.vitesse) * this.ratio : 0)));
         if (a.lire) { this.lecture = true; this.fin = false; }
         this._bloc(sG, sD, k, n);
         return;

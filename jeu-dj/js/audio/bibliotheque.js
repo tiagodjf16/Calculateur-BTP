@@ -2,7 +2,7 @@
 import { CATALOGUE, dureeDe } from './synthe.js';
 import { travailler } from './fabrique.js';
 
-const GARDES = 3;                        // morceaux gardés en mémoire en plus de ceux des platines
+const GARDES = 2;                        // morceaux prêts gardés en mémoire (ceux des platines sont confiés à leur lecteur)
 
 export class Bibliotheque {
   constructor(moteur) {
@@ -45,7 +45,7 @@ export class Bibliotheque {
 
   /** Données audio d'un morceau (fabrication ou décodage à la première demande). */
   obtenir(id, progres = () => {}) {
-    if (this.cache.has(id)) { const d = this.cache.get(id); this.cache.delete(id); this.cache.set(id, d); return Promise.resolve(d); }
+    if (this.cache.has(id)) { const d = this.cache.get(id); this.cache.delete(id); if (d.G) { this.cache.set(id, d); return Promise.resolve(d); } }      // sans échantillons : il est parti sur une platine, on le refait
     if (this.attentes.has(id)) return this.attentes.get(id);
     const f = this.fiche(id);
     const p = (async () => {
@@ -73,11 +73,8 @@ export class Bibliotheque {
   }
 
   _alleger() {
-    const sur = new Set(this.moteur.platines.map((p) => p.morceau && p.morceau.id));
-    for (const id of [...this.cache.keys()]) {
-      if (this.cache.size <= GARDES + sur.size) break;
-      if (!sur.has(id)) this.cache.delete(id);
-    }
+    for (const [id, d] of [...this.cache]) if (!d.G) this.cache.delete(id);
+    for (const id of [...this.cache.keys()]) { if (this.cache.size <= GARDES) break; this.cache.delete(id); }
   }
 
   /** Ajoute des fichiers audio du joueur (MP3, WAV, OGG, FLAC, M4A… selon le navigateur). */

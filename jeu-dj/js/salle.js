@@ -86,6 +86,11 @@ export class Salle {
       this._boite(22, 7, 0.1, this._mat(0x0a1030, { emissive: 0x16205a, emissiveIntensity: 0.6 }), 0, 6.5, zDJ - 4.6);        // mur d'écrans
       for (let k = 0; k < 16; k++) { const x = (rnd() - 0.5) * 140, z = p / 2 + 4 + rnd() * 30, ar = new THREE.Mesh(new THREE.ConeGeometry(3 + rnd() * 2, 9 + rnd() * 5, 7), this._mat(0x0b140c)); ar.position.set(x, 5, z); d.add(ar); }
       for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) this._boite(4, 2.6, 3, this._mat([0xb3261a, 0xe8e8e8, 0x1d6fa5][k], { emissive: 0x33260f }), sx * (l / 2 - 3), 1.3, -5 + k * 14);     // buvettes
+      for (let x = -18.75; x <= 18.76; x += 2.5) { this._boite(2.4, 1.1, 0.06, this._mat(0x8d949e), x, 0.55, zDJ + 4.1); this._boite(0.06, 1.1, 0.5, this._mat(0x6d737c), x - 1.2, 0.55, zDJ + 3.9); }      // barrières devant la scène
+      const N = 420, et = new Float32Array(N * 3);                                                                              // ciel étoilé
+      for (let i = 0; i < N; i++) { const a = rnd() * Math.PI * 2, e = 0.08 + rnd() * 1.3, R = 230; et.set([Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R, Math.sin(a) * Math.cos(e) * R], i * 3); }
+      const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.BufferAttribute(et, 3));
+      const ciel = new THREE.Points(ge, new THREE.PointsMaterial({ color: 0xdfe8ff, size: 1.5, fog: false, transparent: true, opacity: 0.85 })); ciel.frustumCulled = false; d.add(ciel);
     }
     if (L.estrade) { this._boite(5.4, yDJ, 2.7, this._mat(0x1b1c20), 0, yDJ / 2, zDJ + 0.15); this._boite(5.4, 0.03, 0.04, this._mat(0x8d949e), 0, yDJ - 0.015, zDJ + 1.5); }      // estrade du DJ
     if (L.piste) { const pi = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(l - 3, 13), Math.min(p - 7, 11)), this._mat(L.piste)); pi.rotation.x = -Math.PI / 2; pi.position.set(0, 0.012, zDJ + 2.2 + Math.min(p - 7, 11) / 2); d.add(pi); }
@@ -172,13 +177,13 @@ export class Salle {
 
   _enceintes(inst) {
     const L = this.lieu, d = this.decor, z = this.zDJ, metal = this._mat(0x6d737c);
-    const pw = inst.sono.puissance, he = pw > 600 ? 3.4 : pw > 200 ? 2.1 : pw > 60 ? 1.5 : 0.75, le = pw > 600 ? 1.3 : pw > 200 ? 0.62 : pw > 60 ? 0.42 : 0.3, ex = Math.min(L.l / 2 - le, 3.4 + (pw > 600 ? 5 : 0));
+    const pw = inst.sono.puissance, he = pw > 600 ? 3.4 : pw > 200 ? 2.1 : pw > 60 ? 1.5 : 0.75, le = pw > 600 ? 1.3 : pw > 200 ? 0.62 : pw > 60 ? 0.42 : 0.3, ex = Math.min(L.l / 2 - le, 4.2 + (pw > 600 ? 4.5 : 0)), ze = z + (this.id === 'chambre' ? 1.4 : 2.4);
     this.enceintes = [];
     for (const sx of [-1, 1]) {
       const ys = L.exterieur ? this.yDJ : 0, y0 = ys + (pw > 200 ? 0 : 1.15);
-      if (pw <= 200) this._cyl(0.025, 0.025, 1.15, metal, sx * ex, ys + 0.575, z + 1.4, d, 6);
-      this._boite(le, he, le * 0.9, this._mat(0x0d0e10), sx * ex, y0 + he / 2, z + 1.4);
-      for (let k = 0; k < (pw > 200 ? 2 : 1); k++) { const hp = new THREE.Mesh(new THREE.CircleGeometry(le * 0.36, 18), this._mat(0x24262b)); hp.position.set(sx * ex, y0 + he * (pw > 200 ? 0.28 + k * 0.42 : 0.42), z + 1.4 + le * 0.46); d.add(hp); this.enceintes.push(hp); }
+      if (pw <= 200) this._cyl(0.025, 0.025, 1.15, metal, sx * ex, ys + 0.575, ze, d, 6);
+      this._boite(le, he, le * 0.9, this._mat(0x0d0e10), sx * ex, y0 + he / 2, ze);
+      for (let k = 0; k < (pw > 200 ? 2 : 1); k++) { const hp = new THREE.Mesh(new THREE.CircleGeometry(le * 0.36, 18), this._mat(0x24262b)); hp.position.set(sx * ex, y0 + he * (pw > 200 ? 0.28 + k * 0.42 : 0.42), ze + le * 0.46); d.add(hp); this.enceintes.push(hp); }
     }
     if (inst.fumee) { this._boite(0.3, 0.2, 0.42, this._mat(0x1a1b1f), 1.9, this.yDJ + 0.1, z + 1.25); this._cyl(0.04, 0.04, 0.12, metal, 1.9, this.yDJ + 0.12, z + 1.5, d, 8).rotation.x = Math.PI / 2; }
   }
@@ -258,12 +263,13 @@ export class Salle {
       const im = new THREE.InstancedMesh(g, this._mat(0xffffff), nb * k);
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.frustumCulled = false; d.add(im); this.im[nom] = im;
     }
-    const demi = Math.min(L.l / 2 - 1.2, L.exterieur ? 28 : 6.5), piste = { x0: -demi, x1: demi, z0: this.zDJ + (L.exterieur ? 6 : 3.3), z1: this.zDJ + Math.min(L.p - 5, L.exterieur ? 62 : 13) };
+    const ext = !!L.exterieur, demi = Math.min(L.l / 2 - 1.2, ext ? 18 : 6.5), piste = { x0: -demi, x1: demi, z0: this.zDJ + (ext ? 4.9 : 3.3), z1: this.zDJ + Math.min(L.p - 5, ext ? 30 : 13) };
     const c = new THREE.Color(), tirer = (t) => t[Math.floor(rnd() * t.length)];
     for (let i = 0; i < nb; i++) {
       // la piste se remplit depuis la cabine ; les autres attendent aux tables, au bar ou au fond
       const danse = [lerp(piste.x0, piste.x1, rnd()), lerp(piste.z0, piste.z1, rnd() ** 1.5)];
-      const repos = assises.length && rnd() < 0.8 ? tirer(assises).map((v) => v + (rnd() - 0.5) * 0.5) : [(rnd() < 0.5 ? -1 : 1) * (L.l / 2 - 0.8 - rnd() * (L.exterieur ? 12 : 1.5)), lerp(piste.z0 + (piste.z1 - piste.z0) * 0.55, L.p / 2 - 1, rnd())];
+      // en plein air la foule reste devant la scène, qu'elle danse ou non
+      const repos = ext ? [danse[0] + (rnd() - 0.5) * 0.5, danse[1] + (rnd() - 0.5) * 0.5] : assises.length && rnd() < 0.8 ? tirer(assises).map((v) => v + (rnd() - 0.5) * 0.5) : [(rnd() < 0.5 ? -1 : 1) * (L.l / 2 - 0.8 - rnd() * 1.5), lerp(piste.z0 + (piste.z1 - piste.z0) * 0.55, L.p / 2 - 1, rnd())];
       const g = { danse, repos, x: repos[0], z: repos[1], envie: (i + 0.5) / nb, t: rnd() * 10, taille: 0.9 + rnd() * 0.2, style: Math.floor(rnd() * 4), ampl: 0.6 + rnd() * 0.6, dansant: 0, bras: 0, cap: Math.PI };
       const role = extras.roles && extras.roles[i], haut = role ? role.haut : tirer(HABITS), peau = tirer(PEAUX);
       c.setHex(haut); this.im.buste.setColorAt(i, c);
@@ -321,7 +327,7 @@ export class Salle {
     if (!L) return;
     const P = lum ? lum.projecteurs : [], amb = lum ? lum.ambiance : [0, 0, 0], flash = lum ? lum.flash : 0, dens = lum ? lum.densite : 0, noir = !lum || lum.noir, uv = lum && lum.uv ? 1 : 0, c = L.clarte;
     // lumière générale : éclairage du lieu + couleur des projecteurs + éclairs
-    this.ambiant.color.setRGB(c + amb[0] * 0.4 + flash * 1.3 + uv * 0.05, c * 0.97 + amb[1] * 0.4 + flash * 1.3, c * 0.92 + amb[2] * 0.4 + flash * 1.3 + uv * 0.28);
+    this.ambiant.color.setRGB(c + amb[0] * 0.28 + flash * 1.3 + uv * 0.05, c * 0.97 + amb[1] * 0.28 + flash * 1.3, c * 0.92 + amb[2] * 0.28 + flash * 1.3 + uv * 0.28);
     this.ciel.intensity = Math.PI * (c * 0.55 + 0.04);
     this.face.color.setRGB(0.25 + amb[0], 0.25 + amb[1], 0.25 + amb[2]); this.face.intensity = Math.PI * (c * 0.35 + (noir ? 0 : 0.3) + flash * 0.8);
     this.scene.fog.density = (L.exterieur ? 0.003 : 0.006) + dens * (L.exterieur ? 0.013 : 0.055);
@@ -353,7 +359,7 @@ export class Salle {
         }
       });
     }
-    this.pl.forEach((pl, k) => { const s = cotes[k]; if (s[3] && !noir) { pl.color.setRGB(s[0] / s[3], s[1] / s[3], s[2] / s[3]); pl.intensity = 34; } else pl.intensity = 0; });
+    this.pl.forEach((pl, k) => { const s = cotes[k]; if (s[3] && !noir) { pl.color.setRGB(s[0] / s[3], s[1] / s[3], s[2] / s[3]); pl.intensity = 24; } else pl.intensity = 0; });
     // boule à facettes
     if (this.points) {
       const B = this.points, allume = lum && lum.boule ? 1 : 0, b = B.boule.position, a = this.temps * 0.35, ca = Math.cos(a), sa = Math.sin(a), hl = L.l / 2 - 0.05, hp = L.p / 2 - 0.05;

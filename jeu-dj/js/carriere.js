@@ -162,7 +162,7 @@ export function installationLibre(lieu) {
   if (lieu === 'chambre') return installation({ equipe: { platines: 'flx4', casque: 'hd25', sono: 'ts408', lumieres: 'gigbar', pupitre: 'obey70', fumee: 'hurricane' }, possede: ['boule', 'uv'] });
   const tout = { equipe: { platines: 'cdj3000', casque: 'x10', sono: lieu === 'bar' ? 'art912' : 'prx900', lumieres: lieu === 'bar' ? 'focus' : 'pointe', pupitre: 'grandma', fumee: 'z1000', micro: 'ewd' }, possede: MATERIEL.filter((x) => x.cat === 'effets').map((x) => x.id) };
   const inst = installation(tout, lieu === 'festival' ? 'festival' : null);
-  if (lieu === 'club') inst.sono = { ...MAISON.club.sono };
+  if (lieu === 'club' || lieu === 'bar') inst.sono = { ...MAISON[lieu].sono };
   return inst;
 }
 
@@ -312,7 +312,7 @@ export class Soiree {
     // ---- le son : blanc, niveau trop faible, saturation
     this.silence = niv.moyen < 0.006 ? this.silence + dt : 0;
     this.enveloppe = Math.max(niv.moyen, this.enveloppe - dt * 0.06);
-    const blanc = this.silence > 2.2 && this.t > 30 && !this.microOuvert;
+    const blanc = this.silence > 2.6 && this.t > 30 && !this.microOuvert;
     if (blanc && !this.enBlanc) { S.blancs++; annoncer('Blanc ! Plus de musique : la piste se vide.', 'mauvais'); }
     this.enBlanc = blanc;
     if (niv.rouge) { S.tRouge += dt; this.rougeRecent = Math.min(4, this.rougeRecent + dt); } else this.rougeRecent = Math.max(0, this.rougeRecent - dt * 0.3);

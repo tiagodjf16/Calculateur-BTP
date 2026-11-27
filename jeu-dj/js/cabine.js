@@ -103,7 +103,7 @@ export class Cabine {
       if (b.dataset.rep != null) { p.repere(+b.dataset.rep, vue.efface); vue.efface = false; this.surAction('repere', i); }
       else if (b.dataset.boucle) { p.boucleAuto(+b.dataset.boucle); this.surAction('boucle', i); }
       else if (a === 'cue') { p.cueAppui(); b.setPointerCapture(e.pointerId); }
-      else if (a === 'lecture') { p.basculer(); this.surAction('lecture', i); }
+      else if (a === 'lecture') { p.basculer(); this.cmd.tempo[i].regler(-p.curseur); this._plage(i); this.surAction('lecture', i); }
       else if (a === 'sync') { const ok = p.basculerSync(this.m.platines[1 - i]); this.cmd.tempo[i].regler(-p.curseur); this._plage(i); this.surAction('sync', i, ok); }
       else if (a === 'moins' || a === 'plus') { p.pousser(a === 'plus' ? 0.06 : -0.06); b.setPointerCapture(e.pointerId); }
       else if (a === 'plage') { p.sync = false; p.reglerPlage(p.plage === 0.08 ? 0.16 : p.plage === 0.16 ? 0.5 : 0.08); this._plage(i); }
@@ -209,7 +209,7 @@ export class Cabine {
       const t = touches[e.code];
       if (t) {
         const p = this.m.platines[t[0]];
-        if (t[1] === 'cue') p.cueAppui(); else if (t[1] === 'lecture') { p.basculer(); this.surAction('lecture', t[0]); }
+        if (t[1] === 'cue') p.cueAppui(); else if (t[1] === 'lecture') { p.basculer(); this.cmd.tempo[t[0]].regler(-p.curseur); this._plage(t[0]); this.surAction('lecture', t[0]); }
         else { const ok = p.basculerSync(this.m.platines[1 - t[0]]); this.cmd.tempo[t[0]].regler(-p.curseur); this._plage(t[0]); this.surAction('sync', t[0], ok); }
         e.preventDefault();
       } else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
@@ -226,7 +226,7 @@ export class Cabine {
   charge(i) {
     const p = this.m.platines[i];
     this.ondes[i] = new Onde(p.morceau);
-    this.cmd.tempo[i].regler(-p.curseur);
+    this.cmd.tempo[i].regler(-p.curseur); this._plage(i);
     $('.charge', this.vues[i].el).textContent = '';
   }
   /** Vide les deux platines (début d'une soirée). */
@@ -273,7 +273,13 @@ export class Cabine {
     if (!mo) { g.fillStyle = '#5c6877'; g.font = '13px system-ui'; g.textAlign = 'center'; g.fillText('Platine vide', W / 2, H / 2 - 8); return; }
     const t = p.secondes, hTexte = 30, hVue = Math.max(10, H * 0.2), hOnde = H - hTexte - hVue - 4;
     // ligne d'informations
-    const etroit = W < 400;                                                  // petit écran : on ne garde que le temps restant
+    const etroit = W < 400, mini = W < 230;                                  // petit écran : on ne garde que le temps restant ; très petit : l'essentiel
+    if (mini) {
+      g.textAlign = 'left'; g.fillStyle = '#eef2f6'; g.font = '600 11px system-ui'; g.fillText(mo.titre, 5, 3, W - 62);
+      g.fillStyle = p.lecture && mo.duree - p.secondes < 20 && Math.floor(performance.now() / 300) % 2 ? '#ff453a' : '#8fa0b3'; g.font = '600 11px system-ui'; g.fillText(`−${mmss(mo.duree - p.secondes)}`, 5, 17);
+      g.textAlign = 'right'; g.fillStyle = p.sync ? '#40c8e0' : '#ffd60a'; g.font = '700 15px system-ui'; g.fillText(p.bpm.toFixed(1), W - 5, 1);
+      g.fillStyle = '#8fa0b3'; g.font = '9px system-ui'; g.fillText(`${(p.tempo - 1 >= 0 ? '+' : '') + ((p.tempo - 1) * 100).toFixed(1)} %`, W - 5, 18);
+    } else {
     g.textAlign = 'left'; g.fillStyle = '#eef2f6'; g.font = '600 13px system-ui';
     g.fillText(mo.titre, 8, 3, W * (etroit ? 0.44 : 0.5));
     g.fillStyle = '#8fa0b3'; g.font = '11px system-ui';
@@ -286,6 +292,7 @@ export class Cabine {
     const xT = etroit ? W * 0.6 : W * 0.66, reste = mo.duree - t;
     g.fillText(etroit ? `−${mmss(reste)}` : `${mmss(t)}  /  −${mmss(reste)}`, xT, 3);
     if (p.lecture && reste < 20) { g.fillStyle = Math.floor(performance.now() / 300) % 2 ? '#ff453a' : '#7a1f1a'; g.font = '700 10px system-ui'; g.fillText(etroit ? 'FIN' : 'FIN DU MORCEAU', xT, 19); }
+    }
     // forme d'onde défilante et grille des temps
     const y0 = hTexte, onde = this.ondes[vue.i];
     if (onde) onde.dessiner(g, 0, y0, W, hOnde, t);

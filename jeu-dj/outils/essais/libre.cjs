@@ -30,7 +30,7 @@ module.exports = async (page, { capture, attendre, clic, dj, verifier }) => {
   await clic('.platine[data-p="1"] [data-act="sync"]');
   await clic('.platine[data-p="1"] [data-act="lecture"]');
   await attendre(4);
-  const ph = await dj((d) => { const [a, b] = d.moteur.platines, t = d.moteur.ctx.currentTime; let x = a.tempsA(t) - b.tempsA(t); x -= Math.round(x); return { bpmA: +a.bpm.toFixed(2), bpmB: +b.bpm.toFixed(2), ecartMs: +((Math.abs(x) * 60000) / a.bpm).toFixed(1), sync: b.sync }; });
+  const ph = await dj((d) => { const [a, b] = d.moteur.platines, t = d.moteur.horloge(); let x = a.tempsA(t) - b.tempsA(t); x -= Math.round(x); return { bpmA: +a.bpm.toFixed(2), bpmB: +b.bpm.toFixed(2), ecartMs: +((Math.abs(x) * 60000) / a.bpm).toFixed(1), sync: b.sync }; });
   verifier('SYNC : même tempo et temps calés (< 25 ms)', Math.abs(ph.bpmA - ph.bpmB) < 0.05 && ph.ecartMs < 25, ph);
   const n2 = await dj((d) => { let c = 0, m = 0; for (let i = 0; i < 30; i++) { const n = d.moteur.niveaux(); c = Math.max(c, n.maitre); m = Math.max(m, n.moyen); } return { crete: +c.toFixed(3), moyen: +m.toFixed(3) }; });
   console.log('  niveaux avec deux morceaux :', JSON.stringify(n2));
@@ -38,6 +38,20 @@ module.exports = async (page, { capture, attendre, clic, dj, verifier }) => {
   await capture('05_deux_platines');
   const amb = await dj((d) => ({ ambiance: Math.round(d.jeu.etat.ambiance), dansants: d.salle.dansants, nb: d.salle.nb }));
   verifier('le public réagit à la musique', amb.dansants > 0, amb);
+
+  // SYNC resté allumé : un autre morceau chargé sur B reprend de lui-même le tempo et les temps de A
+  await clic('.platine[data-p="1"] [data-act="lecture"]');
+  await dj((d) => d.jeu.cabine.cmd.voies[1].fader.regler(0, true));
+  await clic('[data-vue="pc"]');
+  await clic('#pc tr[data-id="2"] [data-charger="1"]');
+  await page.waitForFunction(() => { const m = window.__dj.moteur.platines[1].morceau; return !!m && m.id === 2; }, null, { timeout: 60000 });
+  await clic('[data-vue="salle"]');
+  await clic('.platine[data-p="1"] [data-act="lecture"]');
+  await attendre(2.5);
+  const ph2 = await dj((d) => { const [a, b] = d.moteur.platines, t = d.moteur.horloge(); let x = a.tempsA(t) - b.tempsA(t); x -= Math.round(x); return { bpmA: +a.bpm.toFixed(2), bpmB: +b.bpm.toFixed(2), ecartMs: +((Math.abs(x) * 60000) / a.bpm).toFixed(1), sync: b.sync, curseurAffiche: +d.jeu.cabine.cmd.tempo[1].valeur.toFixed(3), curseur: +(-b.curseur).toFixed(3) }; });
+  verifier('SYNC resté allumé : le morceau suivant reprend le tempo et les temps', ph2.sync && Math.abs(ph2.bpmA - ph2.bpmB) < 0.05 && ph2.ecartMs < 25 && Math.abs(ph2.curseurAffiche - ph2.curseur) < 0.002, ph2);
+  await dj((d) => d.jeu.cabine.cmd.voies[1].fader.regler(1, true));
+  await attendre(3);
 
   // lumières
   await clic('[data-vue="pupitre"]');

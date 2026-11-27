@@ -1,6 +1,7 @@
 // Carrière : création, leçon dans la chambre, première soirée (demandes, enchaînement, bilan, paie), boutique, sauvegarde.
-module.exports = async (page, { capture, attendre, clic, dj, verifier }) => {
-  const charger = async (id, i) => { await clic('[data-vue="pc"]'); await clic('#pc tr[data-id="' + id + '"] [data-charger="' + i + '"]'); await page.waitForFunction(([x, k]) => { const m = window.__dj.moteur.platines[k].morceau; return !!m && m.id === x; }, [id, i], { timeout: 60000 }); await clic('[data-vue="salle"]'); };
+module.exports = async (page, { capture, attendre, clic, dj, verifier, tactile }) => {
+  const retour = tactile ? 'platines' : 'salle';            // sur téléphone, les platines ont leur propre onglet
+  const charger = async (id, i) => { await clic('[data-vue="pc"]'); await clic('#pc tr[data-id="' + id + '"] [data-charger="' + i + '"]'); await page.waitForFunction(([x, k]) => { const m = window.__dj.moteur.platines[k].morceau; return !!m && m.id === x; }, [id, i], { timeout: 60000 }); await clic('[data-vue="' + retour + '"]'); };
   await clic('[data-a="nouvelle"]');
   await page.fill('#nom-dj', 'DJ Essai');
   await clic('#dialogue [data-i="1"]');
@@ -103,6 +104,7 @@ module.exports = async (page, { capture, attendre, clic, dj, verifier }) => {
   verifier('achat de la machine à fumée', b.possede.includes('hurricane') && b.fumee === 'hurricane' && b.argent === e.argent - 65, b);
   // ---- la sauvegarde survit au rechargement
   await page.reload();
+  if ((process.env.SANS || '').includes('stockage')) { await page.waitForSelector('[data-a="nouvelle"]'); verifier('sans stockage : le jeu redémarre sans carrière, sans erreur', !(await page.$('[data-a="continuer"]'))); return; }
   await page.waitForSelector('[data-a="continuer"]');
   verifier('carrière retrouvée après rechargement', (await page.textContent('[data-a="continuer"]')).includes('DJ Essai'));
   await capture('31_menu_continuer');

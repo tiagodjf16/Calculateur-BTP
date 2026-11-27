@@ -140,7 +140,7 @@ export class Lumieres {
     const jg = $('.pup-jauge i', this.el);
     if (jg) jg.style.width = Math.round(this.densite * 100) + '%';
     // couleur
-    if (e.auto) e.couleurAuto = Math.floor(ph / 32) % 8;
+    if (e.auto) e.couleurAuto = (5 + Math.floor(ph / 32)) % 8;                              // change toutes les huit mesures, en partant du bleu
     const ic = e.auto ? e.couleurAuto : e.couleur, c1 = RVB[ic], c2 = RVB[(ic + 3) % 8];
     const scene = this.dispo && !this.dispo.scenes ? 'pulsation' : e.scene, g = e.noir ? 0 : e.gradateur;
     if (e.strobo) this.stats.stroboTenu += dt;
